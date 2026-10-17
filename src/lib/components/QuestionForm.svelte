@@ -8,7 +8,7 @@
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { Question } from '#lib/decision.ts';
 	import { formatAge, formatDeadline, urgencyOf } from '#lib/time.ts';
 	import Blocked from './Blocked.svelte';
@@ -46,14 +46,21 @@
 	let pending = $state(false);
 	let error = $state<string | null>(null);
 	let field = $state<HTMLTextAreaElement | null>(null);
+	/** False until the page's JavaScript runs; the plain form shows every field then. */
+	let enhanced = $state(false);
+
+	onMount(() => {
+		enhanced = true;
+	});
 
 	const uid = $derived(`q-${question.id}`);
 	const chosen = $derived(question.options.find((o) => o.id === selected) ?? null);
 	const ready = $derived(chosen !== null || text.trim() !== '');
 	// The note or own-answer field appears once it is wanted: always when there is
-	// nothing to pick, otherwise after an option or an own answer is in play.
+	// nothing to pick or without JavaScript, otherwise after an option or an own
+	// answer is in play.
 	const showField = $derived(
-		question.options.length === 0 || chosen !== null || writing || text !== ''
+		!enhanced || question.options.length === 0 || chosen !== null || writing || text !== ''
 	);
 	const shownError = $derived(error ?? failure?.error ?? null);
 	const textLabel = $derived(
@@ -61,7 +68,9 @@
 			? 'Your answer'
 			: chosen
 				? 'Add a note (optional)'
-				: 'Your own answer'
+				: enhanced
+					? 'Your own answer'
+					: 'Your own answer or a note'
 	);
 
 	/** Escape backs out of a half-made answer. */
@@ -70,6 +79,11 @@
 			event.preventDefault();
 			clear();
 		}
+	}
+
+	/** Picking an option ends writing your own answer; any text stays as a note. */
+	function onpick() {
+		writing = false;
 	}
 
 	/** Writing your own answer replaces any option picked so far. */
@@ -190,6 +204,7 @@
 									name="option_id"
 									value={option.id}
 									bind:group={selected}
+									onchange={onpick}
 									disabled={pending}
 									aria-labelledby="{oid}-label{option.recommended ? ` ${oid}-rec` : ''}"
 									aria-describedby={[
@@ -222,24 +237,26 @@
 								</span>
 							</label>
 						{/each}
-						<button
-							type="button"
-							class="option own"
-							class:open={writing}
-							disabled={pending}
-							onclick={openOwn}
-						>
-							<span class="option-body">
-								<span class="option-label">
-									{writing
-										? 'Writing my own answer'
-										: question.free_text_ok
-											? 'Or write my own answer'
-											: 'Write my own answer'}
+						{#if enhanced}
+							<button
+								type="button"
+								class="option own"
+								class:open={writing}
+								disabled={pending}
+								onclick={openOwn}
+							>
+								<span class="option-body">
+									<span class="option-label">
+										{writing
+											? 'Writing my own answer'
+											: question.free_text_ok
+												? 'Or write my own answer'
+												: 'Write my own answer'}
+									</span>
+									<span class="what">Say it in your own words instead of picking one.</span>
 								</span>
-								<span class="what">Say it in your own words instead of picking one.</span>
-							</span>
-						</button>
+							</button>
+						{/if}
 					</div>
 				</fieldset>
 			{/if}
@@ -260,20 +277,26 @@
 				</div>
 			{/if}
 
-			{#if ready}
+			{#if ready || !enhanced}
 				<div class="confirm" aria-live="polite">
-					<p class="confirm-summary">
-						{#if chosen}
-							Reply to <strong>{question.from}</strong>: {chosen.label}{text.trim()
-								? ', with your note'
-								: ''}
-						{:else}
-							Reply to <strong>{question.from}</strong> in your own words
-						{/if}
-					</p>
+					{#if enhanced}
+						<p class="confirm-summary">
+							{#if chosen}
+								Reply to <strong>{question.from}</strong>: {chosen.label}{text.trim()
+									? ', with your note'
+									: ''}
+							{:else}
+								Reply to <strong>{question.from}</strong> in your own words
+							{/if}
+						</p>
+					{/if}
 					<div class="confirm-actions">
 						<button type="reset" class="btn btn-quiet" disabled={pending}>Cancel</button>
-						<button type="submit" class="btn btn-primary" disabled={pending || !ready}>
+						<button
+							type="submit"
+							class="btn btn-primary"
+							disabled={pending || (enhanced && !ready)}
+						>
 							{pending ? 'Sending…' : 'Send answer'}
 						</button>
 					</div>

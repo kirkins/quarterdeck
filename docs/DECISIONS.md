@@ -57,7 +57,7 @@ v0 leans on loopback for its safety, and nothing else. The answer form is a plai
 
 ## 10. Every decision takes the captain's own answer
 
-The captain can always answer in their own words, whatever the ship asked for. Options stay the primary, one-tap path. Below them, a dashed row reads "Write my own answer"; choosing it clears any option picked so far and opens a text field. Writing a note under a chosen option sends both. The own answer goes through the same confirm step as an option, and Send stays hidden until there is an option or some non-blank text.
+The captain can always answer in their own words, whatever the ship asked for. Options stay the primary, one-tap path. Below them, a dashed row reads "Write my own answer"; choosing it clears any option picked so far and opens a text field; picking an option afterwards closes it and keeps any text as a note. Writing a note under a chosen option sends both. The own answer goes through the same confirm step as an option, and with JavaScript Send stays hidden until there is an option or some non-blank text. Without JavaScript the text field and Send are always shown, and the server refuses an empty answer.
 
 `free_text_ok` is now only a hint that the ship especially invites a written answer. It changes the row's wording and nothing else. Privateer was asked to drop its gate on text answers, and until it does a live text-only reply can be refused; the card shows that refusal and keeps the text, so nothing is lost silently.
 
