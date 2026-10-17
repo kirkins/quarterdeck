@@ -1,0 +1,328 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"messages": [
+		{
+			"id": "dddd0001-0f1e-4c2d-8b3a-000000000001",
+			"from": "billing",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "billing-retries",
+			"correlation": null,
+			"created_ms": 1792289200000,
+			"asked_ms": 1792289200000,
+			"age_ms": 10800000,
+			"deadline_ms": 1792310800000,
+			"urgency": "high",
+			"state": "open",
+			"body": "Which retry policy should billing ship for failed renewals?",
+			"payload": {
+				"decision": {
+					"question": "Which retry policy should billing ship for failed renewals?",
+					"why": "About 1 in 30 renewals fail on the first try. Today they are cancelled silently, and the pricing launch is waiting on this choice.",
+					"blocked": ["billing", "storefront", "pricing-launch"],
+					"options": [
+						{
+							"id": "smart",
+							"label": "Smart retries over 7 days",
+							"what_happens": "Retry a failed card up to 4 times over a week, timed around likely paydays. Customers get one friendly reminder email.",
+							"cost": "~$40/mo in processor fees",
+							"recommended": true
+						},
+						{
+							"id": "fixed",
+							"label": "Retry 3 times, a day apart",
+							"what_happens": "Simple and predictable. Recovers less revenue, but there is nothing new to monitor.",
+							"cost": "No extra cost"
+						},
+						{
+							"id": "none",
+							"label": "No automatic retries",
+							"what_happens": "Failed payments go straight to a reminder email and a manual review queue.",
+							"cost": "~2h a week of support time"
+						}
+					],
+					"free_text_ok": false
+				}
+			}
+		},
+		{
+			"id": "dddd0002-0f1e-4c2d-8b3a-000000000002",
+			"from": "storefront",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "autumn-sale",
+			"correlation": null,
+			"created_ms": 1792206400000,
+			"asked_ms": 1792206400000,
+			"age_ms": 93600000,
+			"deadline_ms": null,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Which hero should the homepage use for the autumn sale?",
+			"payload": {
+				"decision": {
+					"question": "Which hero should the homepage use for the autumn sale?",
+					"why": "The sale starts Monday. Design finished three heroes and has no strong preference.",
+					"blocked": ["storefront"],
+					"options": [
+						{
+							"id": "photo",
+							"label": "Product photo in use",
+							"what_happens": "A warm photo of the product on a kitchen table. Tested best last spring.",
+							"cost": "$120 stock licence"
+						},
+						{
+							"id": "illustration",
+							"label": "Illustrated autumn scene",
+							"what_happens": "A hand-drawn harbour in autumn colours. Most on-brand, slower to load on phones."
+						},
+						{
+							"id": "type",
+							"label": "Bold type, no image",
+							"what_happens": "Just the offer in large type. Fastest page, least atmosphere."
+						}
+					]
+				}
+			}
+		},
+		{
+			"id": "dddd0003-0f1e-4c2d-8b3a-000000000003",
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "docs-ia-refresh",
+			"correlation": null,
+			"created_ms": 1792282000000,
+			"asked_ms": 1792282000000,
+			"age_ms": 18000000,
+			"deadline_ms": 1792472800000,
+			"urgency": "normal",
+			"state": "open",
+			"body": "What should the docs call the shared \"workspaces\" feature?",
+			"payload": {
+				"decision": {
+					"question": "What should the docs call the shared “workspaces” feature?",
+					"why": "The word appears on 140 pages and in the API reference. Renaming after launch means redirects and broken links.",
+					"blocked": ["docs-site", "docs-ia-refresh"],
+					"options": [
+						{
+							"id": "workspaces",
+							"label": "Keep “Workspaces”",
+							"what_happens": "No changes. The docs stay consistent with the app as it is today."
+						},
+						{
+							"id": "projects",
+							"label": "Rename to “Projects”",
+							"what_happens": "docs-site rewrites the 140 pages and adds redirects; the app team renames the menu.",
+							"cost": "~1 day of crew time"
+						},
+						{
+							"id": "spaces",
+							"label": "Shorten to “Spaces”",
+							"what_happens": "Same work as a rename, with a shorter word that fits the mobile menu.",
+							"cost": "~1 day of crew time"
+						}
+					],
+					"free_text_ok": true
+				}
+			}
+		},
+		{
+			"id": "dddd0004-0f1e-4c2d-8b3a-000000000004",
+			"from": "search-index",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "search-launch",
+			"correlation": null,
+			"created_ms": 1792297000000,
+			"asked_ms": 1792297000000,
+			"age_ms": 3000000,
+			"deadline_ms": 1792372000000,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Approve the new synonym list (212 pairs)?",
+			"payload": {
+				"decision": {
+					"question": "Approve the new synonym list (212 pairs)?",
+					"why": "Synonyms decide what a search for “sofa” also finds. The list was generated, and 40 pairs were checked by hand.",
+					"blocked": ["search-index", "search-launch"],
+					"options": [
+						{
+							"id": "approve",
+							"label": "Approve all 212",
+							"what_happens": "The full list goes live with the launch index.",
+							"recommended": true
+						},
+						{
+							"id": "reviewed",
+							"label": "Only the 40 reviewed pairs",
+							"what_happens": "Safer, but most new synonyms wait for a later review."
+						},
+						{
+							"id": "hold",
+							"label": "Hold the list",
+							"what_happens": "Launch with last year’s synonyms."
+						}
+					],
+					"group": "launch-lists"
+				}
+			}
+		},
+		{
+			"id": "dddd0005-0f1e-4c2d-8b3a-000000000005",
+			"from": "search-index",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "search-launch",
+			"correlation": null,
+			"created_ms": 1792297120000,
+			"asked_ms": 1792297120000,
+			"age_ms": 2880000,
+			"deadline_ms": 1792372000000,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Approve the Spanish stop-word list?",
+			"payload": {
+				"decision": {
+					"question": "Approve the Spanish stop-word list?",
+					"why": "Stop words are skipped when matching. A wrong entry makes some searches return nothing.",
+					"blocked": ["search-index", "search-launch"],
+					"options": [
+						{
+							"id": "approve",
+							"label": "Approve",
+							"what_happens": "Spanish search ignores the 180 listed words.",
+							"recommended": true
+						},
+						{
+							"id": "hold",
+							"label": "Hold",
+							"what_happens": "Spanish search matches every word until the list is reviewed."
+						}
+					],
+					"group": "launch-lists"
+				}
+			}
+		},
+		{
+			"id": "dddd0006-0f1e-4c2d-8b3a-000000000006",
+			"from": "search-index",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "search-launch",
+			"correlation": null,
+			"created_ms": 1792297240000,
+			"asked_ms": 1792297240000,
+			"age_ms": 2760000,
+			"deadline_ms": 1792372000000,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Which ranking should lead on launch day?",
+			"payload": {
+				"decision": {
+					"question": "Which ranking should lead on launch day?",
+					"blocked": ["search-index", "search-launch"],
+					"options": [
+						{
+							"id": "fresh",
+							"label": "Newest first",
+							"what_happens": "Recent articles lead. Good for news, weaker for evergreen guides."
+						},
+						{
+							"id": "popular",
+							"label": "Most read first",
+							"what_happens": "Proven pages lead. New content takes a few days to surface."
+						},
+						{
+							"id": "blend",
+							"label": "Blend of both",
+							"what_happens": "A tuned mix of freshness and popularity.",
+							"cost": "~3h tuning"
+						}
+					],
+					"group": "launch-lists"
+				}
+			}
+		},
+		{
+			"id": "dddd0007-0f1e-4c2d-8b3a-000000000007",
+			"from": "analytics",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": null,
+			"task_id": "retention-policy",
+			"correlation": null,
+			"created_ms": 1792127200000,
+			"asked_ms": 1792127200000,
+			"age_ms": 172800000,
+			"deadline_ms": 1792292800000,
+			"urgency": "high",
+			"state": "open",
+			"body": "Keep raw event logs for 30 or 90 days?",
+			"payload": {
+				"decision": {
+					"question": "Keep raw event logs for 30 or 90 days?",
+					"why": "The privacy page promises a retention period, and the nightly cleanup job cannot ship without one.",
+					"blocked": ["analytics", "retention-policy", "privacy page"],
+					"options": [
+						{
+							"id": "d30",
+							"label": "30 days",
+							"what_happens": "Raw events are deleted after 30 days; monthly summaries are kept.",
+							"cost": "Saves ~$25/mo storage",
+							"recommended": true
+						},
+						{
+							"id": "d90",
+							"label": "90 days",
+							"what_happens": "Room to rerun a quarter of reports from raw data.",
+							"cost": "~$60/mo storage"
+						}
+					]
+				}
+			}
+		},
+		{
+			"id": "dddd0008-0f1e-4c2d-8b3a-000000000008",
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"request_kind": null,
+			"task_id": "release-2-3",
+			"correlation": null,
+			"created_ms": 1792274800000,
+			"asked_ms": 1792274800000,
+			"age_ms": 25200000,
+			"deadline_ms": null,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Release 2.3 is built and passed QA on both platforms. Ship it to the stores today, or wait about two days for the fix to the rare login crash?",
+			"payload": {
+				"choices": ["Ship 2.3 today", "Wait for the crash fix"]
+			}
+		},
+		{
+			"id": "dddd0009-0f1e-4c2d-8b3a-000000000009",
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "request",
+			"request_kind": null,
+			"task_id": "style-guide",
+			"correlation": null,
+			"created_ms": 1792298200000,
+			"asked_ms": 1792298200000,
+			"age_ms": 1800000,
+			"deadline_ms": null,
+			"urgency": "normal",
+			"state": "open",
+			"body": "Could you read the new style guide draft when you have ten minutes?",
+			"payload": {}
+		}
+	]
+}

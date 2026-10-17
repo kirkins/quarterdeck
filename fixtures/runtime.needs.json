@@ -1,0 +1,42 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"messages": [
+		{
+			"id": "dddd000a-0f1e-4c2d-8b3a-000000000010",
+			"from": "status-page",
+			"to": "captain",
+			"kind": "decision",
+			"request_kind": "needs_hands",
+			"task_id": "status-move",
+			"correlation": null,
+			"created_ms": 1792299100000,
+			"asked_ms": 1792299100000,
+			"age_ms": 900000,
+			"deadline_ms": 1792302400000,
+			"urgency": "high",
+			"state": "open",
+			"body": "Move the status page to the new host tonight?",
+			"payload": {
+				"decision": {
+					"question": "Move the status page to the new host tonight?",
+					"why": "The old host’s certificate expires in two days.",
+					"blocked": ["status-page"],
+					"options": [
+						{
+							"id": "now",
+							"label": "Yes, DNS change approved",
+							"what_happens": "status-page switches traffic to the new host and watches it for 30 minutes.",
+							"recommended": true
+						},
+						{
+							"id": "later",
+							"label": "Not tonight",
+							"what_happens": "The old host stays live; status-page asks again tomorrow morning."
+						}
+					]
+				}
+			},
+			"hands_on": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it."
+		}
+	]
+}
