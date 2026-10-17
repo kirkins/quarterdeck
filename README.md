@@ -55,7 +55,7 @@ The live source runs `captain.waiting` and `runtime.needs`, which are operator c
 
 ## How answering works
 
-Each card shows the question, why it matters, who is blocked, the options (what happens, cost, and the ship's recommendation, marked but never preselected), the deadline and the asking ship. Answering is two deliberate steps: pick an option (or write an answer when the ship allows free text), optionally add a note, then press **Send answer**. **Cancel** or Escape backs out.
+Each card shows the question, why it matters, who is blocked, the options (what happens, cost, and the ship's recommendation, marked but never preselected), the deadline and the asking ship. Answering is two deliberate steps: pick an option, or choose **Write my own answer** and say it in your own words (always available, whatever the ship asked for). Add a note under a chosen option if you want, then press **Send answer**. **Cancel** or Escape backs out.
 
 The answer is a captain `mail.send`:
 
@@ -71,7 +71,7 @@ The answer is a captain `mail.send`:
 }
 ```
 
-`text` alone is only accepted when the decision has `free_text_ok`. Older asks that only carry `payload.choices` are shown as simpler cards and answered with `payload.answer.text`.
+`text` alone is always accepted: the captain can answer any decision in their own words. `free_text_ok` on a decision is only a hint that the ship especially invites one. `task_id` is included only when the ask has one. Older asks that only carry `payload.choices` are shown as simpler cards and answered with `payload.answer.text`.
 
 In fixture mode, or without `QD_ALLOW_SEND=1`, the server logs the exact `mail.send` arguments and argv instead of running them, and marks the card answered in memory.
 

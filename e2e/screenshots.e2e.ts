@@ -35,6 +35,40 @@ test.describe('phone', () => {
 		});
 	}
 
+	test('own answer', async ({ page }) => {
+		await open(page, 'light');
+		const card = page.locator('[data-card]').filter({ hasText: 'retry policy' });
+		await card.getByRole('button', { name: 'Write my own answer' }).click();
+		const field = card.getByLabel('Your own answer');
+		await field.fill('Retry on payday only, and tell support first.');
+		// Frame the own answer and its Send step below the header.
+		await field.evaluate((el) =>
+			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 260)
+		);
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/phone-own-answer.png` });
+	});
+
+	test('grouped card', async ({ page }) => {
+		await open(page, 'light');
+		const card = page.locator('[data-card]').filter({ hasText: 'search-index' });
+		await card.evaluate((el) =>
+			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 80)
+		);
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/phone-group.png` });
+	});
+
+	test('legacy card', async ({ page }) => {
+		await open(page, 'light');
+		const card = page.locator('[data-card]').filter({ hasText: 'mobile-app' });
+		await card.evaluate((el) =>
+			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 80)
+		);
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/phone-legacy.png` });
+	});
+
 	test('confirm step', async ({ page }) => {
 		await open(page, 'light');
 		const card = page.locator('[data-card]').filter({ hasText: 'retry policy' });

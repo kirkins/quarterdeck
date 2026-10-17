@@ -52,3 +52,13 @@ Within one server process, a second answer to the same ask is refused, including
 ## 9. Listen on loopback; no auth in v0
 
 The portal acts as the captain. Dev, preview and `npm start` bind `127.0.0.1` unless `HOST` is set (`server.js` sets the default because adapter-node's is `0.0.0.0`). There is no authentication in v0; the README says plainly that an authenticating proxy is required before any non-local exposure.
+
+v0 leans on loopback for its safety, and nothing else. The answer form is a plain POST to `?/answer` with no CSRF token. The only guard is SvelteKit's origin check, which rejects a form POST whose `Origin` does not match the app's own origin. That protects a browser on another site from answering on the captain's behalf, but it is not authentication and it is not a substitute for one. Before the authenticating proxy goes in, review this again: check that the proxy passes the public origin through (or set `kit.paths.origin`, or `csrf.trustedOrigins`), since a rewritten Host would make the captain's own answers fail, and decide whether a token is needed as well.
+
+## 10. Every decision takes the captain's own answer
+
+The captain can always answer in their own words, whatever the ship asked for. Options stay the primary, one-tap path. Below them, a dashed row reads "Write my own answer"; choosing it clears any option picked so far and opens a text field. Writing a note under a chosen option sends both. The own answer goes through the same confirm step as an option, and Send stays hidden until there is an option or some non-blank text.
+
+`free_text_ok` is now only a hint that the ship especially invites a written answer. It changes the row's wording and nothing else. Privateer was asked to drop its gate on text answers, and until it does a live text-only reply can be refused; the card shows that refusal and keeps the text, so nothing is lost silently.
+
+The reply shapes are fixed: an option alone is `{option_id}`; an option with a note is `{option_id, text}`; an own answer is `{text}`, with the text as the body. Every reply carries `task_id` when the ask has one.

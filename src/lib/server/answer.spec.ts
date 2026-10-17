@@ -57,34 +57,53 @@ describe('buildReply', () => {
 		expect(result.ok && result.args.body).toBe('No retries — only after Friday');
 	});
 
-	it('allows text alone only when free_text_ok', () => {
-		expect(buildReply(question(), { text: 'Something else' })).toEqual({
-			ok: false,
-			error: expect.stringMatching(/needs one of the options/)
-		});
-		const free = buildReply(question({}, { free_text_ok: true }), { text: 'Something else' });
-		expect(free.ok && free.args.payload.answer).toEqual({ text: 'Something else' });
-		expect(free.ok && free.args.body).toBe('Something else');
+	it('accepts the captain’s own answer alone, whatever free_text_ok says', () => {
+		for (const free_text_ok of [false, true]) {
+			const result = buildReply(question({}, { free_text_ok }), { text: 'Something else' });
+			expect(result.ok && result.args.payload.answer).toEqual({ text: 'Something else' });
+			expect(result.ok && result.args.body).toBe('Something else');
+			expect(result.ok && result.answered).toEqual({ text: 'Something else' });
+		}
 	});
 
-	it('rejects nothing, unknown options, long text and second answers', () => {
+	it('trims an own answer and rejects one that is empty or only spaces', () => {
+		const result = buildReply(question(), { text: '  Not yet  ' });
+		expect(result.ok && result.args.body).toBe('Not yet');
+		expect(buildReply(question(), { text: '' })).toEqual({
+			ok: false,
+			error: 'Choose an option or write your own answer.'
+		});
+		expect(buildReply(question(), { text: '   ' }).ok).toBe(false);
+	});
+
+	it('rejects an own answer longer than MAX_TEXT, with or without an option', () => {
+		const long = 'x'.repeat(MAX_TEXT + 1);
+		expect(buildReply(question({}, { free_text_ok: true }), { text: long })).toEqual({
+			ok: false,
+			error: `Keep the answer under ${MAX_TEXT} characters.`
+		});
+		expect(buildReply(question(), { option_id: 'smart', text: long }).ok).toBe(false);
+		expect(buildReply(question(), { text: 'x'.repeat(MAX_TEXT) }).ok).toBe(true);
+	});
+
+	it('rejects nothing, unknown options and second answers', () => {
 		expect(buildReply(question(), {}).ok).toBe(false);
 		expect(buildReply(question(), { option_id: '', text: '   ' }).ok).toBe(false);
 		expect(buildReply(question(), { option_id: 'other' })).toMatchObject({
 			ok: false,
 			error: expect.stringMatching(/no longer offered/)
 		});
-		expect(buildReply(question(), { option_id: 'smart', text: 'x'.repeat(MAX_TEXT + 1) }).ok).toBe(
-			false
-		);
 		const answered = question();
 		answered.answered = { at_ms: NOW, sent: false };
 		expect(buildReply(answered, { option_id: 'smart' }).ok).toBe(false);
+		expect(buildReply(answered, { text: 'again' }).ok).toBe(false);
 	});
 
-	it('omits task_id when the ask has none', () => {
-		const result = buildReply(question({ task_id: null }), { option_id: 'smart' });
-		expect(result.ok && 'task_id' in result.args).toBe(false);
+	it('carries task_id on the reply when the ask has one, and omits it when not', () => {
+		const withTask = buildReply(question(), { text: 'Own words' });
+		expect(withTask.ok && withTask.args.task_id).toBe('billing-retries');
+		const withoutTask = buildReply(question({ task_id: null }), { option_id: 'smart' });
+		expect(withoutTask.ok && 'task_id' in withoutTask.args).toBe(false);
 	});
 
 	it('answers older choices-only asks in words', () => {
