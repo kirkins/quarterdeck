@@ -37,7 +37,10 @@ export type BuildResult =
  *
  * - option only: `payload.answer = {option_id}`, body = the option's label
  * - option + text: `{option_id, text}`, body = "label — text"
- * - text only: `{text}`, allowed only when the question is free_text_ok
+ * - text only (the captain's own answer, on every decision): `{text}`, body = text
+ *
+ * `free_text_ok` is only a hint that the ship invites a written answer, so it
+ * does not gate anything here.
  *
  * Older (choices-only) asks have no option ids a ship would understand, so
  * their reply carries the chosen words as text; the body says the same.
@@ -53,10 +56,7 @@ export function buildReply(question: Question, input: AnswerInput): BuildResult 
 
 	const option = optionId ? question.options.find((o) => o.id === optionId) : undefined;
 	if (optionId && !option) return { ok: false, error: 'That option is no longer offered.' };
-	if (!option && !text) return { ok: false, error: 'Choose an option first.' };
-	if (!option && !question.free_text_ok) {
-		return { ok: false, error: 'This question needs one of the options; a note can go with it.' };
-	}
+	if (!option && !text) return { ok: false, error: 'Choose an option or write your own answer.' };
 
 	const body = option ? (text ? `${option.label} — ${text}` : option.label) : (text as string);
 	const answer: ReplyAnswer =

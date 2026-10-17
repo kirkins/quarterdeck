@@ -38,6 +38,7 @@ export interface Decision {
 	why?: string;
 	blocked: string[];
 	options: DecisionOption[];
+	/** A hint that the ship especially invites a written answer. The captain may always write their own. */
 	free_text_ok: boolean;
 	group?: string;
 }
@@ -221,6 +222,7 @@ export interface Question {
 	why: string | null;
 	blocked: string[];
 	options: CardOption[];
+	/** Hint only: the ship especially invites a written answer. Every question accepts one. */
 	free_text_ok: boolean;
 	hands_on: string | null;
 	deadline_ms: number | null;
@@ -339,7 +341,7 @@ export function toQuestion(item: MailItem, now: number): Question {
 		...splitBody(item.body),
 		blocked: [],
 		options,
-		// With fewer than two choices there is nothing to pick; let the captain write.
+		// With fewer than two choices the ship is clearly inviting a written answer.
 		free_text_ok: options.length < 2,
 		problems: []
 	};

@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { tick } from 'svelte';
 	import type { Question } from '#lib/decision.ts';
 	import { formatAge, formatDeadline, urgencyOf } from '#lib/time.ts';
 	import Blocked from './Blocked.svelte';
@@ -40,34 +41,49 @@
 	let selected = $state<string | null>(failure?.option_id ?? null);
 	// svelte-ignore state_referenced_locally
 	let text = $state(failure?.text ?? '');
+	/** The captain opened their own answer instead of picking an option. */
+	let writing = $state(false);
 	let pending = $state(false);
 	let error = $state<string | null>(null);
+	let field = $state<HTMLTextAreaElement | null>(null);
 
 	const uid = $derived(`q-${question.id}`);
 	const chosen = $derived(question.options.find((o) => o.id === selected) ?? null);
-	const ready = $derived(chosen !== null || (question.free_text_ok && text.trim() !== ''));
+	const ready = $derived(chosen !== null || text.trim() !== '');
+	// The note or own-answer field appears once it is wanted: always when there is
+	// nothing to pick, otherwise after an option or an own answer is in play.
+	const showField = $derived(
+		question.options.length === 0 || chosen !== null || writing || text !== ''
+	);
 	const shownError = $derived(error ?? failure?.error ?? null);
 	const textLabel = $derived(
 		question.options.length === 0
 			? 'Your answer'
-			: question.free_text_ok
-				? chosen
-					? 'Add a note (optional)'
-					: 'Or answer in your own words'
-				: 'Add a note (optional)'
+			: chosen
+				? 'Add a note (optional)'
+				: 'Your own answer'
 	);
 
 	/** Escape backs out of a half-made answer. */
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape' && ready) {
+		if (event.key === 'Escape' && (selected !== null || text !== '' || writing)) {
 			event.preventDefault();
 			clear();
 		}
 	}
 
+	/** Writing your own answer replaces any option picked so far. */
+	async function openOwn() {
+		selected = null;
+		writing = true;
+		await tick();
+		field?.focus();
+	}
+
 	function clear() {
 		selected = null;
 		text = '';
+		writing = false;
 		error = null;
 	}
 </script>
@@ -142,7 +158,6 @@
 		<form
 			method="POST"
 			action="?/answer"
-			class:ready
 			onreset={clear}
 			use:enhance={() => {
 				pending = true;
@@ -207,40 +222,63 @@
 								</span>
 							</label>
 						{/each}
+						<button
+							type="button"
+							class="option own"
+							class:open={writing}
+							disabled={pending}
+							onclick={openOwn}
+						>
+							<span class="option-body">
+								<span class="option-label">
+									{writing
+										? 'Writing my own answer'
+										: question.free_text_ok
+											? 'Or write my own answer'
+											: 'Write my own answer'}
+								</span>
+								<span class="what">Say it in your own words instead of picking one.</span>
+							</span>
+						</button>
 					</div>
 				</fieldset>
 			{/if}
 
-			<div class="compose" class:always={question.free_text_ok}>
-				<label class="text-label" for="{uid}-text">{textLabel}</label>
-				<textarea
-					id="{uid}-text"
-					name="text"
-					rows="2"
-					maxlength="2000"
-					placeholder={question.free_text_ok ? 'Write an answer…' : 'e.g. only after Friday'}
-					bind:value={text}
-					disabled={pending}
-					{onkeydown}></textarea>
-			</div>
-
-			<div class="confirm" aria-live="polite">
-				<p class="confirm-summary">
-					{#if chosen}
-						Reply to <strong>{question.from}</strong>: {chosen.label}
-					{:else if text.trim()}
-						Reply to <strong>{question.from}</strong> in your own words
-					{:else}
-						Reply to <strong>{question.from}</strong>
-					{/if}
-				</p>
-				<div class="confirm-actions">
-					<button type="reset" class="btn btn-quiet" disabled={pending}>Cancel</button>
-					<button type="submit" class="btn btn-primary" disabled={pending}>
-						{pending ? 'Sending…' : 'Send answer'}
-					</button>
+			{#if showField}
+				<div class="compose">
+					<label class="text-label" for="{uid}-text">{textLabel}</label>
+					<textarea
+						id="{uid}-text"
+						name="text"
+						rows="2"
+						maxlength="2000"
+						placeholder={chosen ? 'e.g. only after Friday' : 'Write your answer…'}
+						bind:value={text}
+						bind:this={field}
+						disabled={pending}
+						{onkeydown}></textarea>
 				</div>
-			</div>
+			{/if}
+
+			{#if ready}
+				<div class="confirm" aria-live="polite">
+					<p class="confirm-summary">
+						{#if chosen}
+							Reply to <strong>{question.from}</strong>: {chosen.label}{text.trim()
+								? ', with your note'
+								: ''}
+						{:else}
+							Reply to <strong>{question.from}</strong> in your own words
+						{/if}
+					</p>
+					<div class="confirm-actions">
+						<button type="reset" class="btn btn-quiet" disabled={pending}>Cancel</button>
+						<button type="submit" class="btn btn-primary" disabled={pending || !ready}>
+							{pending ? 'Sending…' : 'Send answer'}
+						</button>
+					</div>
+				</div>
+			{/if}
 
 			{#if shownError}
 				<p class="error" role="alert"><Icon name="alert" size={16} />{shownError}</p>
@@ -380,6 +418,29 @@
 	.option:has(input:disabled) {
 		cursor: progress;
 	}
+	/* The own-answer row is a button, so it resets the look a native button brings. */
+	button.option {
+		width: 100%;
+		font: inherit;
+		color: inherit;
+		text-align: left;
+	}
+	.option.own {
+		grid-template-columns: 1fr;
+		border-style: dashed;
+		background: transparent;
+	}
+	.option.own:hover {
+		border-style: dashed;
+	}
+	.option.own.open {
+		border-style: solid;
+		border-color: var(--sea);
+		background: var(--sea-soft);
+	}
+	.option.own:disabled {
+		cursor: progress;
+	}
 	.option input {
 		position: absolute;
 		opacity: 0;
@@ -447,18 +508,6 @@
 		color: var(--ink-3);
 	}
 
-	/* The note field and the Send step appear once something is chosen. */
-	.compose,
-	.confirm {
-		display: none;
-	}
-	.compose.always,
-	form:has(input:checked) .compose,
-	form.ready .confirm,
-	form:has(input:checked) .confirm,
-	form:has(textarea:not(:placeholder-shown)) .confirm {
-		display: grid;
-	}
 	.compose {
 		gap: var(--s-1);
 	}

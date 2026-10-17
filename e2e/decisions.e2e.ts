@@ -69,7 +69,8 @@ test('free-text answers and the keyboard work', async ({ page }) => {
 	await page.goto('/');
 	const card = page.locator('[data-card]').filter({ hasText: 'workspaces' });
 
-	await card.getByLabel('Or answer in your own words').fill('Call them “Crews”.');
+	await card.getByRole('button', { name: 'Or write my own answer' }).click();
+	await card.getByLabel('Your own answer').fill('Call them “Crews”.');
 	await expect(card.getByText('Reply to docs-site in your own words')).toBeVisible();
 	await card.getByRole('button', { name: 'Send answer' }).click();
 	await expect(card.getByRole('status')).toContainText('Crews');
@@ -83,6 +84,30 @@ test('free-text answers and the keyboard work', async ({ page }) => {
 	await expect(hero.getByRole('radio').nth(1)).toBeChecked();
 	await page.keyboard.press('Escape');
 	await expect(hero.getByRole('radio', { checked: true })).toHaveCount(0);
+});
+
+test('every decision takes the captain’s own answer, with no send until there is text', async ({
+	page
+}) => {
+	await page.goto('/');
+	const card = page.locator('[data-card]').filter({ hasText: 'analytics' });
+	const send = card.getByRole('button', { name: 'Send answer' });
+
+	// Options stay primary; the own answer is one row below them.
+	await expect(card.getByRole('radio')).toHaveCount(2);
+	await card.getByRole('button', { name: 'Write my own answer' }).click();
+	await expect(send).toBeHidden();
+
+	// Spaces alone are not an answer.
+	await card.getByLabel('Your own answer').fill('   ');
+	await expect(send).toBeHidden();
+
+	await card.getByLabel('Your own answer').fill('Keep 30 days, and say why in the docs.');
+	await expect(card.getByText('Reply to analytics in your own words')).toBeVisible();
+	await send.click();
+
+	await expect(card.getByRole('status')).toContainText('Keep 30 days, and say why in the docs.');
+	await expect(card.getByRole('status')).toContainText('Logged, not sent');
 });
 
 test('theme toggle cycles and persists', async ({ page }) => {
