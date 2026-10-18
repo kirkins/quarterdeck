@@ -7,8 +7,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use data::captain::Waiting;
 use data::config::{self, Source};
+use data::decision::Card;
 use data::markdown::{self, Document};
-use data::privateer::{Client, Error};
+use data::privateer::{Client, Error, Sent};
+use data::triage;
 use iced::Task;
 use serde_json::json;
 
@@ -18,6 +20,25 @@ pub enum Message {
     Waited(u64, Result<Waiting, Error>),
 }
 
+/// One ask, read for drawing: its card, and its Markdown.
+pub struct Details {
+    pub card: Card,
+    pub body: Document,
+    pub why: Option<Document>,
+}
+
+impl Details {
+    fn read(item: &data::captain::Item) -> Self {
+        let card = Card::from_mail(&item.mail);
+        let why = card.why.as_deref().map(|why| markdown::parse(why, None));
+        Self {
+            body: markdown::parse(&item.mail.body, None),
+            why,
+            card,
+        }
+    }
+}
+
 pub struct Connection {
     client: Client,
     poll: Duration,
@@ -25,8 +46,8 @@ pub struct Connection {
     in_flight: bool,
     /// The last answer that worked, kept while a later poll fails.
     pub waiting: Option<Waiting>,
-    /// Each ask's body as Markdown, by mail id, parsed once per answer.
-    pub bodies: HashMap<String, Document>,
+    /// Each ask read once per answer, by its triage key.
+    pub details: HashMap<String, Details>,
     pub error: Option<Error>,
     /// When Privateer last answered, in ms since the epoch.
     pub checked_ms: Option<i64>,
@@ -40,7 +61,7 @@ impl Connection {
             generation: 0,
             in_flight: false,
             waiting: None,
-            bodies: HashMap::new(),
+            details: HashMap::new(),
             error: None,
             checked_ms: None,
         }
@@ -69,6 +90,21 @@ impl Connection {
             ..Self::new(config)
         };
         self.poll()
+    }
+
+    /// Whether writes really reach Privateer.
+    pub fn sends(&self) -> bool {
+        self.client.sends()
+    }
+
+    /// A write, such as `captain.reply`, through the one guarded path.
+    pub fn send(
+        &self,
+        command: &'static str,
+        args: serde_json::Value,
+    ) -> impl Future<Output = Result<Sent, Error>> + use<> {
+        let client = self.client.clone();
+        async move { client.send(command, args).await }
     }
 
     pub fn poll(&mut self) -> Task<Message> {
@@ -100,14 +136,11 @@ impl Connection {
                 self.in_flight = false;
                 match result {
                     Ok(waiting) => {
-                        self.bodies = waiting
+                        self.details = waiting
                             .waiting
                             .iter()
                             .map(|item| {
-                                (
-                                    item.mail.id.clone(),
-                                    markdown::parse(&item.mail.body, None),
-                                )
+                                (triage::key(item), Details::read(item))
                             })
                             .collect();
                         self.waiting = Some(waiting);

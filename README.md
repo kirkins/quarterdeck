@@ -2,7 +2,9 @@
 
 A native desktop app for the captain of a [Privateer](https://github.com/kirkins/privateer) fleet: see what every ship needs, and decide. It runs on your own machine, as you, and talks to Privateer through its JSON commands.
 
-Status: early. A window with a sidebar of the captain's six views (Triage, Feed, Ships, Fleet, Spend, Reports), panes you can split, drag, resize and maximize, themes, and a settings window. Quarterdeck asks Privateer what waits on you every few seconds: the sidebar shows whether it answered, and Triage lists the open asks. The other views are placeholders.
+Status: early. A window with a sidebar of the captain's six views (Triage, Feed, Ships, Fleet, Spend, Reports), panes you can split, drag, resize and maximize, themes, and a settings window. Quarterdeck asks Privateer what waits on you every few seconds: the sidebar shows whether it answered, and Triage lists the open asks. Triage sorts what waits on you into "Needs you now", "Waiting on you" and "When you have a moment" (high urgency, then overdue, then the nearest deadline, then the oldest). Decisions open as cards: the question, why it matters as Markdown, the options with cost and the ship's recommendation, and always a way to answer in your own words. Answering is two steps, choose then confirm; any ask can be dismissed, with a note. The other views are placeholders.
+
+**Sending is off until you turn it on.** Every answer and dismissal goes through one path: unless `source = "cli"` and `allow_send = true`, nothing runs, the exact command is logged, and the ask is marked "not sent". Replies use `captain.reply {id, body, payload: {answer}}`: an option is `{option_id}`, with a note `{option_id, text}`, your own words `{text}`. Dismissing is `captain.dismiss {id, note?}`.
 
 The earlier SvelteKit web portal is archived on the [`archive/sveltekit`](https://github.com/kirkins/quarterdeck/tree/archive/sveltekit) branch (tag `sveltekit-final`). Its [design](https://github.com/kirkins/quarterdeck/blob/archive/sveltekit/docs/DESIGN.md) and [decisions](https://github.com/kirkins/quarterdeck/blob/archive/sveltekit/docs/DECISIONS.md) are the spec this app is catching up to.
 
@@ -38,6 +40,7 @@ home = "~/ships/workstation/.privateer"       # any Privateer home on this machi
 bin = "privateer"                             # a path, or a name on PATH
 source = "cli"                                # or "fixtures" for invented data
 poll_seconds = 15                             # at least 5
+allow_send = false                            # true to really send answers
 ```
 
 Quarterdeck runs `privateer --home HOME COMMAND --json ARGS` as the captain: it clears `PRIVATEER_ACTOR`, `PRIVATEER_ROLE` and `PRIVATEER_HOME`, so starting it from a ship's shell does not make it act as that ship. Each command runs in its own process group, with a time limit and an output limit, and is stopped with everything it started when it runs over. When `privateer machine captain` keeps the captain's desk on another machine, Privateer answers the captain's commands from there (Privateer PR #251).
@@ -58,7 +61,9 @@ Layout:
 - `src/screen/dashboard.rs`: the sidebar and the pane grid.
 - `src/screen/settings.rs`: the settings window.
 - `src/connection.rs`: polling Privateer, and what it last answered.
-- `data/src/privateer.rs`: running the privateer binary. `data/src/captain.rs`: what `captain.waiting` returns.
+- `src/screen/triage.rs`: the Triage view, decision cards, answering and dismissing.
+- `data/src/triage.rs`: sections and order. `data/src/decision.rs`: an ask as a card, and the reply and dismiss arguments.
+- `data/src/privateer.rs`: running the privateer binary, and the one guarded write path. `data/src/captain.rs`: what `captain.waiting` returns.
 - `data/src/markdown.rs` and `src/widget/markdown.rs`: Markdown into a document model, and drawing it. Ported from halloy-extend's Doc Lib parser and extension rich-text blocks; inline `$...$` math is not read, so prices stay text.
 - `fixtures/`: invented data for `source = "fixtures"`.
 - `src/appearance/`, `src/widget/`, `src/font.rs`, `src/icon.rs`, `src/window.rs`: the theme, widgets, fonts and window handling, from Halloy.

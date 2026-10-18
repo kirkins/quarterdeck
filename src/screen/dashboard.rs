@@ -1,7 +1,5 @@
-use data::captain::Item;
 use data::config::{Position, Source};
 use data::dashboard::{Axis, Layout, View};
-use data::markdown::Document;
 use iced::widget::pane_grid::{self, PaneGrid};
 use iced::widget::{button, column, container, row, scrollable, space};
 use iced::{Alignment, Length, Padding};
@@ -9,7 +7,8 @@ use iced::{Alignment, Length, Padding};
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
-use crate::widget::{Column, Element, markdown, text};
+use crate::screen::triage::{self, Triage};
+use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
 #[derive(Debug, Clone)]
@@ -23,9 +22,7 @@ pub enum Message {
     ToggleMaximize(pane_grid::Pane),
     OpenSettings,
     Refresh,
-    /// Show or hide one ask's full text.
-    Expand(String),
-    OpenLink(String),
+    Triage(triage::Message),
 }
 
 /// What the app must do after an update.
@@ -34,6 +31,12 @@ pub enum Event {
     OpenSettings,
     Refresh,
     OpenLink(String),
+    /// Run a write for the ask `key`.
+    Write {
+        key: String,
+        command: &'static str,
+        args: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,8 +47,7 @@ struct Pane {
 pub struct Dashboard {
     panes: pane_grid::State<Pane>,
     focus: Option<pane_grid::Pane>,
-    /// The ask shown in full, by mail id.
-    expanded: Option<String>,
+    triage: Triage,
 }
 
 impl Dashboard {
@@ -56,7 +58,7 @@ impl Dashboard {
         Self {
             panes,
             focus,
-            expanded: None,
+            triage: Triage::default(),
         }
     }
 
@@ -67,7 +69,20 @@ impl Dashboard {
         }
     }
 
-    pub fn update(&mut self, message: Message) -> Option<Event> {
+    /// What became of a write Triage asked for.
+    pub fn written(
+        &mut self,
+        key: String,
+        result: Result<data::privateer::Sent, data::privateer::Error>,
+    ) {
+        self.triage.written(key, result);
+    }
+
+    pub fn update(
+        &mut self,
+        message: Message,
+        connection: &Connection,
+    ) -> Option<Event> {
         match message {
             Message::Open(view) => {
                 // Show the view where it already is; otherwise put it in the
@@ -128,12 +143,14 @@ impl Dashboard {
             }
             Message::OpenSettings => Some(Event::OpenSettings),
             Message::Refresh => Some(Event::Refresh),
-            Message::Expand(id) => {
-                self.expanded =
-                    (self.expanded.as_deref() != Some(&id)).then_some(id);
-                None
+            Message::Triage(message) => {
+                match self.triage.update(message, connection)? {
+                    triage::Event::Write { key, command, args } => {
+                        Some(Event::Write { key, command, args })
+                    }
+                    triage::Event::OpenLink(url) => Some(Event::OpenLink(url)),
+                }
             }
-            Message::OpenLink(url) => Some(Event::OpenLink(url)),
         }
     }
 
@@ -288,7 +305,7 @@ impl Dashboard {
 
             let body = match pane.view {
                 View::Triage => {
-                    triage(connection, self.expanded.as_deref(), theme)
+                    self.triage.view(connection, theme).map(Message::Triage)
                 }
                 view => placeholder(view),
             };
@@ -369,7 +386,10 @@ fn status(connection: &Connection) -> Element<'_, Message> {
             (None, Source::Cli) => match connection.checked_ms {
                 Some(at) => (
                     icon::dot(),
-                    format!("Privateer, {}", ago(connection::now_ms() - at)),
+                    format!(
+                        "Privateer, {}",
+                        triage::ago(connection::now_ms() - at)
+                    ),
                     theme::text::success,
                 ),
                 None => (
@@ -402,129 +422,6 @@ fn status(connection: &Connection) -> Element<'_, Message> {
         iced::widget::tooltip::Position::Top,
     )
     .into()
-}
-
-/// What waits on the captain, as a plain list until the Triage view is
-/// built: hands-on asks marked, the ship, the ask, and how long ago.
-fn triage<'a>(
-    connection: &'a Connection,
-    expanded: Option<&str>,
-    theme: &'a Theme,
-) -> Element<'a, Message> {
-    let Some(waiting) = &connection.waiting else {
-        let message = match &connection.error {
-            Some(error) => error.to_string(),
-            None if connection.is_loading() => "Asking Privateer...".into(),
-            None => "Not asked yet.".into(),
-        };
-        return container(text(message).style(if connection.error.is_some() {
-            theme::text::error
-        } else {
-            theme::text::secondary
-        }))
-        .padding(16)
-        .center(Length::Fill)
-        .max_width(480)
-        .into();
-    };
-
-    if waiting.waiting.is_empty() {
-        return container(
-            text("Nothing waits on you.").style(theme::text::secondary),
-        )
-        .center(Length::Fill)
-        .into();
-    }
-
-    let summary = format!(
-        "{} waiting, {} need your hands",
-        waiting.waiting.len(),
-        waiting.hands_on.len()
-    );
-    let mut list = Column::new().spacing(2).push(
-        text(summary)
-            .style(theme::text::secondary)
-            .font(font::MONO_BOLD.clone()),
-    );
-    if let Some(error) = &connection.error {
-        list = list.push(
-            text(format!("Showing the last answer: {error}"))
-                .style(theme::text::error),
-        );
-    }
-    for item in waiting.waiting.iter().rev() {
-        let open = expanded == Some(item.mail.id.as_str());
-        let body = connection.bodies.get(&item.mail.id).filter(|_| open);
-        list = list.push(row_for(item, body, theme));
-    }
-
-    scrollable(container(list.spacing(12)).padding(12))
-        .height(Length::Fill)
-        .into()
-}
-
-fn row_for<'a>(
-    item: &'a Item,
-    body: Option<&'a Document>,
-    theme: &'a Theme,
-) -> Element<'a, Message> {
-    let kind = if item.step.is_some() {
-        text("needs your hands").style(theme::text::error)
-    } else {
-        text(item.mail.kind.as_str()).style(theme::text::tertiary)
-    };
-
-    let header = button(
-        row![
-            text(item.ship.as_str())
-                .style(move |theme| theme::text::seeded(theme, &item.ship)),
-            kind,
-            space().width(Length::Fill),
-            text(ago(item.age_ms)).style(theme::text::tertiary),
-        ]
-        .spacing(8),
-    )
-    .padding(0)
-    .style(theme::button::bare)
-    .on_press(Message::Expand(item.mail.id.clone()));
-
-    let content: Element<'a, Message> = match body {
-        Some(document) => {
-            container(markdown(document, theme, Message::OpenLink))
-                .padding([6, 0])
-                .into()
-        }
-        None => button(text(preview(&item.mail.body, 180)))
-            .padding(0)
-            .style(theme::button::bare)
-            .on_press(Message::Expand(item.mail.id.clone()))
-            .into(),
-    };
-
-    column![header, content].spacing(2).into()
-}
-
-/// The start of a message, on one line, cut at a word near `limit`
-/// characters.
-fn preview(body: &str, limit: usize) -> String {
-    let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
-    if flat.chars().count() <= limit {
-        return flat;
-    }
-    let cut: String = flat.chars().take(limit).collect();
-    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
-    format!("{cut}…")
-}
-
-/// A rough age: "now", "12m", "3h", "2d".
-fn ago(ms: i64) -> String {
-    let minutes = ms.max(0) / 60_000;
-    match minutes {
-        0 => "now".into(),
-        1..60 => format!("{minutes}m"),
-        60..1440 => format!("{}h", minutes / 60),
-        _ => format!("{}d", minutes / 1440),
-    }
 }
 
 fn section_icon<'a>(view: View) -> crate::widget::Text<'a> {

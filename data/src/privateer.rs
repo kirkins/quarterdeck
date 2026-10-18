@@ -62,7 +62,17 @@ pub struct Client {
     source: Source,
     bin: PathBuf,
     home: Option<PathBuf>,
+    allow_send: bool,
     timeout: Duration,
+}
+
+/// What became of a write.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Sent {
+    /// Privateer ran it and answered.
+    Sent(Value),
+    /// Sending is off: nothing ran. The command that would have.
+    Held(Vec<String>),
 }
 
 impl Client {
@@ -71,6 +81,7 @@ impl Client {
             source: config.source,
             bin: config.bin.clone(),
             home: config.home.clone(),
+            allow_send: config.allow_send,
             timeout: TIMEOUT,
         }
     }
@@ -82,6 +93,29 @@ impl Client {
 
     pub fn source(&self) -> Source {
         self.source
+    }
+
+    /// Whether writes really reach Privateer.
+    pub fn sends(&self) -> bool {
+        self.allow_send && self.source == Source::Cli
+    }
+
+    /// Run a command that changes something, such as `captain.reply`. Every
+    /// write goes through here: unless sending is on and the source is the
+    /// binary, nothing runs and the command is handed back.
+    pub async fn send(
+        &self,
+        command: &str,
+        args: Value,
+    ) -> Result<Sent, Error> {
+        if !self.sends() {
+            let home = self.home.clone().unwrap_or_else(|| "HOME".into());
+            let mut argv = vec![self.bin.display().to_string()];
+            argv.extend(argv_for(&home, command, &args));
+            log::info!("sending is off; would run: {argv:?}");
+            return Ok(Sent::Held(argv));
+        }
+        self.run(command, args).await.map(Sent::Sent)
     }
 
     /// Run one command and return its JSON answer.
@@ -117,7 +151,7 @@ fn fixture(command: &str) -> Result<Value, Error> {
 }
 
 /// The argv for one command.
-pub fn argv(home: &Path, command: &str, args: &Value) -> Vec<String> {
+pub fn argv_for(home: &Path, command: &str, args: &Value) -> Vec<String> {
     vec![
         "--home".into(),
         home.to_string_lossy().into_owned(),
@@ -136,7 +170,7 @@ async fn run(
 ) -> Result<Value, Error> {
     let mut process = Command::new(bin);
     process
-        .args(argv(home, command, args))
+        .args(argv_for(home, command, args))
         // Quarterdeck acts as the captain: never as a ship whose shell it
         // was started from.
         .env_remove("PRIVATEER_ACTOR")
@@ -322,6 +356,7 @@ mod tests {
             bin,
             home: Some(dir.join("home")),
             poll_seconds: 15,
+            allow_send: false,
         })
     }
 
@@ -410,6 +445,34 @@ echo '{"waiting":[]}'"#,
             .unwrap_err();
 
         assert!(matches!(error, Error::TooLarge { .. }), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_write_runs_only_when_sending_is_on() {
+        let (dir, bin) = script(
+            "send",
+            r#"touch "$(dirname "$0")/ran"; echo '{"id":"a1"}'"#,
+        );
+        let held = client(bin.clone(), &dir);
+        let reply = json!({"id": "a1", "body": "Yes"});
+
+        let Sent::Held(argv) =
+            held.send("captain.reply", reply.clone()).await.unwrap()
+        else {
+            panic!("sent with sending off");
+        };
+        assert_eq!(argv[3], "captain.reply");
+        assert!(!dir.join("ran").exists());
+
+        let sending = Client {
+            allow_send: true,
+            ..held
+        };
+        assert_eq!(
+            sending.send("captain.reply", reply).await.unwrap(),
+            Sent::Sent(json!({"id": "a1"}))
+        );
+        assert!(dir.join("ran").exists());
     }
 
     #[tokio::test]

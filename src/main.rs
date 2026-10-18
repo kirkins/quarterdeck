@@ -147,6 +147,10 @@ enum Message {
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
     Connection(connection::Message),
+    Written(
+        String,
+        Result<data::privateer::Sent, data::privateer::Error>,
+    ),
 }
 
 impl Quarterdeck {
@@ -230,8 +234,16 @@ impl Quarterdeck {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Dashboard(message) => match self.dashboard.update(message)
+            Message::Dashboard(message) => match self
+                .dashboard
+                .update(message, &self.connection)
             {
+                Some(dashboard::Event::Write { key, command, args }) => {
+                    Task::perform(
+                        self.connection.send(command, args),
+                        move |result| Message::Written(key.clone(), result),
+                    )
+                }
                 Some(dashboard::Event::LayoutChanged) => self.save_layout(),
                 Some(dashboard::Event::OpenSettings) => self.open_settings(),
                 Some(dashboard::Event::OpenLink(url)) => {
@@ -261,6 +273,16 @@ impl Quarterdeck {
                 self.connection
                     .configure(&self.config.privateer)
                     .map(Message::Connection)
+            }
+            Message::Written(key, result) => {
+                let sent = matches!(result, Ok(data::privateer::Sent::Sent(_)));
+                self.dashboard.written(key, result);
+                // A sent answer closes the ask: read the list again.
+                if sent {
+                    self.connection.poll().map(Message::Connection)
+                } else {
+                    Task::none()
+                }
             }
             Message::Connection(message) => {
                 self.connection.update(message).map(Message::Connection)

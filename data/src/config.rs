@@ -31,6 +31,9 @@ pub struct Privateer {
     pub home: Option<PathBuf>,
     /// How often to ask Privateer what is waiting, in seconds.
     pub poll_seconds: u64,
+    /// Really send the captain's answers and dismissals. Off, each is only
+    /// logged, with the exact command that would run.
+    pub allow_send: bool,
 }
 
 impl Default for Privateer {
@@ -40,6 +43,7 @@ impl Default for Privateer {
             bin: PathBuf::from("privateer"),
             home: None,
             poll_seconds: 15,
+            allow_send: false,
         }
     }
 }
