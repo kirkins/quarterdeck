@@ -3654,6 +3654,48 @@
 			"harness": "tidewater",
 			"jobs": 1,
 			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1792296400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 980000,
+				"output": 196000,
+				"cacheRead": 3220000,
+				"cacheWrite": 210000
+			}
+		},
+		{
+			"ts_ms": 1792292800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 276000,
+				"output": 60000,
+				"cacheRead": 720000,
+				"cacheWrite": 48000
+			}
+		},
+		{
+			"ts_ms": 1792289200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 78000,
+				"output": 15600,
+				"cacheRead": 143000,
+				"cacheWrite": 6500
+			}
 		}
 	]
 }

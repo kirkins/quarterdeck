@@ -7,12 +7,15 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	assemble,
+	firstCursorOf,
+	forwardCursorOf,
 	parseFeed,
 	parseRoutesShow,
 	parseShipProfile,
 	parseSnapshot,
 	parseUsageRecords,
 	parseUsageSummary,
+	type FeedEntry,
 	type FeedPage,
 	type FleetSnapshot,
 	type RoutesConfig,
@@ -20,7 +23,7 @@ import {
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
-import { isShipToShip, type FeedQuery } from '#lib/feed.ts';
+import { isShipToShip, type FeedBound, type FeedQuery } from '#lib/feed.ts';
 import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
 import { REPORT_FORMATS, checkContent, type ReportFormat } from '#lib/report.ts';
 import type { ReplyArgs } from './answer.ts';
@@ -86,6 +89,23 @@ function rec(value: unknown): Record<string, unknown> | null {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: null;
+}
+
+/** The feed's own order: by cursor, which is arrival order, not creation time. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The UTC midnight a time falls after: the day the usage chart's buckets are keyed by. */
+function dayStart(time: number): number {
+	return Math.floor(time / DAY_MS) * DAY_MS;
+}
+
+/** A fixture cursor's place in arrival order, read from its `f1.<n>` form. */
+function ordinalOf(cursor: string | null): number {
+	return Number(cursor?.replace(/^f1\./, '') ?? 0);
+}
+
+function byCursor(a: FeedEntry, b: FeedEntry): number {
+	return ordinalOf(a.cursor) - ordinalOf(b.cursor);
 }
 
 /**
@@ -244,6 +264,26 @@ export function rebaseFixture(value: unknown, fixtureNow: number, now: number): 
 	return shift(value);
 }
 
+/**
+ * The entries before a bound: the ones written before a time, or the ones ahead
+ * of a cursor. An unknown cursor reads as the start of the feed, as a stale one would.
+ */
+function beforeBound(visible: readonly FeedEntry[], bound: FeedBound): FeedEntry[] {
+	if (typeof bound === 'number') return visible.filter((e) => (e.created_ms ?? 0) < bound);
+	const at = visible.findIndex((e) => e.cursor === bound);
+	return at < 0 ? [] : visible.slice(0, at);
+}
+
+/**
+ * The entries after a bound: the ones written after a time, or the ones behind a
+ * cursor. An unknown cursor reads as the start of the feed, as a stale one would.
+ */
+function afterBound(visible: readonly FeedEntry[], bound: FeedBound): FeedEntry[] {
+	if (typeof bound === 'number') return visible.filter((e) => (e.created_ms ?? 0) > bound);
+	const at = visible.findIndex((e) => e.cursor === bound);
+	return at < 0 ? [...visible] : visible.slice(at + 1);
+}
+
 export class FixtureSource implements Source {
 	readonly mode = 'fixtures' as const;
 	readonly #dir: string;
@@ -252,14 +292,38 @@ export class FixtureSource implements Source {
 	#feedBase: number | undefined;
 	/** When each held feed message first arrived; see feed(). */
 	readonly #arrivals = new Map<string, number>();
+	/**
+	 * The cursor Privateer would have given each message, in the order they arrived.
+	 * Shaped as Privateer's are (`f1.` and a number), never all digits, so a cursor
+	 * is never mistaken for a time.
+	 */
+	readonly #cursors = new Map<string, string>();
 
 	constructor(dir: string, now: () => number = Date.now) {
 		this.#dir = dir;
 		this.#now = now;
 	}
 
-	/** One fixture file as parsed JSON, or null when it is absent. */
-	async #read(file: string, now: number = this.#now()): Promise<unknown> {
+	/**
+	 * One message's place in the feed, given when it arrives, so a cursor never
+	 * moves once it has been handed out. A message collected late from another
+	 * machine gets a cursor at the newest end while keeping its own older
+	 * `created_ms`, which is exactly why paging is done on cursors and not times.
+	 */
+	#cursorFor(key: string): string {
+		const held = this.#cursors.get(key);
+		if (held !== undefined) return held;
+		const cursor = `f1.${this.#cursors.size + 1}`;
+		this.#cursors.set(key, cursor);
+		return cursor;
+	}
+
+	/**
+	 * One fixture file as parsed JSON, or null when it is absent. `byDay` shifts it
+	 * by whole days, so its midnight lands on the midnight `now` falls in: each
+	 * record keeps its time of day, and the days it falls on do not move with the hour.
+	 */
+	async #read(file: string, now: number = this.#now(), byDay = false): Promise<unknown> {
 		let text: string;
 		try {
 			text = await readFile(path.resolve(this.#dir, file), 'utf8');
@@ -268,9 +332,10 @@ export class FixtureSource implements Source {
 			throw error;
 		}
 		const json = JSON.parse(text) as { fixture_now_ms?: unknown };
-		return typeof json.fixture_now_ms === 'number'
-			? rebaseFixture(json, json.fixture_now_ms, now)
-			: json;
+		if (typeof json.fixture_now_ms !== 'number') return json;
+		const fixtureNow = json.fixture_now_ms;
+		const target = byDay ? fixtureNow + dayStart(now) - dayStart(fixtureNow) : now;
+		return rebaseFixture(json, fixtureNow, target);
 	}
 
 	async waiting(): Promise<Waiting> {
@@ -302,35 +367,51 @@ export class FixtureSource implements Source {
 	}
 
 	/**
-	 * The feed as captain.feed would answer it. `after` lists what is newer; otherwise
-	 * the newest `limit` entries, or the page before `before`, whose cursor is the
-	 * index of its first entry.
+	 * The feed as captain.feed answers it: oldest first, one page at a time. `before`
+	 * ends the page just before a cursor, or just before a time in milliseconds
+	 * (the newest page is `before` one millisecond past now). `after` reads forward
+	 * from a cursor, up to `limit`. The text "now" is not a bound, as Privateer
+	 * refuses it. `next` is direction-dependent, as Privateer's is: a backward page
+	 * gives a `before` cursor (its oldest entry) while there are older entries, and
+	 * a forward page gives the cursor to read on from, null once nothing is newer.
 	 *
 	 * The fixture's times are pinned to the moment this process first reads the
 	 * feed, so a poll sees only what is really new. An entry with `arrives_in_s`
 	 * is held back until that many seconds after then, so the live feed can be
-	 * seen to bring a message in.
+	 * seen to bring a message in. An entry marked `desk_copy` is a copy collected
+	 * late from another machine: it keeps its own older `created_ms` and takes a
+	 * cursor at the newest end, so forward polling on created_ms alone would
+	 * never have shown it.
 	 */
 	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
+		if (query.before === 'now') throw new Error('now is not a feed cursor');
 		this.#feedBase ??= this.#now();
 		const elapsed = this.#now() - this.#feedBase;
 		const raw = await this.#read(FEED_FIXTURE, this.#feedBase);
 		if (raw === null) return { status: 'unsupported' };
-		const sent = rec(raw)?.entries;
-		const arrived: unknown[] = [];
-		for (const e of Array.isArray(sent) ? sent : []) {
-			const delay = rec(e)?.arrives_in_s;
-			if (typeof delay !== 'number') {
-				arrived.push(e);
-			} else if (delay * 1000 <= elapsed) {
+		const held = rec(raw)?.entries;
+		const arrived: FeedEntry[] = [];
+		for (const e of Array.isArray(held) ? held : []) {
+			const entry = rec(e);
+			if (!entry) continue;
+			const delay = entry.arrives_in_s;
+			if (typeof delay === 'number' && delay * 1000 > elapsed) continue;
+			const id = String(entry.id);
+			const key = `${entry.from}\u0000${id}`;
+			const deskCopy = entry.desk_copy === true;
+			let created = entry.created_ms;
+			if (typeof delay === 'number' && !deskCopy) {
 				// A held message is stamped when it first arrives, so it is newer than anything before it.
-				const id = String(rec(e)?.id);
 				if (!this.#arrivals.has(id)) this.#arrivals.set(id, this.#now());
-				arrived.push({ ...(rec(e) ?? {}), created_ms: this.#arrivals.get(id) });
+				created = this.#arrivals.get(id);
 			}
+			arrived.push(
+				...parseFeed({ entries: [{ ...entry, created_ms: created, cursor: this.#cursorFor(key) }] })
+					.entries
+			);
 		}
-		const visible = parseFeed({ entries: arrived })
-			.entries.filter((e) => query.include_ship_mail || !isShipToShip(e))
+		const visible = arrived
+			.filter((e) => query.include_ship_mail || !isShipToShip(e))
 			.filter(
 				(e) =>
 					query.ship === undefined ||
@@ -338,27 +419,37 @@ export class FixtureSource implements Source {
 					e.from === query.ship ||
 					e.to === query.ship
 			)
-			.sort((a, b) => (a.created_ms ?? 0) - (b.created_ms ?? 0));
+			.filter((e) => !query.open_only || e.state === 'open')
+			.filter((e) => !query.states || (e.state !== null && query.states.includes(e.state)))
+			.sort(byCursor);
+		const { limit } = query;
+
 		if (query.after !== undefined) {
-			const after = query.after;
+			// The oldest `limit` entries after the bound, so a forward read pages up from it.
+			const rest = afterBound(visible, query.after);
+			const page = rest.slice(0, limit);
 			return {
 				status: 'ok',
 				value: {
-					entries: visible.filter((e) => (e.created_ms ?? 0) > after),
-					more: false,
-					next: null
+					entries: page,
+					more: rest.length > page.length,
+					next: forwardCursorOf(page),
+					first: firstCursorOf(page)
 				}
 			};
 		}
-		const end =
-			query.before === undefined ? visible.length : Math.min(Number(query.before), visible.length);
-		const start = Math.max(0, end - query.limit);
+
+		// The newest `limit` entries before the bound: the newest page when there is none.
+		const older = query.before === undefined ? visible : beforeBound(visible, query.before);
+		const page = older.slice(Math.max(0, older.length - limit));
+		const more = older.length > page.length;
 		return {
 			status: 'ok',
 			value: {
-				entries: visible.slice(start, end),
-				more: start > 0,
-				next: start > 0 ? String(start) : null
+				entries: page,
+				more,
+				next: more ? firstCursorOf(page) : null,
+				first: firstCursorOf(page)
 			}
 		};
 	}
@@ -373,7 +464,7 @@ export class FixtureSource implements Source {
 
 	/** Records are grouped here, the way usage.summary would group them live. */
 	async usage(query: UsageQuery): Promise<Read<UsageSummary>> {
-		const raw = await this.#read(USAGE_FIXTURE);
+		const raw = await this.#read(USAGE_FIXTURE, this.#now(), true);
 		if (raw === null) return { status: 'unsupported' };
 		return { status: 'ok', value: summarizeRecords(parseUsageRecords(raw), query) };
 	}

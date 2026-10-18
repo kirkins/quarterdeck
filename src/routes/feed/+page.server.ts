@@ -8,6 +8,7 @@ export const load: PageServerLoad = async ({ depends }) => {
 	depends('quarterdeck:feed');
 	const now = Date.now();
 	try {
+		// No bound names the newest page, which the thread shows at the bottom.
 		const result = await loadFeed({ limit: PAGE_LIMIT, include_ship_mail: false });
 		if (result.status === 'unsupported') return { now, page: null, unsupported: true, error: null };
 		return { now, page: result.page, unsupported: false, error: null };

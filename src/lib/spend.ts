@@ -17,11 +17,15 @@ import type {
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 
-/** The periods the usage switch offers, most recent first. */
+/**
+ * The periods the usage switch offers, most recent first. A period of whole days
+ * is that many days ending today, so the day chart draws exactly that many bars;
+ * the 24 h period is the last 24 hours as they run.
+ */
 export const PERIODS = {
-	'24h': { label: '24 h', span: DAY, long: 'the last 24 hours' },
-	'7d': { label: '7 days', span: 7 * DAY, long: 'the last 7 days' },
-	'30d': { label: '30 days', span: 30 * DAY, long: 'the last 30 days' }
+	'24h': { label: '24 h', span: DAY, long: 'the last 24 hours', wholeDays: null },
+	'7d': { label: '7 days', span: 7 * DAY, long: 'the last 7 days', wholeDays: 7 },
+	'30d': { label: '30 days', span: 30 * DAY, long: 'the last 30 days', wholeDays: 30 }
 } as const;
 export type Period = keyof typeof PERIODS;
 export const DEFAULT_PERIOD: Period = '7d';
@@ -45,9 +49,16 @@ export function parseGrouping(value: string | null | undefined): Grouping {
 		: DEFAULT_GROUPING;
 }
 
-/** The start of a period, counted back from now. */
+/**
+ * The start of a period, counted back from now. A period of whole days starts at
+ * the midnight (UTC, as the day chart's buckets are keyed) that opens its first
+ * day, so it does not reach into the day before, whatever the hour.
+ */
 export function sinceFor(period: Period, now: number): number {
-	return now - PERIODS[period].span;
+	const { span, wholeDays } = PERIODS[period];
+	if (wholeDays === null) return now - span;
+	const midnight = Math.floor(now / DAY) * DAY;
+	return midnight - (wholeDays - 1) * DAY;
 }
 
 export type CostClass = 'free' | 'plan' | 'credits' | 'unknown';

@@ -3,16 +3,20 @@ import type { Answered } from '#lib/decision.ts';
 import {
 	CAPTAIN,
 	EMPTY_FILTER,
+	MAX_LIMIT,
+	PAGE_LIMIT,
 	anchorOf,
 	applyLocalAnswers,
 	atBottom,
 	buildRows,
+	closedAtOf,
 	dayLabel,
+	endReasonOf,
 	feedKindOf,
 	feedQuery,
 	isOpen,
 	mergeEntries,
-	newerThan,
+	newestBefore,
 	newestOf,
 	outcomeOf,
 	outcomesOf,
@@ -24,9 +28,10 @@ import {
 	unseenAfter,
 	isWaiting,
 	visibleEntries,
-	waitingCount
+	waitingCount,
+	withNewest
 } from './feed.ts';
-import { parseFeed, type FeedEntry } from './shapes.ts';
+import { firstCursorOf, forwardCursorOf, parseFeed, type FeedEntry } from './shapes.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 const MIN = 60_000;
@@ -37,17 +42,25 @@ const NOW = new Date(2026, 9, 17, 10, 0).getTime();
 function entry(over: Partial<FeedEntry> = {}): FeedEntry {
 	return {
 		machine: 'north-rig',
+		home: 'desk-north',
 		ship: 'billing',
 		id: 'b-1',
+		cursor: 'c-1',
 		created_ms: NOW - 30 * MIN,
 		from: 'billing',
 		to: CAPTAIN,
 		kind: 'request',
+		request_kind: null,
 		correlation: null,
 		task_id: null,
 		urgency: 'normal',
 		deadline_ms: null,
 		state: 'open',
+		end_reason: null,
+		answered_by: null,
+		answered_ms: null,
+		ended_by: null,
+		ended_ms: null,
 		body: 'Can invoices show the tax ID?',
 		payload: {},
 		...over
@@ -83,6 +96,45 @@ describe('parseFeed', () => {
 		expect(page.entries[0].payload).toEqual({ decision: { question: 'Pause it?', options: [] } });
 	});
 
+	it('reads the desk home, the request kind, the cursor and how an ask ended', () => {
+		const page = parseFeed({
+			entries: [
+				{
+					ship: 'analytics',
+					home: 'desk-lab',
+					id: 'a-9',
+					cursor: 'c-42',
+					created_ms: 5,
+					from: 'analytics',
+					to: 'captain',
+					kind: 'request',
+					request_kind: 'notice',
+					state: 'dismissed',
+					end_reason: 'dismissed',
+					answered_by: null,
+					answered_ms: null,
+					ended_by: 'captain',
+					ended_ms: 7,
+					body: 'Marked read?'
+				}
+			]
+		});
+		expect(page.entries[0]).toMatchObject({
+			home: 'desk-lab',
+			cursor: 'c-42',
+			request_kind: 'notice',
+			end_reason: 'dismissed',
+			ended_by: 'captain',
+			ended_ms: 7,
+			answered_ms: null
+		});
+	});
+
+	it('takes the cursor from `next` when an entry carries no cursor of its own', () => {
+		const page = parseFeed({ entries: [{ id: 'x', from: 'ops', to: 'captain', next: 'c-5' }] });
+		expect(page.entries[0].cursor).toBe('c-5');
+	});
+
 	it('fills what is missing and drops what cannot be keyed', () => {
 		const page = parseFeed({
 			entries: [
@@ -99,6 +151,8 @@ describe('parseFeed', () => {
 			urgency: 'normal',
 			created_ms: null,
 			state: null,
+			cursor: null,
+			home: null,
 			payload: {}
 		});
 		expect(page.more).toBe(false);
@@ -113,24 +167,81 @@ describe('parseFeed', () => {
 	});
 
 	it('reads nothing from a result that is not a feed', () => {
-		expect(parseFeed(null)).toEqual({ entries: [], more: false, next: null });
+		expect(parseFeed(null)).toEqual({ entries: [], more: false, next: null, first: null });
 		expect(parseFeed({ entries: 'nope' }).entries).toEqual([]);
+	});
+
+	it("reads both ends of a page in Privateer's order, not by time", () => {
+		const page = parseFeed({
+			entries: [
+				// A desk copy collected late: newest in the feed, oldest by time.
+				{ id: 'late', cursor: 'c-9', created_ms: 100, from: 'ops', to: 'captain' },
+				{ id: 'newer', cursor: 'c-8', created_ms: 900, from: 'ops', to: 'captain' }
+			],
+			more: true,
+			next: null
+		});
+		expect(page.first).toBe('c-9');
+		// next is Privateer's own, unchanged. The forward cursor is the newest entry's, read from the entries.
+		expect(page.next).toBeNull();
+		expect(forwardCursorOf(page.entries)).toBe('c-8');
+	});
+
+	it("keeps Privateer's next as sent, whichever way the page reads", () => {
+		const page = parseFeed({
+			entries: [{ id: 'a', cursor: 'c-1', from: 'ops', to: 'captain' }],
+			next: 'c-1'
+		});
+		expect(page.next).toBe('c-1');
 	});
 });
 
 describe('feedQuery', () => {
-	it('reads the URL, clamping the limit and ignoring bad values', () => {
-		expect(
-			feedQuery(new URLSearchParams('after=1700&limit=500&ship=ops&include_ship_mail=1'))
-		).toEqual({
-			after: 1700,
-			limit: 50,
-			ship: 'ops',
-			include_ship_mail: true
+	it('reads a time as a number and a cursor as text, and the newest page is one ms past now', () => {
+		expect(feedQuery(new URLSearchParams('before=1800000000000'))).toEqual({
+			before: 1_800_000_000_000,
+			limit: PAGE_LIMIT,
+			include_ship_mail: false
 		});
-		expect(feedQuery(new URLSearchParams('after=soon&limit=x&before=c-3'))).toEqual({
-			before: 'c-3',
-			limit: 15,
+		expect(feedQuery(new URLSearchParams('after=f1.12&before=f1.3')).after).toBe('f1.12');
+		expect(feedQuery(new URLSearchParams('after=f1.12&before=f1.3')).before).toBe('f1.3');
+		expect(newestBefore(1_800_000_000_000)).toBe(1_800_000_000_001);
+	});
+
+	it('reads the newest page when it names no bound, and keeps any bound it is given', () => {
+		const query = { limit: PAGE_LIMIT, include_ship_mail: false };
+		expect(withNewest(query, 1_800_000_000_000)).toEqual({
+			...query,
+			before: 1_800_000_000_001
+		});
+		expect(withNewest({ ...query, after: 'f1.4' }, 1_800_000_000_000)).toEqual({
+			...query,
+			after: 'f1.4'
+		});
+	});
+
+	it('reads cursors, open_only and states, clamping the limit', () => {
+		expect(
+			feedQuery(
+				new URLSearchParams('after=c-12&limit=500&ship=ops&include_ship_mail=1&open_only=1')
+			)
+		).toEqual({
+			after: 'c-12',
+			limit: MAX_LIMIT,
+			ship: 'ops',
+			include_ship_mail: true,
+			open_only: true
+		});
+		expect(
+			feedQuery(new URLSearchParams('before=f1.9&limit=x&state=open&state=dismissed'))
+		).toEqual({
+			before: 'f1.9',
+			limit: PAGE_LIMIT,
+			include_ship_mail: false,
+			states: ['open', 'dismissed']
+		});
+		expect(feedQuery(new URLSearchParams('after=&open_only=0&state=,'))).toEqual({
+			limit: PAGE_LIMIT,
 			include_ship_mail: false
 		});
 	});
@@ -169,12 +280,45 @@ describe('one message per key', () => {
 		expect(merged.map((e) => e.id)).toEqual(['old', 'new']);
 	});
 
-	it('finds what is newer than a time, and the newest time', () => {
+	it('finds the newest time', () => {
 		const list = [entry({ id: 'a', created_ms: 100 }), entry({ id: 'b', created_ms: 200 })];
-		expect(newerThan(list, 150).map((e) => e.id)).toEqual(['b']);
-		expect(newerThan(list, null)).toEqual([]);
 		expect(newestOf(list)).toBe(200);
 		expect(newestOf([])).toBeNull();
+	});
+});
+
+describe('paging by cursor', () => {
+	const oldest = entry({ id: 'old', cursor: 'c-1', created_ms: 100 });
+	const middle = entry({ id: 'mid', cursor: 'c-2', created_ms: 200 });
+	const newest = entry({ id: 'new', cursor: 'c-3', created_ms: 300 });
+
+	it('takes both ends of a page from the page just read', () => {
+		const page = [oldest, middle, newest];
+		expect(firstCursorOf(page)).toBe('c-1');
+		// A page arrives oldest first, so its last entry is where a forward read goes next.
+		expect(forwardCursorOf(page)).toBe('c-3');
+		expect(firstCursorOf([])).toBeNull();
+		expect(forwardCursorOf([])).toBeNull();
+	});
+
+	it('skips entries with no cursor of their own', () => {
+		const page = [entry({ id: 'no-cursor', cursor: null }), oldest];
+		expect(firstCursorOf(page)).toBe('c-1');
+		expect(firstCursorOf([entry({ cursor: null })])).toBeNull();
+	});
+
+	it('does not let a late desk copy move the page boundaries by its time', () => {
+		// Collected from another machine: newest in the feed, older than the rest by time.
+		const late = entry({ id: 'late', cursor: 'c-4', created_ms: 50, body: 'ran elsewhere' });
+		// A page that ends with it reads forward after c-4, not after the message below it in time.
+		expect(forwardCursorOf([oldest, middle, newest, late])).toBe('c-4');
+		// Paging back is read from the page, so the boundary only moves when a page is read.
+		expect(firstCursorOf([oldest, middle, newest, late])).toBe('c-1');
+		// Ordered by time the copy is the oldest, which is exactly why it cannot be the boundary.
+		const byTime = [oldest, middle, newest, late].sort(
+			(a, b) => (a.created_ms ?? 0) - (b.created_ms ?? 0)
+		);
+		expect(byTime[0].id).toBe('late');
 	});
 });
 
@@ -206,6 +350,31 @@ describe('kinds, open and outcomes', () => {
 		expect(outcomeOf(entry({ state: 'dismissed' }))).toBe('Dismissed');
 		expect(outcomeOf(entry({ state: 'answered' }))).toBe('Answered');
 		expect(outcomeOf(entry())).toBeNull();
+	});
+
+	it('takes the words from the end reason, which is what Privateer now sends', () => {
+		expect(outcomeOf(entry({ state: 'closed', end_reason: 'dismissed' }))).toBe('Dismissed');
+		expect(outcomeOf(entry({ kind: 'notice', state: 'closed', end_reason: 'dismissed' }))).toBe(
+			'Marked read'
+		);
+		expect(outcomeOf(entry({ state: 'closed', end_reason: 'answered' }))).toBe('Answered');
+		// The end reason is what the state used to say, so both are read.
+		expect(endReasonOf(entry({ state: 'dismissed' }))).toBe('dismissed');
+		expect(endReasonOf(entry({ state: 'closed', end_reason: 'expired' }))).toBe('expired');
+	});
+
+	it('says when it was answered, when the reply is not in the loaded pages', () => {
+		const answered = entry({
+			state: 'answered',
+			end_reason: 'answered',
+			answered_ms: NOW - 2 * MIN
+		});
+		expect(outcomeOf(answered, null, NOW)).toBe('Answered 2m ago');
+		expect(closedAtOf(answered)).toBe(NOW - 2 * MIN);
+		// ended_ms alone is enough when there was no answer.
+		expect(closedAtOf(entry({ ended_ms: NOW - 5 * MIN }))).toBe(NOW - 5 * MIN);
+		// With no time reported, the words stand on their own.
+		expect(outcomeOf(entry({ state: 'answered' }), null, NOW)).toBe('Answered');
 	});
 });
 

@@ -61,6 +61,74 @@ test('scrolling up loads older messages and keeps the place', async ({ page }) =
 	expect(y).toBeGreaterThan(0);
 });
 
+test('the newest page is read first, and two older pages load by cursor', async ({ page }) => {
+	await openFeed(page);
+	// Every backward page the thread asks Privateer for, and the cursor it asked with.
+	const cursors: string[] = [];
+	page.on('request', (request) => {
+		const url = new URL(request.url());
+		if (url.pathname === '/feed/data' && url.searchParams.has('before')) {
+			cursors.push(url.searchParams.get('before') ?? '');
+		}
+	});
+
+	const old = page.locator('li.msg[data-entry="a-402"]');
+	await expect(old).toHaveCount(0);
+
+	// Scrolling up is how the captain pages back. The button is not clicked: the feed is live,
+	// so it is re-rendered while a test is reaching for it.
+	for (let i = 0; i < 3 && cursors.length < 2; i++) {
+		const asked = cursors.length;
+		await page.evaluate(() => window.scrollTo(0, 0));
+		await expect.poll(() => cursors.length, { timeout: 10_000 }).toBeGreaterThan(asked);
+	}
+
+	// Two pages back, each asked for with a cursor of its own, so paging moved on.
+	expect(cursors.length).toBeGreaterThanOrEqual(2);
+	expect(new Set(cursors).size).toBe(cursors.length);
+	await expect(old).toBeAttached();
+});
+
+test('Only waiting on me asks Privateer, so an old open ask appears without paging', async ({
+	page
+}) => {
+	await openFeed(page);
+	// An open ask that is older than the page the feed opened on: it can only be here
+	// if Privateer was asked for the open items over the whole history.
+	const ask = page.locator('li.msg[data-entry="m-605"]');
+	await expect(ask).toHaveCount(0);
+
+	const asked = page.waitForRequest(
+		(r) => r.url().includes('/feed/data') && r.url().includes('open_only=1')
+	);
+	await page.getByLabel('Only waiting on me').check();
+	// A reload of the newest open items sends no cursor: Privateer's newest bound is the server's to set.
+	expect(new URL((await asked).url()).searchParams.has('after')).toBe(false);
+	await expect(ask).toBeVisible();
+});
+
+test('the open refresh merges by key and leaves the captain where they were', async ({ page }) => {
+	await openFeed(page);
+	// Read one message, and remember where it sits on the screen.
+	const reading = page.locator('li.msg[data-entry="a-406"]');
+	await reading.scrollIntoViewIfNeeded();
+	const top = await reading.evaluate((row) => row.getBoundingClientRect().top);
+
+	// Coming back to the tab re-reads the open items, which is how a desk copy
+	// collected late from another machine is found.
+	await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+	await expect(page.locator('li.msg[data-entry="f0012-late-desk-copy"]')).toHaveCount(1);
+
+	const ids = await page
+		.locator('li.msg')
+		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-entry')));
+	expect(new Set(ids).size).toBe(ids.length);
+	// Merging older asks in above the view is anchored by the browser, so the message the
+	// captain was reading stays put even though the scroll position moves.
+	const after = await reading.evaluate((row) => row.getBoundingClientRect().top);
+	expect(Math.abs(after - top)).toBeLessThan(4);
+});
+
 test('an open ask is a short message until Answer opens its form, and a half-written answer survives', async ({
 	page
 }) => {
@@ -141,7 +209,10 @@ test('ship-to-ship mail is behind a toggle, and drawn apart', async ({ page }) =
 	await expect(page.getByText('Refund totals match the ledger for March.')).toHaveCount(0);
 
 	await toggle.check();
+	// Asking again reads the newest page with ship mail in it, which can put the older mail
+	// past the page's end: load older pages the way the captain would, until it is there.
 	const mail = page.locator('li.msg.s2s').filter({ hasText: 'Refund totals match the ledger' });
+	await reveal(page, mail);
 	await expect(mail).toBeVisible();
 	await expect(mail).toContainText('billing → chandlery');
 });

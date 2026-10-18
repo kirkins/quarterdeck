@@ -12,12 +12,15 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import { failureFrom } from '#lib/form.ts';
 	import {
+		MAX_LIMIT,
+		OPEN_REFRESH_MS,
 		PAGE_LIMIT,
 		POLL_MS,
 		atBottom,
 		buildRows,
 		entryKey,
 		applyLocalAnswers,
+		forwardCursorOf,
 		mergeEntries,
 		newestOf,
 		outcomesOf,
@@ -63,9 +66,22 @@
 	const READ_KEY = 'quarterdeck.feed.read';
 
 	// svelte-ignore state_referenced_locally
-	let olderCursor = $state<string | null>(page?.next ?? null);
-	// svelte-ignore state_referenced_locally
 	let hasOlder = $state(page?.more ?? false);
+	/**
+	 * Where a forward poll starts: the newest entry of the page last read. Taken
+	 * from the entries, never from `next`, which for a backward page is a cursor
+	 * to page back with.
+	 */
+	// svelte-ignore state_referenced_locally
+	let forwardCursor = $state<string | null>(forwardCursorOf(page?.entries ?? []));
+	/**
+	 * Where to page back to: the oldest place in the feed among what is loaded.
+	 * Privateer reads it off the page in its own order, because it is not the
+	 * oldest time on screen: a desk copy collected late from another machine
+	 * carries an older `created_ms` than the cursor that passed it.
+	 */
+	// svelte-ignore state_referenced_locally
+	let olderCursor = $state<string | null>(page?.first ?? null);
 	/** Where the captain had read to when this page opened: the Unread divider sits above it. */
 	let openedRead = $state<number | null>(null);
 	/** Where the captain has read to, kept for next time. */
@@ -74,9 +90,9 @@
 	let freshKeys = $state<string[]>([]);
 	let loadingOlder = $state(false);
 	let reloading = $state(false);
+	let refreshingOpen = false;
 	let fetchError = $state<string | null>(null);
 	let polling = false;
-	let loadedOlder = false;
 	let initialised = false;
 	/** The one open ask whose form is showing, by entryKey. */
 	let expandedKey = $state<string | null>(null);
@@ -85,7 +101,7 @@
 	let fetchedFor = filterKey(filter);
 
 	function filterKey(f: FeedFilter): string {
-		return `${f.ship ?? ''}|${f.shipMail}`;
+		return `${f.ship ?? ''}|${f.shipMail}|${f.onlyWaiting}`;
 	}
 
 	// A server page (after an action, or a fresh load) joins what is already on screen.
@@ -98,10 +114,8 @@
 		if (!next) return;
 		untrack(() => {
 			entries = mergeEntries(entries, next.entries);
-			if (!loadedOlder) {
-				olderCursor = next.next;
-				hasOlder = next.more;
-			}
+			forwardCursor = forwardCursorOf(next.entries) ?? forwardCursor;
+			hasOlder = hasOlder || next.more;
 		});
 	});
 
@@ -131,7 +145,7 @@
 	const rows = $derived(buildRows(shown, { now, lastRead: openedRead }));
 	const failure = $derived(failureFrom(form, ['answer']));
 	const dismissFailure = $derived(failureFrom(form, ['dismiss']));
-	const outcomes = $derived(outcomesOf(entries));
+	const outcomes = $derived(outcomesOf(entries, now));
 	/** An ask whose answer or dismiss failed opens, so the error is seen where it was made. */
 	const failedKeys = $derived(
 		[failure, dismissFailure].flatMap((f) => (f ? [askKey(f.from, f.id)] : []))
@@ -193,11 +207,16 @@
 		}
 	}
 
-	/** The query string the filter asks Privateer for. */
+	/**
+	 * The query string the filter asks Privateer for. Ship filtering, ship mail and
+	 * "only waiting on me" are Privateer's to apply, so each asks for itself:
+	 * open_only reads the whole history, not only the pages already loaded.
+	 */
 	function filterParams(): Record<string, string> {
 		return {
 			...(filter.ship && { ship: filter.ship }),
-			include_ship_mail: filter.shipMail ? '1' : '0'
+			include_ship_mail: filter.shipMail ? '1' : '0',
+			...(filter.onlyWaiting && { open_only: '1' })
 		};
 	}
 
@@ -220,16 +239,19 @@
 		return parseFeed(body);
 	}
 
-	/** Newer messages, asked for by the newest time on screen. Pauses while the tab is hidden. */
+	/**
+	 * Newer messages, asked for from the newest cursor on screen. Pauses while the
+	 * tab is hidden.
+	 */
 	async function poll(): Promise<void> {
 		if (polling || reloading || document.visibilityState !== 'visible') return;
-		const newest = newestOf(entries);
-		if (newest === null) return;
+		if (forwardCursor === null) return;
 		polling = true;
 		try {
-			const result = await fetchFeed({ after: String(newest), ...filterParams() });
+			const result = await fetchFeed({ after: forwardCursor, ...filterParams() });
 			const known = new Set(entries.map(entryKey));
 			const arrived = result.entries.filter((e) => !known.has(entryKey(e)));
+			forwardCursor = forwardCursorOf(result.entries) ?? forwardCursor;
 			fetchError = null;
 			if (arrived.length === 0) return;
 			const bottom = atBottomNow();
@@ -249,17 +271,53 @@
 		}
 	}
 
+	/**
+	 * The open items, read again over the whole history. A desk copy collected
+	 * late from another machine carries an older `created_ms` than the cursor that
+	 * passed it, so no amount of forward polling brings it in; an open_only read
+	 * does. It reads the newest open page, so it does not move the forward cursor:
+	 * that is the poll's, read from the newest page of the whole feed. Anything
+	 * already on screen is merged by key, so nothing appears twice and the captain
+	 * is not moved.
+	 */
+	async function refreshOpen(): Promise<void> {
+		if (refreshingOpen || reloading) return;
+		if (filter.onlyWaiting) return;
+		refreshingOpen = true;
+		try {
+			const result = await fetchFeed({
+				...filterParams(),
+				open_only: '1',
+				limit: String(MAX_LIMIT)
+			});
+			const known = new Set(entries.map(entryKey));
+			const added = result.entries.filter((e) => !known.has(entryKey(e)));
+			fetchError = null;
+			if (added.length === 0) return;
+			entries = mergeEntries(entries, added);
+			const bottom = atBottomNow();
+			if (bottom) await tick();
+		} catch (error) {
+			fetchError = error instanceof Error ? error.message : 'The open items could not be read.';
+		} finally {
+			refreshingOpen = false;
+		}
+	}
+
 	/** Older messages above the top, keeping the captain where they were. */
 	async function loadOlder(): Promise<void> {
-		if (loadingOlder || !hasOlder || olderCursor === null) return;
+		// A reload brings its own cursors: an older page asked for before it lands would be stale.
+		if (loadingOlder || reloading || !hasOlder || olderCursor === null) return;
 		loadingOlder = true;
 		const height = document.documentElement.scrollHeight;
 		const y = window.scrollY;
+		const asked = fetchedFor;
 		try {
 			const result = await fetchFeed({ before: olderCursor, ...filterParams() });
-			loadedOlder = true;
+			// The filter changed while this page was read: it belongs to the old filter, so it is dropped.
+			if (asked !== fetchedFor) return;
 			entries = mergeEntries(entries, result.entries);
-			olderCursor = result.next;
+			olderCursor = result.first ?? olderCursor;
 			hasOlder = result.more;
 			await tick();
 			window.scrollTo(0, y + (document.documentElement.scrollHeight - height));
@@ -270,14 +328,14 @@
 		}
 	}
 
-	/** A fresh first page for a changed filter. Ship filtering is Privateer's, so it is asked again. */
+	/** A fresh newest page for a changed filter. Ship filtering is Privateer's, so it is asked again. */
 	async function reload(): Promise<void> {
 		reloading = true;
 		try {
-			const result = await fetchFeed(filterParams());
-			loadedOlder = false;
+			const result = await fetchFeed({ ...filterParams() });
 			entries = result.entries;
-			olderCursor = result.next;
+			forwardCursor = forwardCursorOf(result.entries);
+			olderCursor = result.first;
 			hasOlder = result.more;
 			unseen = 0;
 			fetchError = null;
@@ -315,14 +373,19 @@
 			if (window.scrollY < 240) void loadOlder();
 		};
 		const onVisible = () => {
-			if (document.visibilityState === 'visible') void poll();
+			if (document.visibilityState !== 'visible') return;
+			void poll();
+			// Coming back to the tab is also when a late desk copy is worth re-reading.
+			void refreshOpen();
 		};
 		const pollTimer = setInterval(() => void poll(), POLL_MS);
+		const openTimer = setInterval(() => void refreshOpen(), OPEN_REFRESH_MS);
 		window.addEventListener('scroll', onScroll, { passive: true });
 		window.addEventListener('focus', onVisible);
 		document.addEventListener('visibilitychange', onVisible);
 		return () => {
 			clearInterval(pollTimer);
+			clearInterval(openTimer);
 			window.removeEventListener('scroll', onScroll);
 			window.removeEventListener('focus', onVisible);
 			document.removeEventListener('visibilitychange', onVisible);

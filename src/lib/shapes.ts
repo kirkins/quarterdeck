@@ -504,29 +504,57 @@ export function parseUsageRecords(result: unknown): UsageRecord[] {
 }
 
 /*
- * The captain's feed (PROVISIONAL). Privateer's `captain.feed` is agreed but not
- * built yet: one stream of every message to and from the captain, across ships
- * and machines. The entry fields are as agreed; the page wrapper
- * `{ entries, more, next }` is our guess. Every field is optional and extras are
- * ignored. Adjust these parsers alone; see docs/DECISIONS.md section 16.
+ * The captain's feed. Privateer's `captain.feed` is built (its PR 232): one
+ * stream of every message to and from the captain, across ships, collected by
+ * each ship's desk home. The command takes
+ *
+ *   captain.feed {after?, before?, limit?, ship?, include_ship_mail?, states?, open_only?}
+ *
+ * and answers `{ entries, more, next }`. Pages are oldest first. `before` is a
+ * cursor, or a time in milliseconds, that the page ends just before; the newest
+ * page is `before` one millisecond past now. Every entry carries its own
+ * `cursor`, and that is what paging is built on, never `created_ms`: a desk copy
+ * collected late from another machine can carry an older `created_ms` than the
+ * cursor, so ordering by time would lose it. `next` is direction-dependent: after
+ * a forward read it is the cursor to continue from, and after a backward read it
+ * is a `before` cursor, so the browser never takes a forward cursor from it (see
+ * forwardCursorOf). Every field is optional and extras are ignored. Adjust these
+ * parsers alone; see docs/DECISIONS.md section 16.
  */
 
 /** One message in the feed. `payload` is the mail payload, unchanged. */
 export interface FeedEntry {
+	/** No longer sent by Privateer: another machine's mail arrives through the desk home. Kept for older data. */
 	machine: string | null;
+	/** The desk home that collected this message, as Privateer reports it. */
+	home: string | null;
 	/** The ship the conversation belongs to; for ship-to-ship mail, the sender. */
 	ship: string;
 	id: string;
+	/**
+	 * This entry's own place in the feed. Pass back as `after` to read forward
+	 * from here, or as `before` to read the page ending just before it.
+	 */
+	cursor: string | null;
 	created_ms: number | null;
 	from: string;
 	to: string;
 	kind: string;
+	/** A request's own kind, where the mail row names one separately. */
+	request_kind: string | null;
 	correlation: string | null;
 	task_id: string | null;
 	urgency: string;
 	deadline_ms: number | null;
 	/** "open", "answered", "dismissed", or another state Privateer reports. */
 	state: string | null;
+	/** Why an ask ended: "answered", "dismissed", or another reason. */
+	end_reason: string | null;
+	/** Who answered it, and when; the same pair for whatever closed it. */
+	answered_by: string | null;
+	answered_ms: number | null;
+	ended_by: string | null;
+	ended_ms: number | null;
 	body: string | null;
 	payload: Rec;
 	/** Set on an answer made in this portal that Privateer does not list yet. */
@@ -537,41 +565,83 @@ export interface FeedPage {
 	entries: FeedEntry[];
 	/** True when there are older entries than these. */
 	more: boolean;
-	/** Opaque cursor for the page of older entries; pass it back as `before`. */
+	/**
+	 * Privateer's `next` as it sent it. Its direction follows the read: a forward
+	 * read's next is a cursor to read on from, a backward read's is a `before`
+	 * cursor. Read forward from forwardCursorOf(entries), never from this.
+	 */
 	next: string | null;
+	/** Where to read backward from: the first entry's own cursor, in Privateer's order. */
+	first: string | null;
+}
+
+/**
+ * The cursor to read the page before one just read: the first entry of that
+ * page, since Privateer lists each page oldest first. It is read here, while the
+ * page is still in Privateer's order, and never from entries sorted for the chat:
+ * a desk copy collected late from another machine carries a `created_ms` older
+ * than the cursor that passed it, so the oldest time on screen is not the oldest
+ * place in the feed, and paging back from it would re-read a page.
+ */
+export function firstCursorOf(entries: readonly FeedEntry[]): string | null {
+	for (const e of entries) if (e.cursor !== null) return e.cursor;
+	return null;
+}
+
+/**
+ * Where a forward read continues from: the last entry of the page just read, the
+ * newest message Privateer listed. Polling with this is what keeps a late desk
+ * copy from being asked for again on every poll.
+ */
+export function forwardCursorOf(entries: readonly FeedEntry[]): string | null {
+	let cursor: string | null = null;
+	for (const e of entries) if (e.cursor !== null) cursor = e.cursor;
+	return cursor;
 }
 
 /** Read `captain.feed`. Entries without an id or a sender are dropped. */
 export function parseFeed(result: unknown): FeedPage {
 	const root = rec(result);
+	const entries = list(root?.entries).flatMap((raw) => {
+		const entry = rec(raw);
+		const id = str(entry?.id);
+		const from = str(entry?.from);
+		if (!entry || !id || !from) return [];
+		const to = str(entry.to) ?? '';
+		const request_kind = str(entry.request_kind);
+		return [
+			{
+				machine: str(entry.machine),
+				home: str(entry.home),
+				ship: str(entry.ship) ?? (from === 'captain' ? to : from),
+				id,
+				cursor: str(entry.cursor) ?? str(entry.next),
+				created_ms: num(entry.created_ms),
+				from,
+				to,
+				kind: str(entry.kind) ?? request_kind ?? 'request',
+				request_kind,
+				correlation: str(entry.correlation),
+				task_id: str(entry.task_id),
+				urgency: urgencyOf(entry.urgency),
+				deadline_ms: num(entry.deadline_ms),
+				state: str(entry.state),
+				end_reason: str(entry.end_reason),
+				answered_by: str(entry.answered_by),
+				answered_ms: num(entry.answered_ms),
+				ended_by: str(entry.ended_by),
+				ended_ms: num(entry.ended_ms),
+				body: str(entry.body),
+				payload: rec(entry.payload) ?? {}
+			}
+		];
+	});
 	return {
-		entries: list(root?.entries).flatMap((raw) => {
-			const entry = rec(raw);
-			const id = str(entry?.id);
-			const from = str(entry?.from);
-			if (!entry || !id || !from) return [];
-			const to = str(entry.to) ?? '';
-			return [
-				{
-					machine: str(entry.machine),
-					ship: str(entry.ship) ?? (from === 'captain' ? to : from),
-					id,
-					created_ms: num(entry.created_ms),
-					from,
-					to,
-					kind: str(entry.kind) ?? 'request',
-					correlation: str(entry.correlation),
-					task_id: str(entry.task_id),
-					urgency: urgencyOf(entry.urgency),
-					deadline_ms: num(entry.deadline_ms),
-					state: str(entry.state),
-					body: str(entry.body),
-					payload: rec(entry.payload) ?? {}
-				}
-			];
-		}),
+		entries,
 		more: root?.more === true,
-		next: str(root?.next)
+		// Both ends are taken here, while the page is still in Privateer's own order.
+		next: str(root?.next),
+		first: firstCursorOf(entries)
 	};
 }
 

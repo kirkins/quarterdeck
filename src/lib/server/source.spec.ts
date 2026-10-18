@@ -15,6 +15,7 @@ import {
 	type Source
 } from './source.ts';
 import { PrivateerCommandError, PrivateerExecError } from './privateer.ts';
+import { sinceFor } from '#lib/spend.ts';
 
 const NOW = 1_800_000_000_000;
 const H = 3_600_000;
@@ -415,6 +416,21 @@ describe('spend reads (routes.show, usage.summary)', () => {
 
 		const day = await source.usage({ since_ms: NOW - 24 * H, group_by: 'day' });
 		expect(day.status === 'ok' && day.value.groups.length).toBeGreaterThan(0);
+	});
+
+	it('draws the same days for the usage fixture at any hour of the day', async () => {
+		const days = async (now: number) => {
+			const source = new FixtureSource('fixtures', () => now);
+			const read = await source.usage({ since_ms: sinceFor('30d', now), group_by: 'day' });
+			if (read.status !== 'ok') throw new Error('expected usage');
+			return read.value.groups.map((g) => g.key);
+		};
+		const midnight = Date.UTC(2026, 9, 17);
+		const early = await days(midnight + H);
+		const late = await days(midnight + 23 * H);
+		expect(early).toEqual(late);
+		// Thirty days, each with its own bar, and none of them before the first.
+		expect(early).toHaveLength(30);
 	});
 
 	it('shows a shorter period as no more tokens than a longer one', async () => {
