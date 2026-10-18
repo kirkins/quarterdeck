@@ -5,6 +5,7 @@ pub use self::window::Window;
 
 pub mod appearance;
 pub mod captain;
+pub mod choices;
 pub mod config;
 pub mod dashboard;
 pub mod decision;

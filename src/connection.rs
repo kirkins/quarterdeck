@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use data::captain::Waiting;
+use data::choices;
 use data::config::{self, Source};
 use data::decision::Card;
 use data::markdown::{self, Document};
@@ -25,16 +26,25 @@ pub struct Details {
     pub card: Card,
     pub body: Document,
     pub why: Option<Document>,
+    /// Choices written into a plain request, to tick.
+    pub choices: Option<choices::Split>,
 }
 
 impl Details {
     fn read(item: &data::captain::Item) -> Self {
         let card = Card::from_mail(&item.mail);
         let why = card.why.as_deref().map(|why| markdown::parse(why, None));
+        let body = markdown::parse(&item.mail.body, None);
+        let choices = if card.options.is_empty() {
+            choices::split(&body)
+        } else {
+            None
+        };
         Self {
-            body: markdown::parse(&item.mail.body, None),
+            body,
             why,
             card,
+            choices,
         }
     }
 }

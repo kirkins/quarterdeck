@@ -8,11 +8,12 @@
 use std::collections::{HashMap, HashSet};
 
 use data::captain::Item;
-use data::decision::{self, Answer, Card, Choice};
+use data::choices;
+use data::decision::{self, Answer, Choice};
 use data::privateer::{Error, Sent};
 use data::triage::{self, Section};
 use iced::widget::{
-    button, column, container, row, scrollable, space, text_input,
+    button, checkbox, column, container, row, scrollable, space, text_input,
 };
 use iced::{Border, Length};
 use serde_json::Value;
@@ -29,6 +30,8 @@ pub enum Message {
     Choose(String, String),
     OwnWords(String),
     Text(String, String),
+    /// Tick or untick a choice written into a request, by its marker.
+    Tick(String, String),
     Confirm(String),
     Back(String),
     Send(String),
@@ -58,6 +61,8 @@ struct Draft {
     confirming: bool,
     dismissing: bool,
     note: String,
+    /// Ticked choices of a plain request, by marker.
+    ticked: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +107,14 @@ impl Triage {
                 let draft = self.drafts.entry(key).or_default();
                 draft.own_words = true;
                 draft.choice = None;
+                draft.confirming = false;
+                None
+            }
+            Message::Tick(key, marker) => {
+                let draft = self.drafts.entry(key).or_default();
+                if !draft.ticked.remove(&marker) {
+                    draft.ticked.insert(marker);
+                }
                 draft.confirming = false;
                 None
             }
@@ -333,7 +346,12 @@ impl Triage {
         let draft = self.drafts.get(&key).cloned().unwrap_or_default();
         let mut body = Column::new().spacing(10).push(header);
 
-        if details.card.options.is_empty() {
+        if let Some(split) = &details.choices {
+            body = body
+                .push(markdown(&split.before, theme, Message::OpenLink))
+                .push(ticks(&key, split, &draft))
+                .push(markdown(&split.after, theme, Message::OpenLink));
+        } else if details.card.options.is_empty() {
             body = body.push(markdown(&details.body, theme, Message::OpenLink));
         } else {
             body = body.push(
@@ -383,7 +401,7 @@ impl Triage {
             return container(body).padding([4, 0]).into();
         }
 
-        body = body.push(self.answer_view(&key, item, &details.card, &draft));
+        body = body.push(self.answer_view(&key, item, details, &draft));
         if let Some(Outcome::Failed(problem)) = outcome {
             body = body.push(text(problem.as_str()).style(theme::text::error));
         }
@@ -395,10 +413,11 @@ impl Triage {
         &'a self,
         key: &str,
         item: &'a Item,
-        card: &'a Card,
+        details: &'a Details,
         draft: &Draft,
     ) -> Element<'a, Message> {
         let key = key.to_owned();
+        let card = &details.card;
 
         if draft.dismissing {
             return column![
@@ -430,7 +449,9 @@ impl Triage {
             content = content.push(option_view(&key, choice, selected));
         }
 
-        let words_label = if card.options.is_empty() {
+        let words_label = if details.choices.is_some() {
+            "A note with your choice (optional)"
+        } else if card.options.is_empty() {
             "Your reply"
         } else if card.free_text_ok {
             "Write my own answer (the ship invites one)"
@@ -466,7 +487,9 @@ impl Triage {
             );
         }
 
-        let ready = draft.choice.is_some() || !draft.text.trim().is_empty();
+        let ready = draft.choice.is_some()
+            || !draft.ticked.is_empty()
+            || !draft.text.trim().is_empty();
         let mut actions = row![].spacing(6);
         if draft.confirming && ready {
             let summary = match (&draft.choice, draft.text.trim()) {
@@ -482,7 +505,8 @@ impl Triage {
                         format!("{label} — {note}")
                     }
                 }
-                (None, words) => words.to_owned(),
+                (None, words) => ticked_reply(details, draft)
+                    .unwrap_or_else(|| words.to_owned()),
             };
             content = content.push(
                 text(format!("Send to {}: {summary}", item.mail.from))
@@ -546,7 +570,8 @@ fn reply(
             },
         ),
         None if details.card.options.is_empty() => {
-            decision::plain_reply_args(id, &draft.text)
+            let body = ticked_reply(details, draft).unwrap_or_default();
+            decision::plain_reply_args(id, &body)
         }
         None => decision::reply_args(
             id,
@@ -554,6 +579,55 @@ fn reply(
             &Answer::Words(draft.text.clone()),
         ),
     }
+}
+
+/// The reply for a request's ticked choices and the note, in the order the
+/// ship listed them.
+fn ticked_reply(details: &Details, draft: &Draft) -> Option<String> {
+    let Some(split) = &details.choices else {
+        return Some(draft.text.trim().to_owned()).filter(|t| !t.is_empty());
+    };
+    let ticked: Vec<&choices::Choice> = split
+        .choices
+        .iter()
+        .filter(|choice| draft.ticked.contains(&choice.marker))
+        .collect();
+    choices::reply(&ticked, &draft.text)
+}
+
+/// A request's choices as checkboxes; the text ticks too.
+fn ticks<'a>(
+    key: &str,
+    split: &'a choices::Split,
+    draft: &Draft,
+) -> Element<'a, Message> {
+    Column::with_children(split.choices.iter().map(|choice| {
+        let tick = Message::Tick(key.to_owned(), choice.marker.clone());
+        row![
+            checkbox(draft.ticked.contains(&choice.marker))
+                .on_toggle({
+                    let tick = tick.clone();
+                    move |_| tick.clone()
+                })
+                .style(theme::checkbox::primary),
+            button(
+                row![
+                    text(format!("{}.", choice.marker))
+                        .font(font::MONO_BOLD.clone())
+                        .width(24),
+                    text(choice.text.as_str()).width(Length::Fill),
+                ]
+                .spacing(6),
+            )
+            .padding(0)
+            .style(theme::button::bare)
+            .on_press(tick),
+        ]
+        .spacing(8)
+        .into()
+    }))
+    .spacing(8)
+    .into()
 }
 
 fn option_view<'a>(
