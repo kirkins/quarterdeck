@@ -146,8 +146,11 @@ pub fn picker(theme: &Theme, status: Status, is_selected: bool) -> Style {
 
 pub fn bare(_theme: &Theme, status: Status) -> Style {
     match status {
+        // Text left unstyled inside reads in the theme's colour, not iced's
+        // default black.
         Status::Active | Status::Pressed | Status::Hovered => Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: _theme.styles().text.primary.color,
             ..Default::default()
         },
         Status::Disabled => {

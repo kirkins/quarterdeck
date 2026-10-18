@@ -297,11 +297,16 @@ impl Triage {
             .on_press(Message::Expand(key.clone()));
 
         let (Some(details), true) = (details, open) else {
-            let summary = details.map_or_else(
-                || preview(&item.mail.body, 180),
-                |d| preview(&d.card.question, 180),
-            );
-            let mut lines = column![text(summary)].spacing(2);
+            // A decision leads with its question; any other ask with how it
+            // starts, since its last question alone ("OK?") says nothing.
+            let summary = match details {
+                Some(d) if !d.card.options.is_empty() => {
+                    preview(&d.card.question, 180)
+                }
+                _ => preview(&item.mail.body, 180),
+            };
+            let mut lines =
+                column![text(summary).style(theme::text::primary)].spacing(2);
             if let Some(choice) = details
                 .and_then(|d| d.card.options.iter().find(|c| c.recommended))
             {
