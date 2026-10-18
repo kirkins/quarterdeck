@@ -523,6 +523,31 @@
 					}
 				}
 			}
+		},
+		{
+			"ship": "ops",
+			"asked_ms": 1792298200000,
+			"age_ms": 1800000,
+			"step": "Rotate the staging token in the vault, then paste the new one into the ship’s config.",
+			"mail": {
+				"id": "f0015-staging-token",
+				"from": "ops",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "staging-rotate",
+				"correlation": null,
+				"created_ms": 1792298200000,
+				"urgency": "normal",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "The staging token expires on Friday. Rotate it?",
+				"payload": {
+					"needs_hands": {
+						"step": "Rotate the staging token in the vault, then paste the new one into the ship’s config."
+					}
+				}
+			}
 		}
 	]
 }
