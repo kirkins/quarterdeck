@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FleetSnapshot, RoutesConfig, UsageSummary } from './shapes.ts';
+import { parseSnapshot, type RoutesConfig, type UsageSummary } from './shapes.ts';
 import {
 	buildRoutes,
 	buildUsage,
@@ -18,31 +18,30 @@ const HOUR = 60 * MIN;
 function route(overrides: Record<string, unknown>) {
 	return {
 		name: 'plan-main',
-		harness: null,
-		model: null,
+		route: null,
 		cost: null,
+		tier: null,
 		state: 'available',
 		until_ms: null,
-		resets_at: null,
-		last_error: null,
+		error: null,
+		allowance: null,
 		...overrides
 	};
 }
 
-function snapshot(
-	machines: Array<{ name: string; routes: ReturnType<typeof route>[] }>
-): FleetSnapshot {
-	return {
+/** The fleet snapshot as parseSnapshot reads it from Privateer. */
+function snapshot(machines: Array<{ name: string; routes: ReturnType<typeof route>[] }>) {
+	return parseSnapshot({
 		generated_ms: NOW,
-		needs: [],
 		machines: machines.map((m) => ({
 			name: m.name,
 			reachable: true,
 			changed_ms: NOW,
-			ships: [],
 			routes: m.routes
-		}))
-	};
+		})),
+		ships: [],
+		needs: []
+	});
 }
 
 const config: RoutesConfig = {
@@ -89,7 +88,7 @@ describe('buildRoutes', () => {
 			{
 				name: 'boreas',
 				routes: [
-					route({ name: 'plan-main', cost: 'plan', state: 'capped', resets_at: NOW + 2 * HOUR })
+					route({ name: 'plan-main', cost: 'plan', state: 'capped', until_ms: NOW + 2 * HOUR })
 				]
 			},
 			{ name: 'calypso', routes: [route({ name: 'zeta' }), route({ name: 'alpha' })] }
@@ -128,7 +127,7 @@ describe('buildRoutes', () => {
 		]);
 	});
 
-	it('shows a capped route as resetting, from resets_at', () => {
+	it('shows a capped route as resetting, from until_ms', () => {
 		const fleet = snapshot([
 			{
 				name: 'boreas',
@@ -137,8 +136,8 @@ describe('buildRoutes', () => {
 						name: 'plan-main',
 						cost: 'plan',
 						state: 'capped',
-						resets_at: NOW + 130 * MIN,
-						last_error: 'Weekly allowance used'
+						until_ms: NOW + 130 * MIN,
+						error: 'Weekly allowance used'
 					})
 				]
 			}
@@ -147,6 +146,38 @@ describe('buildRoutes', () => {
 		expect(row.states[0].label).toBe('capped, resets in 2h 10m');
 		expect(row.states[0].lastError).toBe('Weekly allowance used');
 		expect(row.budget).toBe('Plan allowance: not reported');
+	});
+
+	it('treats an idle route as usable: not throttled, with no countdown', () => {
+		const fleet = snapshot([
+			{ name: 'atlas', routes: [route({ name: 'free-pool', cost: 'free', state: 'idle' })] }
+		]);
+		const [row] = buildRoutes(fleet, config, NOW);
+		expect(row).toMatchObject({ throttled: false });
+		expect(row.states[0]).toMatchObject({ kind: 'idle', label: 'idle', clearsAt: null });
+	});
+
+	it('does not call a plan allowance unreported once Privateer reports one', () => {
+		const fleet = snapshot([
+			{
+				name: 'atlas',
+				routes: [
+					route({
+						cost: 'plan',
+						allowance: {
+							shape: 'window',
+							window_ends_ms: NOW,
+							weekly_ends_ms: NOW,
+							window_used: 1,
+							week_used: 2,
+							last_used_ms: NOW
+						}
+					})
+				]
+			}
+		]);
+		const [row] = buildRoutes(fleet, config, NOW);
+		expect(row.budget).toBeNull();
 	});
 
 	it('says a backoff is over when its time has passed, rather than counting down', () => {

@@ -281,21 +281,102 @@ describe('buildDismiss', () => {
 });
 
 describe('fleet snapshot', () => {
-	it('reads fleet.snapshot and parses it', async () => {
+	it('reads fleet.snapshot in full the first time, and parses it', async () => {
 		const run = vi.fn(async () => ({
 			generated_ms: NOW,
-			machines: [{ name: 'atlas', reachable: true }]
+			machines: [{ name: 'atlas', reachable: true, changed_ms: 7 }]
 		}));
 		const read = await new CliSource(run as never).snapshot();
 		expect(run).toHaveBeenCalledWith('fleet.snapshot', {});
 		expect(read).toEqual({
 			status: 'ok',
 			snapshot: {
+				schema_version: null,
 				generated_ms: NOW,
-				machines: [{ name: 'atlas', reachable: true, changed_ms: null, routes: [], ships: [] }],
+				machines: [
+					{
+						name: 'atlas',
+						link: null,
+						reachable: true,
+						error: null,
+						via: null,
+						as_of_ms: null,
+						changed_ms: 7,
+						unchanged: false,
+						truncated: false,
+						unknown: [],
+						routes: [],
+						ships: []
+					}
+				],
 				needs: []
 			}
 		});
+	});
+
+	it('sends each machine change time as since, and keeps an unchanged machine as held', async () => {
+		const first = {
+			generated_ms: NOW,
+			machines: [
+				{
+					name: 'atlas',
+					reachable: true,
+					changed_ms: 7,
+					routes: [{ name: 'plan-main', state: 'available' }]
+				},
+				{ name: 'boreas', reachable: true, changed_ms: 9 }
+			],
+			ships: [{ name: 'billing', machine: 'atlas', presence: 'hosted' }]
+		};
+		const later = {
+			generated_ms: NOW + 15_000,
+			machines: [
+				{ name: 'atlas', reachable: true, changed_ms: 7, unchanged: true },
+				{ name: 'boreas', reachable: true, changed_ms: 10, unchanged: false }
+			],
+			ships: [{ name: 'search', machine: 'boreas', presence: 'asleep' }]
+		};
+		const run = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(later);
+		const source = new CliSource(run as never);
+		await source.snapshot();
+		const read = await source.snapshot();
+		expect(run).toHaveBeenNthCalledWith(2, 'fleet.snapshot', { since: { atlas: 7, boreas: 9 } });
+		expect(read.status).toBe('ok');
+		if (read.status !== 'ok') return;
+		expect(
+			read.snapshot.machines.find((m) => m.name === 'atlas')?.ships.map((s) => s.name)
+		).toEqual(['billing']);
+		expect(
+			read.snapshot.machines.find((m) => m.name === 'atlas')?.routes.map((r) => r.name)
+		).toEqual(['plan-main']);
+		expect(
+			read.snapshot.machines.find((m) => m.name === 'boreas')?.ships.map((s) => s.name)
+		).toEqual(['search']);
+	});
+
+	it('reads in full when an unchanged machine has nothing held, or the answer is not a fleet', async () => {
+		const first = {
+			generated_ms: NOW,
+			machines: [{ name: 'atlas', reachable: true, changed_ms: 7 }]
+		};
+		const run = vi
+			.fn()
+			.mockResolvedValueOnce(first)
+			// boreas is unchanged, but nothing is held for it: a full read follows.
+			.mockResolvedValueOnce({ generated_ms: NOW, machines: [{ name: 'boreas', unchanged: true }] })
+			.mockResolvedValueOnce(first)
+			// The answer has no machines list: a full read follows.
+			.mockResolvedValueOnce({ generated_ms: NOW, machines: 'garbled' })
+			.mockResolvedValueOnce(first);
+		const source = new CliSource(run as never);
+		await source.snapshot();
+		await source.snapshot();
+		await source.snapshot();
+		await source.snapshot();
+		expect(run).toHaveBeenNthCalledWith(2, 'fleet.snapshot', { since: { atlas: 7 } });
+		expect(run).toHaveBeenNthCalledWith(3, 'fleet.snapshot', {});
+		expect(run).toHaveBeenNthCalledWith(4, 'fleet.snapshot', { since: { atlas: 7 } });
+		expect(run).toHaveBeenNthCalledWith(5, 'fleet.snapshot', {});
 	});
 
 	it('reports an older Privateer that does not know the command as unsupported', async () => {

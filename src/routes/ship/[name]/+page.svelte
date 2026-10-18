@@ -4,6 +4,7 @@
 	import ShipConversation from '#lib/components/ShipConversation.svelte';
 	import ShipTools from '#lib/components/ShipTools.svelte';
 	import { liveNow } from '#lib/clock.svelte.ts';
+	import { presenceLabel, waitLabel } from '#lib/fleet.ts';
 	import { SHIP_TABS, tabOf, type ShipTab } from '#lib/ship.ts';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -62,7 +63,7 @@
 			<p class="summary">
 				{#if facts}
 					<span>On {facts.machine}{facts.reachable ? '' : ' (not reachable)'}</span>
-					<span>{facts.presence ?? 'presence unknown'}</span>
+					<span>{presenceLabel(facts.presence, facts.presenceSince, now)}</span>
 					{#if facts.needs > 0}
 						<a class="needs" href="{resolve('/triage')}?ship={encodeURIComponent(view.name)}">
 							<strong>{facts.needs}</strong>
@@ -82,13 +83,14 @@
 
 	{#if facts && facts.jobs.length > 0}
 		<section class="crew" aria-labelledby="crew-now">
-			<h2 id="crew-now">Running now</h2>
+			<h2 id="crew-now">Crew now</h2>
 			<ul>
 				{#each facts.jobs as job (job.id)}
-					<li>
+					<li data-state={job.state}>
 						<span class="task">{job.task_title ?? job.task_id ?? 'A task'}</span>
-						{#if job.doing_now}<span class="doing">{job.doing_now}</span>{/if}
-						{#if job.waits}<span class="tag tag-warn">{job.waits}</span>{/if}
+						{#if job.doing}<span class="doing">{job.doing.text}</span>{/if}
+						{#if job.state && job.state !== 'running'}<span class="tag">{job.state}</span>{/if}
+						{#if job.wait}<span class="tag tag-warn">{waitLabel(job.wait, now)}</span>{/if}
 					</li>
 				{/each}
 			</ul>

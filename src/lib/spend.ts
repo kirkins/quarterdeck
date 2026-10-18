@@ -77,7 +77,8 @@ export function costClass(cost: string | null): CostClass {
 /** A route's state on one machine. `kind` is what the sort and the marker use. */
 export interface RouteStateView {
 	machine: string;
-	kind: 'available' | 'backing_off' | 'capped' | 'unknown';
+	/** Idle is usable, as available is; only backing_off and capped are throttled. */
+	kind: 'available' | 'idle' | 'backing_off' | 'capped' | 'unknown';
 	/** "backing off, back in 7m"; "capped, resets in 2h 10m"; or the bare state. */
 	label: string;
 	/** Absolute time the route clears, for a title attribute; null when it is not known. */
@@ -96,8 +97,6 @@ export interface RouteRow {
 	/** Position in the crew try order; null when no order lists it. */
 	tryOrder: number | null;
 	throttled: boolean;
-	harnesses: string[];
-	models: string[];
 	states: RouteStateView[];
 }
 
@@ -109,13 +108,15 @@ function describe(
 	kind: RouteStateView['kind']
 ): string {
 	const pretty = (state ?? 'unknown').replaceAll('_', ' ');
-	if (kind === 'available' || until === null || until <= now) return pretty;
+	if (kind === 'available' || kind === 'idle' || until === null || until <= now) return pretty;
 	const verb = kind === 'capped' ? 'resets' : 'back';
 	return `${pretty}, ${verb} in ${formatSpan(until - now)}`;
 }
 
 function stateKind(state: string | null): RouteStateView['kind'] {
-	return state === 'available' || state === 'backing_off' || state === 'capped' ? state : 'unknown';
+	return state === 'available' || state === 'idle' || state === 'backing_off' || state === 'capped'
+		? state
+		: 'unknown';
 }
 
 /** The try order of a route: the crew list first, then errand, then first mate. */
@@ -154,34 +155,31 @@ export function buildRoutes(
 			budget: null,
 			tryOrder: tryOrderOf(name, config),
 			throttled: false,
-			harnesses: [],
-			models: [],
 			states: []
 		};
 		byName.set(name, row);
 		return row;
 	};
 
+	const allowanceReported = new Set<string>();
 	for (const machine of snapshot.machines) {
 		for (const route of machine.routes) {
 			const row = rowFor(route.name);
 			const kind = stateKind(route.state);
-			const until = kind === 'capped' ? (route.resets_at ?? route.until_ms) : route.until_ms;
+			const until = route.until_ms;
 			if (kind === 'backing_off' || kind === 'capped') row.throttled = true;
+			if (route.allowance) allowanceReported.add(route.name);
 			// A route's cost comes from the fleet when routes.show is not offered.
 			if (row.cost === 'unknown') {
 				row.cost = costClass(route.cost);
 				row.costLabel = COST_LABELS[row.cost];
 			}
-			if (route.harness && !row.harnesses.includes(route.harness))
-				row.harnesses.push(route.harness);
-			if (route.model && !row.models.includes(route.model)) row.models.push(route.model);
 			row.states.push({
 				machine: machine.name,
 				kind,
 				label: describe(route.state, until, now, kind),
 				clearsAt: until !== null && until > now ? until : null,
-				lastError: route.last_error
+				lastError: route.error
 			});
 		}
 	}
@@ -190,7 +188,9 @@ export function buildRoutes(
 	for (const route of config?.routes ?? []) rowFor(route.name);
 
 	for (const row of byName.values()) {
-		if (row.cost === 'plan') row.budget = 'Plan allowance: not reported';
+		// Privateer's allowance numbers carry no unit it names, so they are not shown as a budget.
+		if (row.cost === 'plan' && !allowanceReported.has(row.name))
+			row.budget = 'Plan allowance: not reported';
 		if (row.cost === 'credits') row.budget = 'Credit balance: not reported';
 	}
 

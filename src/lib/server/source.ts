@@ -11,6 +11,7 @@ import {
 	forwardCursorOf,
 	parseFeed,
 	parseRoutesShow,
+	mergeSnapshot,
 	parseShipProfile,
 	parseSnapshot,
 	parseUsageRecords,
@@ -18,8 +19,10 @@ import {
 	type FeedEntry,
 	type FeedPage,
 	type FleetSnapshot,
+	sinceOf,
 	type RoutesConfig,
 	type ShipProfile,
+	type SinceToken,
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
@@ -153,6 +156,8 @@ export function isUnknownCommand(error: unknown): boolean {
 export class CliSource implements Source {
 	readonly mode = 'cli' as const;
 	readonly #run: Runner;
+	/** The last fleet read, which a `since` read joins onto. */
+	#fleet: FleetSnapshot | null = null;
 
 	constructor(run: Runner) {
 		this.#run = run;
@@ -187,11 +192,24 @@ export class CliSource implements Source {
 
 	async snapshot(): Promise<FleetRead> {
 		try {
-			return { status: 'ok', snapshot: parseSnapshot(await this.#run('fleet.snapshot', {})) };
+			const held = this.#fleet;
+			const since = sinceOf(held);
+			let snapshot = since ? await this.#fleetSince(since, held) : null;
+			// Any doubt about a partial read reads in full.
+			snapshot ??= parseSnapshot(await this.#run('fleet.snapshot', {}));
+			this.#fleet = snapshot;
+			return { status: 'ok', snapshot };
 		} catch (error) {
 			if (isUnknownCommand(error)) return { status: 'unsupported' };
 			throw error;
 		}
+	}
+
+	/** A read with `since`, joined onto the held snapshot; null when the answer cannot be joined. */
+	async #fleetSince(since: SinceToken, held: FleetSnapshot | null): Promise<FleetSnapshot | null> {
+		const raw = await this.#run('fleet.snapshot', { since });
+		if (!Array.isArray(rec(raw)?.machines)) return null;
+		return mergeSnapshot(held, parseSnapshot(raw));
 	}
 
 	async routesShow(): Promise<Read<RoutesConfig>> {

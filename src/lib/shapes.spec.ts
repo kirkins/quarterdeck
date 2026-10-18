@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	assemble,
+	mergeSnapshot,
+	sinceOf,
 	parseCaptainWaiting,
 	parseRoutesShow,
 	parseRuntimeNeeds,
@@ -367,181 +369,339 @@ describe('assemble', () => {
 	});
 });
 
-describe('parseSnapshot (provisional fleet.snapshot)', () => {
+describe('parseSnapshot (fleet.snapshot)', () => {
 	const full = {
+		schema_version: 1,
 		generated_ms: NOW,
+		machine: 'atlas',
 		machines: [
 			{
 				name: 'atlas',
+				link: 'here',
 				reachable: true,
+				error: null,
+				via: 'direct',
+				as_of_ms: null,
 				changed_ms: NOW - 4000,
-				routes: [{ name: 'primary', state: 'backing_off', until_ms: NOW + 9 * MIN }],
-				ships: [
+				unchanged: false,
+				truncated: false,
+				unknown: ['answered:billing'],
+				routes: [
 					{
-						name: 'billing',
-						scope: 'Invoices',
-						presence: 'hosted',
-						open_tasks: 3,
-						jobs: [
-							{
-								id: 'j1',
-								task_id: 'billing-retries',
-								task_title: 'Retry policy',
-								doing_now: 'Replaying declines',
-								started_ms: NOW - 12 * MIN,
-								heavy: true,
-								waits: 'waiting for capacity'
-							}
-						]
+						name: 'free-pool',
+						route: 'tidewater small-free',
+						cost: 'free',
+						tier: 'small',
+						state: 'backing_off',
+						until_ms: NOW + 540_000,
+						error: 'Upstream answered 429',
+						allowance: null
 					}
 				]
 			}
 		],
-		needs: [{ id: 'n1', ship: 'billing', kind: 'decision', source: 'mail' }]
+		ships: [
+			{
+				name: 'billing',
+				machine: 'atlas',
+				liaison: 'captain',
+				harness: 'tidewater',
+				hosted: true,
+				presence: 'hosted',
+				presence_since_ms: NOW - 3600_000,
+				unread: 2,
+				open_requests: 1,
+				open_tasks: [
+					{ id: 'billing-retries', title: 'Retries', status: 'running', handoff_to: null }
+				],
+				open_tasks_total: 3,
+				jobs: [
+					{
+						id: 'job-billing-42',
+						task_id: 'billing-retries',
+						task_title: 'Retry policy',
+						kind: 'crew',
+						state: 'queued',
+						heavy: true,
+						created_ms: NOW - 9000,
+						spawned_ms: null,
+						started_ms: null,
+						model_route: 'plan-main',
+						doing: null,
+						wait: {
+							for: 'capacity',
+							since_ms: NOW - 5000,
+							job_id: null,
+							park: null,
+							behind: []
+						}
+					},
+					{
+						id: 'job-billing-43',
+						task_id: 'receipts',
+						task_title: 'Receipts',
+						kind: 'crew',
+						state: 'running',
+						heavy: false,
+						created_ms: NOW - 9000,
+						spawned_ms: NOW - 8000,
+						started_ms: NOW - 7000,
+						model_route: 'free-pool',
+						doing: { text: 'Replaying declines', at_ms: NOW - 1000, report_id: 'r1' },
+						wait: null
+					}
+				],
+				jobs_total: 2
+			}
+		],
+		needs: [
+			{
+				id: 'm-billing-retries',
+				ship: 'billing',
+				machine: 'atlas',
+				kind: 'decision',
+				source: 'mail',
+				question: 'Which policy?',
+				mail_id: 'm-billing-retries',
+				as_of_ms: null,
+				actions: ['approve']
+			}
+		]
 	};
 
-	it('reads the full shape', () => {
+	it('reads every field the contract names', () => {
 		const snap = parseSnapshot(full);
+		expect(snap.schema_version).toBe(1);
 		expect(snap.generated_ms).toBe(NOW);
-		expect(snap.machines).toHaveLength(1);
-		const [machine] = snap.machines;
-		expect(machine).toMatchObject({ name: 'atlas', reachable: true, changed_ms: NOW - 4000 });
-		expect(machine.routes).toEqual([
-			{
-				name: 'primary',
-				harness: null,
-				model: null,
-				cost: null,
-				state: 'backing_off',
-				until_ms: NOW + 9 * MIN,
-				resets_at: null,
-				last_error: null
-			}
-		]);
-		expect(machine.ships[0]).toMatchObject({
+		expect(snap.machines[0]).toMatchObject({
+			name: 'atlas',
+			link: 'here',
+			reachable: true,
+			via: 'direct',
+			as_of_ms: null,
+			changed_ms: NOW - 4000,
+			unchanged: false,
+			truncated: false,
+			unknown: ['answered:billing']
+		});
+		expect(snap.machines[0].routes[0]).toEqual({
+			name: 'free-pool',
+			route: 'tidewater small-free',
+			cost: 'free',
+			tier: 'small',
+			state: 'backing_off',
+			until_ms: NOW + 540_000,
+			error: 'Upstream answered 429',
+			allowance: null
+		});
+		expect(snap.needs[0]).toEqual({
+			id: 'm-billing-retries',
+			ship: 'billing',
+			machine: 'atlas',
+			kind: 'decision',
+			source: 'mail',
+			question: 'Which policy?',
+			mail_id: 'm-billing-retries',
+			as_of_ms: null,
+			actions: ['approve']
+		});
+	});
+
+	it('places each top-level ship on its machine, with its tasks and jobs', () => {
+		const ship = parseSnapshot(full).machines[0].ships[0];
+		expect(ship).toMatchObject({
 			name: 'billing',
-			scope: 'Invoices',
+			machine: 'atlas',
+			hosted: true,
 			presence: 'hosted',
-			open_tasks: 3
+			presence_since_ms: NOW - 3600_000,
+			unread: 2,
+			open_requests: 1,
+			open_tasks_total: 3,
+			jobs_total: 2
 		});
-		expect(machine.ships[0].jobs[0]).toEqual({
-			id: 'j1',
-			task_id: 'billing-retries',
-			task_title: 'Retry policy',
-			doing_now: 'Replaying declines',
-			started_ms: NOW - 12 * MIN,
+		expect(ship.open_tasks).toEqual([
+			{ id: 'billing-retries', title: 'Retries', status: 'running', handoff_to: null }
+		]);
+		expect(ship.jobs[0]).toMatchObject({
+			state: 'queued',
 			heavy: true,
-			waits: 'waiting for capacity'
+			doing: null,
+			wait: { for: 'capacity', since_ms: NOW - 5000, behind: [] }
 		});
-		expect(snap.needs).toEqual([{ id: 'n1', ship: 'billing', kind: 'decision' }]);
+		expect(ship.jobs[1]).toMatchObject({
+			state: 'running',
+			doing: { text: 'Replaying declines', at_ms: NOW - 1000, report_id: 'r1' },
+			wait: null
+		});
+	});
+
+	it('reads a parked job behind another job, and an allowance', () => {
+		const raw = {
+			machines: [
+				{
+					name: 'boreas',
+					reachable: true,
+					routes: [
+						{
+							name: 'plan-main',
+							state: 'available',
+							allowance: {
+								shape: 'window',
+								window_ends_ms: NOW,
+								weekly_ends_ms: NOW,
+								window_used: 3,
+								week_used: 9,
+								last_used_ms: NOW
+							}
+						}
+					]
+				}
+			],
+			ships: [
+				{
+					name: 'chandlery',
+					machine: 'boreas',
+					jobs: [
+						{
+							id: 'j2',
+							state: 'parked',
+							wait: {
+								for: 'job',
+								job_id: 'j1',
+								park: 'waiting for the layout',
+								behind: [{ job_id: 'j1', ship: 'chandlery', unhealthy: true }]
+							}
+						}
+					]
+				}
+			]
+		};
+		const snap = parseSnapshot(raw);
+		expect(snap.machines[0].ships[0].jobs[0].wait).toEqual({
+			for: 'job',
+			since_ms: null,
+			job_id: 'j1',
+			park: 'waiting for the layout',
+			behind: [{ job_id: 'j1', ship: 'chandlery', unhealthy: true }]
+		});
+		expect(snap.machines[0].routes[0].allowance).toEqual({
+			shape: 'window',
+			window_ends_ms: NOW,
+			weekly_ends_ms: NOW,
+			window_used: 3,
+			week_used: 9,
+			last_used_ms: NOW
+		});
+	});
+
+	it('reads an unknown presence as unknown, not as an absent one', () => {
+		const ship = parseSnapshot({
+			machines: [{ name: 'a' }],
+			ships: [
+				{ name: 's', machine: 'a', presence: 'waking' },
+				{ name: 't', machine: 'a' }
+			]
+		}).machines[0].ships;
+		expect(ship.map((s) => s.presence)).toEqual(['unknown', 'unknown']);
+	});
+
+	it('keeps an unreachable machine with its as-of time and last-known ships', () => {
+		const snap = parseSnapshot({
+			machines: [
+				{ name: 'calypso', reachable: false, error: 'timed out', as_of_ms: NOW - 3600_000 }
+			],
+			ships: [{ name: 'mobile-app', machine: 'calypso', presence: 'hosted' }]
+		});
+		expect(snap.machines[0]).toMatchObject({
+			reachable: false,
+			error: 'timed out',
+			as_of_ms: NOW - 3600_000
+		});
+		expect(snap.machines[0].ships.map((s) => s.name)).toEqual(['mobile-app']);
 	});
 
 	it('fills gaps for a partial snapshot instead of failing', () => {
 		const snap = parseSnapshot({ machines: [{ name: 'boreas', ships: [{ name: 'analytics' }] }] });
-		expect(snap).toEqual({
+		expect(snap.machines).toEqual([
+			expect.objectContaining({ name: 'boreas', reachable: false, ships: [], routes: [] })
+		]);
+		expect(snap.needs).toEqual([]);
+	});
+
+	it('returns an empty snapshot for anything that is not an object', () => {
+		expect(parseSnapshot({})).toEqual({
+			schema_version: null,
 			generated_ms: null,
-			machines: [
-				{
-					name: 'boreas',
-					reachable: false,
-					changed_ms: null,
-					routes: [],
-					ships: [{ name: 'analytics', scope: null, presence: null, open_tasks: 0, jobs: [] }]
-				}
-			],
+			machines: [],
 			needs: []
 		});
-	});
-
-	it('ignores extra fields at every level', () => {
-		const snap = parseSnapshot({
-			...full,
-			privateer_version: '9.9',
-			machines: [{ ...full.machines[0], spend_usd: 4.2, ships: [{ name: 'x', hostname: 'h' }] }],
-			needs: [{ id: 'n2', ship: 'x', kind: 'blocker', extra: true }]
-		});
-		expect(snap.machines[0].ships).toEqual([
-			{ name: 'x', scope: null, presence: null, open_tasks: 0, jobs: [] }
-		]);
-		expect(snap.needs).toEqual([{ id: 'n2', ship: 'x', kind: 'blocker' }]);
-	});
-
-	it('returns an empty fleet when machines are missing or not a list', () => {
-		expect(parseSnapshot({})).toEqual({ generated_ms: null, machines: [], needs: [] });
 		expect(parseSnapshot({ machines: 'atlas' }).machines).toEqual([]);
 		expect(parseSnapshot(null).machines).toEqual([]);
 		expect(parseSnapshot('not an object').needs).toEqual([]);
 	});
-
-	it('drops machines, ships and needs without a name or id', () => {
-		const snap = parseSnapshot({
-			machines: [{ reachable: true }, { name: 'calypso', ships: [{ scope: 'no name' }] }],
-			needs: [{ id: 'n3' }, { ship: 'billing' }]
-		});
-		expect(snap.machines.map((m) => m.name)).toEqual(['calypso']);
-		expect(snap.machines[0].ships).toEqual([]);
-		expect(snap.needs).toEqual([]);
-	});
 });
 
-describe('parseSnapshot routes (provisional, for the spend view)', () => {
-	it('reads every route field, and leaves the ones Privateer omits null', () => {
-		const snap = parseSnapshot({
-			machines: [
-				{
-					name: 'atlas',
-					reachable: true,
-					routes: [
-						{
-							name: 'free-pool',
-							harness: 'tidewater',
-							model: 'small-free',
-							cost: 'free',
-							state: 'backing_off',
-							until_ms: NOW + 9 * MIN,
-							last_error: 'Upstream answered 429'
-						},
-						{ name: 'credits-reserve', cost: 'credits', state: 'available' },
-						{ state: 'available' }
-					]
-				}
-			]
-		});
-		expect(snap.machines[0].routes).toEqual([
+describe('sinceOf and mergeSnapshot (fleet.snapshot since)', () => {
+	const read = (machines: unknown[], ships: unknown[] = [], needs: unknown[] = []) =>
+		parseSnapshot({ generated_ms: NOW, machines, ships, needs });
+
+	const held = read(
+		[
 			{
-				name: 'free-pool',
-				harness: 'tidewater',
-				model: 'small-free',
-				cost: 'free',
-				state: 'backing_off',
-				until_ms: NOW + 9 * MIN,
-				resets_at: null,
-				last_error: 'Upstream answered 429'
+				name: 'atlas',
+				reachable: true,
+				changed_ms: 100,
+				routes: [{ name: 'plan-main', state: 'available' }]
 			},
+			{ name: 'boreas', reachable: true, changed_ms: 200 }
+		],
+		[
 			{
-				name: 'credits-reserve',
-				harness: null,
-				model: null,
-				cost: 'credits',
-				state: 'available',
-				until_ms: null,
-				resets_at: null,
-				last_error: null
-			}
-		]);
+				name: 'billing',
+				machine: 'atlas',
+				presence: 'hosted',
+				jobs: [{ id: 'j1', state: 'running' }]
+			},
+			{ name: 'search', machine: 'boreas', presence: 'asleep' }
+		],
+		[{ id: 'old', ship: 'billing', machine: 'atlas' }]
+	);
+
+	it('builds the since token from each machine that has a change time', () => {
+		expect(sinceOf(held)).toEqual({ atlas: 100, boreas: 200 });
+		expect(sinceOf(read([{ name: 'calypso', reachable: false }]))).toBeNull();
+		expect(sinceOf(null)).toBeNull();
 	});
 
-	it('reads resets_at for a capped route', () => {
-		const snap = parseSnapshot({
-			machines: [
-				{
-					name: 'boreas',
-					reachable: true,
-					routes: [{ name: 'plan-main', cost: 'plan', state: 'capped', resets_at: NOW + HOUR }]
-				}
-			]
-		});
-		expect(snap.machines[0].routes[0].resets_at).toBe(NOW + HOUR);
+	it('keeps the held ships and routes of an unchanged machine, and takes the new needs in full', () => {
+		const next = read(
+			[
+				{ name: 'atlas', reachable: true, changed_ms: 100, unchanged: true },
+				{ name: 'boreas', reachable: true, changed_ms: 250, unchanged: false }
+			],
+			[{ name: 'search', machine: 'boreas', presence: 'hosted' }],
+			[{ id: 'new', ship: 'search', machine: 'boreas' }]
+		);
+		const merged = mergeSnapshot(held, next);
+		expect(merged?.machines.map((m) => m.name)).toEqual(['atlas', 'boreas']);
+		expect(merged?.machines[0].ships.map((s) => s.name)).toEqual(['billing']);
+		expect(merged?.machines[0].routes.map((r) => r.name)).toEqual(['plan-main']);
+		expect(merged?.machines[1].ships.map((s) => s.presence)).toEqual(['hosted']);
+		expect(merged?.needs.map((n) => n.id)).toEqual(['new']);
+	});
+
+	it('returns null when an unchanged machine has nothing held to stand on', () => {
+		const next = read([{ name: 'atlas', reachable: true, changed_ms: 100, unchanged: true }]);
+		expect(mergeSnapshot(null, next)).toBeNull();
+		expect(mergeSnapshot(read([{ name: 'boreas' }]), next)).toBeNull();
+	});
+
+	it('takes a changed machine as sent, without the held one', () => {
+		const next = read([{ name: 'atlas', reachable: true, changed_ms: 300, unchanged: false }]);
+		const merged = mergeSnapshot(held, next);
+		expect(merged?.machines[0].ships).toEqual([]);
+		expect(merged?.machines[0].routes).toEqual([]);
 	});
 });
 

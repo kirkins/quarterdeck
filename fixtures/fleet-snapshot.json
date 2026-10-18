@@ -1,200 +1,466 @@
 {
 	"fixture_now_ms": 1792300000000,
+	"schema_version": 1,
 	"generated_ms": 1792300000000,
+	"machine": "atlas",
 	"machines": [
 		{
 			"name": "atlas",
+			"link": "here",
 			"reachable": true,
+			"error": null,
+			"via": "direct",
+			"as_of_ms": null,
 			"changed_ms": 1792299996000,
+			"unchanged": false,
+			"truncated": false,
+			"unknown": [],
 			"routes": [
 				{
 					"name": "free-pool",
-					"harness": "tidewater",
-					"model": "small-free",
+					"route": "tidewater small-free",
 					"cost": "free",
+					"tier": "small",
 					"state": "backing_off",
 					"until_ms": 1792300540000,
-					"last_error": "Upstream answered 429: too many requests this minute"
+					"error": "Upstream answered 429: too many requests this minute",
+					"allowance": null
 				},
 				{
 					"name": "plan-main",
-					"harness": "tidewater",
-					"model": "large",
+					"route": "tidewater large",
 					"cost": "plan",
-					"state": "available"
-				}
-			],
-			"ships": [
-				{
-					"name": "billing",
-					"scope": "Invoices, retries and dunning for paid plans",
-					"presence": "hosted",
-					"open_tasks": 3,
-					"jobs": [
-						{
-							"id": "job-billing-42",
-							"task_id": "billing-retries",
-							"task_title": "Retry policy for failed card payments",
-							"doing_now": "Replaying last month's declines against the draft policy",
-							"started_ms": 1792299280000,
-							"heavy": true,
-							"waits": "waiting for capacity"
-						},
-						{
-							"id": "job-billing-43",
-							"task_id": "billing-receipts",
-							"task_title": "Receipt email wording",
-							"doing_now": "Checking the tone against the style notes",
-							"started_ms": 1792299700000,
-							"heavy": false,
-							"waits": null
-						}
-					]
-				},
-				{
-					"name": "chandlery",
-					"scope": "Catalogue pages, cart and checkout",
-					"presence": "hosted",
-					"open_tasks": 2,
-					"jobs": [
-						{
-							"id": "job-store-11",
-							"task_id": "cart-page",
-							"task_title": "New cart page layout",
-							"doing_now": "Running the checkout visual tests on the phone size",
-							"started_ms": 1792299520000,
-							"heavy": false,
-							"waits": null
-						}
-					]
-				},
-				{
-					"name": "docs-site",
-					"scope": "Public documentation and the changelog",
-					"presence": "asleep",
-					"open_tasks": 0,
-					"jobs": []
+					"tier": "large",
+					"state": "available",
+					"until_ms": null,
+					"error": null,
+					"allowance": null
 				}
 			]
 		},
 		{
 			"name": "boreas",
+			"link": "reaches",
 			"reachable": true,
+			"error": null,
+			"via": "reused",
+			"as_of_ms": null,
 			"changed_ms": 1792299990000,
+			"unchanged": false,
+			"truncated": false,
+			"unknown": [],
 			"routes": [
 				{
 					"name": "plan-main",
-					"harness": "tidewater",
-					"model": "large",
+					"route": "tidewater large",
 					"cost": "plan",
+					"tier": "large",
 					"state": "capped",
 					"until_ms": 1792307800000,
-					"resets_at": 1792307800000,
-					"last_error": "Weekly allowance used; shared with the captain"
+					"error": "Weekly allowance used; shared with the captain",
+					"allowance": null
+				},
+				{
+					"name": "free-pool",
+					"route": "tidewater small-free",
+					"cost": "free",
+					"tier": "small",
+					"state": "idle",
+					"until_ms": null,
+					"error": null,
+					"allowance": null
 				},
 				{
 					"name": "credits-reserve",
-					"harness": "ferry",
-					"model": "large",
+					"route": "ferry large",
 					"cost": "credits",
-					"state": "available"
-				}
-			],
-			"ships": [
-				{
-					"name": "search-index",
-					"scope": "Rebuilds the product search index nightly",
-					"presence": "hosted",
-					"open_tasks": 2,
-					"jobs": [
-						{
-							"id": "job-search-7",
-							"task_id": "index-rebuild",
-							"task_title": "Nightly index rebuild",
-							"doing_now": "Merging shard 4 of 6",
-							"started_ms": 1792298400000,
-							"heavy": true,
-							"waits": null
-						}
-					]
-				},
-				{
-					"name": "analytics",
-					"scope": "Weekly usage rollups for the dashboard",
-					"presence": "hosted",
-					"open_tasks": 1,
-					"jobs": [
-						{
-							"id": "job-ana-3",
-							"task_id": "weekly-rollup",
-							"task_title": "Weekly usage rollup",
-							"doing_now": "Counting active captains per fleet for last week",
-							"started_ms": 1792299100000,
-							"heavy": false,
-							"waits": null
-						}
-					]
-				},
-				{
-					"name": "ledger",
-					"scope": "Double-entry books and month-end close",
-					"presence": "asleep",
-					"open_tasks": 0,
-					"jobs": []
-				},
-				{
-					"name": "previews",
-					"scope": "Short-lived preview environments for pull requests",
-					"presence": "asleep",
-					"open_tasks": 0,
-					"jobs": []
+					"tier": "large",
+					"state": "available",
+					"until_ms": null,
+					"error": null,
+					"allowance": null
 				}
 			]
 		},
 		{
 			"name": "calypso",
+			"link": "reached_by",
 			"reachable": false,
+			"error": "timed out after 10 s",
+			"via": "cache",
+			"as_of_ms": 1792292800000,
 			"changed_ms": 1792292800000,
-			"routes": [],
-			"ships": [
+			"unchanged": false,
+			"truncated": false,
+			"unknown": [],
+			"routes": []
+		}
+	],
+	"ships": [
+		{
+			"name": "billing",
+			"machine": "atlas",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": true,
+			"presence": "hosted",
+			"presence_since_ms": 1792292400000,
+			"unread": 1,
+			"open_requests": 1,
+			"open_tasks": [
 				{
-					"name": "mobile-app",
-					"scope": "The iOS and Android shell",
-					"presence": null,
-					"open_tasks": 0,
-					"jobs": []
+					"id": "billing-retries",
+					"title": "Retry policy for failed card payments",
+					"status": "running",
+					"handoff_to": null
 				},
 				{
-					"name": "status-page",
-					"scope": "The public status page",
-					"presence": null,
-					"open_tasks": 0,
-					"jobs": []
+					"id": "billing-receipts",
+					"title": "Receipt email wording",
+					"status": "running",
+					"handoff_to": null
+				},
+				{
+					"id": "billing-dunning",
+					"title": "Dunning emails for paid plans",
+					"status": "queued",
+					"handoff_to": null
 				}
-			]
+			],
+			"open_tasks_total": 3,
+			"jobs": [
+				{
+					"id": "job-billing-42",
+					"task_id": "billing-retries",
+					"task_title": "Retry policy for failed card payments",
+					"kind": "crew",
+					"state": "queued",
+					"heavy": true,
+					"created_ms": 1792299200000,
+					"spawned_ms": null,
+					"started_ms": null,
+					"model_route": "plan-main",
+					"doing": null,
+					"wait": {
+						"for": "capacity",
+						"since_ms": 1792299250000,
+						"job_id": null,
+						"park": null,
+						"behind": []
+					}
+				},
+				{
+					"id": "job-billing-43",
+					"task_id": "billing-receipts",
+					"task_title": "Receipt email wording",
+					"kind": "crew",
+					"state": "running",
+					"heavy": false,
+					"created_ms": 1792299650000,
+					"spawned_ms": 1792299660000,
+					"started_ms": 1792299700000,
+					"model_route": "free-pool",
+					"doing": {
+						"text": "Checking the tone against the style notes",
+						"at_ms": 1792299960000,
+						"report_id": "rep-billing-43"
+					},
+					"wait": null
+				}
+			],
+			"jobs_total": 2
+		},
+		{
+			"name": "chandlery",
+			"machine": "atlas",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": true,
+			"presence": "hosted",
+			"presence_since_ms": 1792298100000,
+			"unread": 0,
+			"open_requests": 1,
+			"open_tasks": [
+				{
+					"id": "cart-page",
+					"title": "New cart page layout",
+					"status": "running",
+					"handoff_to": null
+				},
+				{
+					"id": "cart-stock",
+					"title": "Stock badges on product cards",
+					"status": "parked",
+					"handoff_to": null
+				}
+			],
+			"open_tasks_total": 2,
+			"jobs": [
+				{
+					"id": "job-store-11",
+					"task_id": "cart-page",
+					"task_title": "New cart page layout",
+					"kind": "crew",
+					"state": "running",
+					"heavy": false,
+					"created_ms": 1792299450000,
+					"spawned_ms": 1792299460000,
+					"started_ms": 1792299520000,
+					"model_route": "plan-main",
+					"doing": {
+						"text": "Running the checkout visual tests on the phone size",
+						"at_ms": 1792299930000,
+						"report_id": "rep-store-11"
+					},
+					"wait": null
+				},
+				{
+					"id": "job-store-12",
+					"task_id": "cart-stock",
+					"task_title": "Stock badges on product cards",
+					"kind": "crew",
+					"state": "parked",
+					"heavy": false,
+					"created_ms": 1792299600000,
+					"spawned_ms": 1792299610000,
+					"started_ms": null,
+					"model_route": "free-pool",
+					"doing": null,
+					"wait": {
+						"for": "job",
+						"since_ms": 1792299800000,
+						"job_id": "job-store-11",
+						"park": "waiting for the cart layout to land",
+						"behind": [{ "job_id": "job-store-11", "ship": "chandlery", "unhealthy": false }]
+					}
+				}
+			],
+			"jobs_total": 2
+		},
+		{
+			"name": "docs-site",
+			"machine": "atlas",
+			"liaison": "captain",
+			"harness": "ferry",
+			"hosted": false,
+			"presence": "asleep",
+			"presence_since_ms": 1792292400000,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [],
+			"open_tasks_total": 0,
+			"jobs": [],
+			"jobs_total": 0
+		},
+		{
+			"name": "search-index",
+			"machine": "boreas",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": true,
+			"presence": "hosted",
+			"presence_since_ms": 1792296900000,
+			"unread": 2,
+			"open_requests": 1,
+			"open_tasks": [
+				{
+					"id": "index-rebuild",
+					"title": "Nightly index rebuild",
+					"status": "running",
+					"handoff_to": null
+				}
+			],
+			"open_tasks_total": 2,
+			"jobs": [
+				{
+					"id": "job-search-7",
+					"task_id": "index-rebuild",
+					"task_title": "Nightly index rebuild",
+					"kind": "crew",
+					"state": "running",
+					"heavy": true,
+					"created_ms": 1792298300000,
+					"spawned_ms": 1792298310000,
+					"started_ms": 1792298400000,
+					"model_route": "credits-reserve",
+					"doing": {
+						"text": "Merging shard 4 of 6",
+						"at_ms": 1792299900000,
+						"report_id": "rep-search-7"
+					},
+					"wait": null
+				}
+			],
+			"jobs_total": 1
+		},
+		{
+			"name": "analytics",
+			"machine": "boreas",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": true,
+			"presence": "session",
+			"presence_since_ms": 1792299000000,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [
+				{
+					"id": "weekly-rollup",
+					"title": "Weekly usage rollup",
+					"status": "running",
+					"handoff_to": null
+				}
+			],
+			"open_tasks_total": 1,
+			"jobs": [
+				{
+					"id": "job-ana-5",
+					"task_id": "weekly-rollup",
+					"task_title": "Weekly usage rollup",
+					"kind": "crew",
+					"state": "running",
+					"heavy": false,
+					"created_ms": 1792299050000,
+					"spawned_ms": 1792299060000,
+					"started_ms": 1792299100000,
+					"model_route": "free-pool",
+					"doing": {
+						"text": "Counting active captains per fleet for last week",
+						"at_ms": 1792299950000,
+						"report_id": "rep-ana-5"
+					},
+					"wait": null
+				},
+				{
+					"id": "job-ana-3",
+					"task_id": "weekly-rollup-old",
+					"task_title": "Weekly usage rollup, last run",
+					"kind": "crew",
+					"state": "orphaned",
+					"heavy": false,
+					"created_ms": 1792296000000,
+					"spawned_ms": 1792296010000,
+					"started_ms": 1792296100000,
+					"model_route": "free-pool",
+					"doing": null,
+					"wait": null
+				}
+			],
+			"jobs_total": 2
+		},
+		{
+			"name": "ledger",
+			"machine": "boreas",
+			"liaison": "captain",
+			"harness": "ferry",
+			"hosted": false,
+			"presence": "unknown",
+			"presence_since_ms": null,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [],
+			"open_tasks_total": 0,
+			"jobs": [],
+			"jobs_total": 0
+		},
+		{
+			"name": "previews",
+			"machine": "boreas",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": false,
+			"presence": "asleep",
+			"presence_since_ms": 1792292400000,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [],
+			"open_tasks_total": 0,
+			"jobs": [],
+			"jobs_total": 0
+		},
+		{
+			"name": "mobile-app",
+			"machine": "calypso",
+			"liaison": "captain",
+			"harness": "tidewater",
+			"hosted": true,
+			"presence": "hosted",
+			"presence_since_ms": 1792290000000,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [],
+			"open_tasks_total": 1,
+			"jobs": [
+				{
+					"id": "job-app-2",
+					"task_id": "push-badges",
+					"task_title": "Push badge counts",
+					"kind": "crew",
+					"state": "running",
+					"heavy": false,
+					"created_ms": 1792292500000,
+					"spawned_ms": 1792292510000,
+					"started_ms": 1792292600000,
+					"model_route": "plan-main",
+					"doing": {
+						"text": "Wiring the badge count to the feed",
+						"at_ms": 1792292750000,
+						"report_id": "rep-app-2"
+					},
+					"wait": null
+				}
+			],
+			"jobs_total": 1
+		},
+		{
+			"name": "status-page",
+			"machine": "calypso",
+			"liaison": "captain",
+			"harness": "ferry",
+			"hosted": false,
+			"presence": "asleep",
+			"presence_since_ms": 1792290000000,
+			"unread": 0,
+			"open_requests": 0,
+			"open_tasks": [],
+			"open_tasks_total": 0,
+			"jobs": [],
+			"jobs_total": 0
 		}
 	],
 	"needs": [
 		{
 			"id": "m-billing-retries",
 			"ship": "billing",
+			"machine": "atlas",
 			"kind": "decision",
 			"source": "mail",
-			"question": "Which retry policy should failed card payments follow?"
+			"question": "Which retry policy should failed card payments follow?",
+			"mail_id": "m-billing-retries",
+			"as_of_ms": null,
+			"actions": []
 		},
 		{
 			"id": "m-search-reindex",
 			"ship": "search-index",
+			"machine": "boreas",
 			"kind": "blocker",
 			"source": "job",
-			"question": "The nightly rebuild is waiting for disk space."
+			"question": "The nightly rebuild is waiting for disk space.",
+			"mail_id": null,
+			"as_of_ms": null,
+			"actions": []
 		},
 		{
 			"id": "m-chandlery-deploy",
 			"ship": "chandlery",
+			"machine": "atlas",
 			"kind": "approval",
 			"source": "mail",
-			"question": "Release the new cart page to all shoppers tonight?"
+			"question": "Release the new cart page to all shoppers tonight?",
+			"mail_id": "m-chandlery-deploy",
+			"as_of_ms": null,
+			"actions": ["approve", "decline"]
 		}
 	]
 }

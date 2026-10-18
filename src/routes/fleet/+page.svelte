@@ -6,7 +6,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import RefreshButton from '#lib/components/RefreshButton.svelte';
-	import { formatUpdated, routeLabel } from '#lib/fleet.ts';
+	import { formatUpdated, presenceLabel, routeLabel, waitLabel } from '#lib/fleet.ts';
 	import { formatSpan } from '#lib/time.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
@@ -92,7 +92,17 @@
 					><strong>{stats.machinesReachable}</strong> of {stats.machinesTotal} machines reachable</span
 				>
 				<span><strong>{stats.shipsAwake}</strong> ships awake</span>
+				{#if stats.shipsUnsure > 0}
+					<span class="unsure"
+						><strong>{stats.shipsUnsure}</strong>
+						{stats.shipsUnsure === 1 ? 'ship' : 'ships'} unknown</span
+					>
+				{/if}
 				<span><strong>{stats.crew}</strong> crew running</span>
+				{#if stats.waiting > 0}<span><strong>{stats.waiting}</strong> waiting</span>{/if}
+				{#if stats.orphaned > 0}
+					<span class="problem"><strong>{stats.orphaned}</strong> orphaned</span>
+				{/if}
 				{#if loadedAt > 0}<span class="updated">Updated {formatUpdated(loadedAt, now)}</span>{/if}
 			</p>
 		{/if}
@@ -129,6 +139,7 @@
 			{#each view.machines as mv, i (mv.machine.name)}
 				{@const m = mv.machine}
 				{@const open = !collapsed.has(m.name)}
+				{@const asOf = m.as_of_ms ?? m.changed_ms}
 				<section class="machine" class:unreachable={!m.reachable} aria-labelledby="machine-{i}">
 					<h2>
 						<button
@@ -144,7 +155,7 @@
 								{#if m.reachable}
 									updated {formatUpdated(m.changed_ms ?? now, now)}
 								{:else}
-									unreachable · last seen {formatUpdated(m.changed_ms ?? now, now)}
+									unreachable · as of {formatUpdated(asOf ?? now, now)}
 								{/if}
 							</span>
 							{#if m.reachable && mv.ships.length > 0}
@@ -170,85 +181,85 @@
 
 					{#if open}
 						<div class="machine-body" id="machine-body-{i}">
-							{#if m.reachable}
-								{#if mv.ships.length === 0}
-									<p class="none">No ships on this machine.</p>
-								{:else}
-									<ul class="ships">
-										{#each mv.ships as sv (sv.ship.name)}
-											{@const s = sv.ship}
-											<li class="ship" data-ship={s.name} class:needs={sv.needs > 0}>
-												<div class="ship-head">
-													<a class="ship-name" href={resolve('/ship/[name]', { name: s.name })}
-														>{s.name}</a
-													>
-													<span
-														class="presence"
-														class:asleep={!sv.awake}
-														data-presence={s.presence ?? 'unknown'}
-													>
-														{s.presence ?? 'unknown'}
-													</span>
-													<span class="tasks">{s.open_tasks} open</span>
-													{#if sv.needs > 0}
-														<a
-															class="needs-link tag tag-brass"
-															href="{resolve('/triage')}?ship={encodeURIComponent(s.name)}"
-														>
-															{sv.needs}
-															{sv.needs === 1 ? 'item needs' : 'items need'} you
-														</a>
-													{/if}
-												</div>
-												{#if s.scope}<p class="scope">{s.scope}</p>{/if}
-												{#if s.jobs.length > 0}
-													<ul class="crew" aria-label="Crew on {s.name}">
-														{#each s.jobs as job (job.id)}
-															<li
-																class="job"
-																class:heavy={job.heavy}
-																class:waits={job.waits !== null}
-															>
-																<p class="job-title">{job.task_title ?? job.task_id ?? job.id}</p>
-																{#if job.doing_now}<p class="doing">{job.doing_now}</p>{/if}
-																<p class="job-meta">
-																	{#if job.started_ms !== null}
-																		<span
-																			><Icon name="clock" size={13} /> running {formatSpan(
-																				now - job.started_ms
-																			)}</span
-																		>
-																	{/if}
-																	{#if job.heavy}<span class="tag heavy">heavy</span>{/if}
-																	{#if job.waits}<span class="tag tag-warn waits">{job.waits}</span
-																		>{/if}
-																</p>
-															</li>
-														{/each}
-													</ul>
-												{/if}
-											</li>
-										{/each}
-									</ul>
-								{/if}
-								{#if m.routes.length > 0}
-									<p class="routes">
-										<span class="routes-label">Routes</span>
-										{m.routes.map((r) => `${r.name} ${routeLabel(r, now)}`).join(', ')}
-									</p>
-								{/if}
+							{#if !m.reachable}
+								<p class="none">
+									Not reachable from here{m.error ? `: ${m.error}` : ''}. Showing the last known
+									state
+									{asOf !== null ? `, as of ${formatUpdated(asOf, now)}` : ''}.
+								</p>
+							{/if}
+							{#if m.unknown.length > 0}
+								<p class="none">Some items could not be checked from here.</p>
+							{/if}
+							{#if mv.ships.length === 0}
+								<p class="none">No ships on this machine.</p>
 							{:else}
-								<p class="none">Not reachable from here. Showing ship names only.</p>
-								<ul class="ship-names">
+								<ul class="ships">
 									{#each mv.ships as sv (sv.ship.name)}
-										<li>
-											<a
-												class="tag tag-outline"
-												href={resolve('/ship/[name]', { name: sv.ship.name })}>{sv.ship.name}</a
-											>
+										{@const s = sv.ship}
+										<li
+											class="ship"
+											class:needs={sv.needs > 0}
+											class:stale={!m.reachable}
+											data-ship={s.name}
+										>
+											<div class="ship-head">
+												<a class="ship-name" href={resolve('/ship/[name]', { name: s.name })}
+													>{s.name}</a
+												>
+												<span class="presence" class:asleep={!sv.awake} data-presence={s.presence}>
+													{presenceLabel(s.presence, s.presence_since_ms, now)}
+												</span>
+												<span class="tasks">{s.open_tasks_total} open</span>
+												{#if sv.needs > 0}
+													<a
+														class="needs-link tag tag-brass"
+														href="{resolve('/triage')}?ship={encodeURIComponent(s.name)}"
+													>
+														{sv.needs}
+														{sv.needs === 1 ? 'item needs' : 'items need'} you
+													</a>
+												{/if}
+											</div>
+											{#if s.jobs.length > 0}
+												<ul class="crew" aria-label="Crew on {s.name}">
+													{#each s.jobs as job (job.id)}
+														<li
+															class="job"
+															data-state={job.state}
+															class:heavy={job.heavy}
+															class:waits={job.wait !== null}
+															class:orphaned={job.state === 'orphaned'}
+														>
+															<p class="job-title">{job.task_title ?? job.task_id ?? job.id}</p>
+															{#if job.doing}<p class="doing">{job.doing.text}</p>{/if}
+															<p class="job-meta">
+																<span class="state">{job.state ?? 'unknown'}</span>
+																{#if job.started_ms !== null && m.reachable && (job.state === 'running' || job.state === 'launching' || job.state === 'starting')}
+																	<span
+																		><Icon name="clock" size={13} /> running {formatSpan(
+																			now - job.started_ms
+																		)}</span
+																	>
+																{/if}
+																{#if job.heavy}<span class="tag heavy">heavy</span>{/if}
+																{#if job.wait}<span class="tag tag-warn waits"
+																		>{waitLabel(job.wait, now)}</span
+																	>{/if}
+															</p>
+														</li>
+													{/each}
+												</ul>
+											{/if}
 										</li>
 									{/each}
 								</ul>
+							{/if}
+							{#if m.routes.length > 0}
+								<p class="routes">
+									<span class="routes-label">Routes</span>
+									{m.routes.map((r) => `${r.name} ${routeLabel(r, now)}`).join(', ')}
+								</p>
 							{/if}
 						</div>
 					{/if}
@@ -390,10 +401,10 @@
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
-	.ship-names {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--s-2);
+	.stale .ship-name,
+	.stale .presence,
+	.stale .job {
+		opacity: 0.75;
 	}
 
 	/* Ships are rows on the machine, not boxes in a box. */
@@ -428,15 +439,10 @@
 		text-decoration: underline;
 		text-underline-offset: 3px;
 	}
-	.ship-name:focus-visible,
-	.ship-names a:focus-visible {
+	.ship-name:focus-visible {
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 		border-radius: 4px;
-	}
-	.ship-names a {
-		text-decoration: none;
-		color: inherit;
 	}
 	.presence {
 		display: inline-flex;
@@ -473,12 +479,20 @@
 	.needs-link:hover {
 		background: color-mix(in srgb, var(--brass-fill) 30%, var(--brass-soft));
 	}
-	.scope {
-		margin-top: var(--s-1);
-		font-size: var(--text-sm);
-		color: var(--ink-2);
-		overflow-wrap: anywhere;
-		text-wrap: pretty;
+	.presence[data-presence='unknown'],
+	.presence[data-presence='unavailable'] {
+		color: var(--warn);
+	}
+	.presence[data-presence='unknown']::before,
+	.presence[data-presence='unavailable']::before {
+		background: var(--warn);
+	}
+	.summary .unsure,
+	.summary .problem {
+		color: var(--warn);
+	}
+	.summary .problem {
+		color: var(--danger);
 	}
 
 	/* Crew hang off the ship on a thin line, like a log entry. */
@@ -505,6 +519,17 @@
 	}
 	.job.waits::before {
 		box-shadow: inset 0 0 0 1.5px var(--warn);
+	}
+	.job.orphaned::before {
+		background: var(--danger);
+		box-shadow: none;
+	}
+	.job .state {
+		font-weight: 600;
+		color: var(--ink-2);
+	}
+	.job.orphaned .state {
+		color: var(--danger);
 	}
 	.job p {
 		margin: 0;
