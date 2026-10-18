@@ -5,7 +5,12 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Local, TimeZone};
 use data::feed::Entry;
-use iced::widget::{button, column, container, row, scrollable, space};
+use data::privateer::{Error, Sent};
+use data::ships::Ship;
+use iced::widget::{
+    button, checkbox, column, container, pick_list, row, scrollable, space,
+    text_editor,
+};
 use iced::{Alignment, Length, Padding};
 
 use crate::Theme;
@@ -14,6 +19,7 @@ use crate::connection::Connection;
 use crate::font;
 use crate::screen::triage::{self, Triage};
 use crate::widget::{Column, Element, markdown, text};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -23,9 +29,193 @@ pub enum Message {
     OpenLink(String),
     /// Answering in place, through Triage's one answer path.
     Triage(triage::Message),
+    Compose(Compose),
+}
+
+/// Writing to a ship.
+#[derive(Debug, Clone)]
+pub enum Compose {
+    To(String),
+    Edit(text_editor::Action),
+    /// Whether the message asks for an answer (a request) or tells (a
+    /// notice).
+    Ask(bool),
+    Confirm,
+    Cancel,
+    Send,
+}
+
+/// The write key for the composer's message, beside the asks' keys.
+pub const COMPOSE_KEY: &str = "compose";
+
+/// The message being written.
+#[derive(Default)]
+pub struct Composer {
+    to: Option<String>,
+    content: text_editor::Content,
+    ask: bool,
+    confirming: bool,
+    sending: bool,
+    /// What became of the last message, and whether that was good.
+    last: Option<(bool, String)>,
+}
+
+impl Composer {
+    /// A write to run, when the captain sends.
+    pub fn update(
+        &mut self,
+        message: Compose,
+    ) -> Option<(&'static str, Value)> {
+        match message {
+            Compose::To(ship) => self.to = Some(ship),
+            Compose::Edit(action) => {
+                self.content.perform(action);
+                self.confirming = false;
+            }
+            Compose::Ask(ask) => self.ask = ask,
+            Compose::Confirm => self.confirming = self.ready(),
+            Compose::Cancel => self.confirming = false,
+            Compose::Send => {
+                if !self.ready() || self.sending {
+                    return None;
+                }
+                self.sending = true;
+                self.last = None;
+                let args = json!({
+                    "to": self.to.clone()?,
+                    "kind": if self.ask { "request" } else { "notice" },
+                    "body": self.content.text().trim(),
+                });
+                return Some(("captain.send", args));
+            }
+        }
+        None
+    }
+
+    fn ready(&self) -> bool {
+        self.to.is_some() && !self.content.text().trim().is_empty()
+    }
+
+    /// What became of the message. A sent or logged one clears the box; a
+    /// refused one keeps it.
+    pub fn written(&mut self, result: Result<Sent, Error>) {
+        self.sending = false;
+        self.confirming = false;
+        let to = self.to.clone().unwrap_or_default();
+        self.last = Some(match result {
+            Ok(Sent::Sent(_)) => {
+                self.content = text_editor::Content::new();
+                (true, format!("Sent to {to}."))
+            }
+            Ok(Sent::Held(_)) => {
+                self.content = text_editor::Content::new();
+                (true, format!("Not sent to {to}: sending is off (logged)."))
+            }
+            Err(error) => (false, error.to_string()),
+        });
+    }
+
+    fn view<'a>(&'a self, ships: &'a [Ship]) -> Element<'a, Message> {
+        let names: Vec<String> = ships.iter().map(|s| s.name.clone()).collect();
+        let to = pick_list(self.to.clone(), names, String::clone)
+            .on_select(|ship| Message::Compose(Compose::To(ship)))
+            .placeholder("Ship")
+            .padding([4, 8]);
+
+        let ask = checkbox(self.ask)
+            .label("Ask for an answer")
+            .on_toggle(|ask| Message::Compose(Compose::Ask(ask)))
+            .style(theme::checkbox::primary);
+
+        let editor = text_editor(&self.content)
+            .placeholder("Write to a ship")
+            .on_action(|action| Message::Compose(Compose::Edit(action)))
+            .height(Length::Shrink)
+            .padding(6);
+
+        let mut actions = row![].spacing(6).align_y(Alignment::Center);
+        if self.confirming {
+            let to = self.to.as_deref().unwrap_or_default();
+            let kind = if self.ask { "a request" } else { "a notice" };
+            actions = actions
+                .push(
+                    text(format!("Send {kind} to {to}?"))
+                        .style(theme::text::secondary),
+                )
+                .push(compose_button(
+                    "Send",
+                    Compose::Send,
+                    true,
+                    !self.sending,
+                ))
+                .push(compose_button("Cancel", Compose::Cancel, false, true));
+        } else {
+            actions = actions.push(compose_button(
+                "Send",
+                Compose::Confirm,
+                true,
+                self.ready() && !self.sending,
+            ));
+        }
+        if let Some((good, line)) = &self.last {
+            actions = actions.push(text(line.as_str()).style(if *good {
+                theme::text::tertiary
+            } else {
+                theme::text::error
+            }));
+        }
+
+        container(
+            column![
+                row![to, ask].spacing(12).align_y(Alignment::Center),
+                editor,
+                actions
+            ]
+            .spacing(6),
+        )
+        .padding(10)
+        .style(theme::container::buffer_title_bar)
+        .into()
+    }
+}
+
+fn compose_button<'a>(
+    label: &'a str,
+    message: Compose,
+    primary: bool,
+    enabled: bool,
+) -> Element<'a, Message> {
+    let mut press =
+        button(text(label))
+            .padding([4, 12])
+            .style(move |theme, status| {
+                if primary {
+                    theme::button::primary(theme, status, false)
+                } else {
+                    theme::button::secondary(theme, status, false)
+                }
+            });
+    if enabled {
+        press = press.on_press(Message::Compose(message));
+    }
+    press.into()
 }
 
 pub fn view<'a>(
+    connection: &'a Connection,
+    triage: &'a Triage,
+    answering: &'a HashSet<String>,
+    composer: &'a Composer,
+    theme: &'a Theme,
+) -> Element<'a, Message> {
+    column![
+        conversation(connection, triage, answering, theme),
+        composer.view(&connection.ships),
+    ]
+    .into()
+}
+
+fn conversation<'a>(
     connection: &'a Connection,
     triage: &'a Triage,
     answering: &'a HashSet<String>,

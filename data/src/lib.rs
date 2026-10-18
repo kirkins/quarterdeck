@@ -13,5 +13,6 @@ pub mod environment;
 pub mod feed;
 pub mod markdown;
 pub mod privateer;
+pub mod ships;
 pub mod triage;
 pub mod window;

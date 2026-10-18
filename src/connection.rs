@@ -12,6 +12,7 @@ use data::decision::Card;
 use data::feed::{Page, Thread};
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
+use data::ships::{self, Ship};
 use data::triage;
 use iced::Task;
 use serde_json::json;
@@ -20,6 +21,7 @@ use serde_json::json;
 pub enum Message {
     Poll,
     LoadOlder,
+    Ships(u64, Result<Vec<Ship>, Error>),
     FeedRead {
         generation: u64,
         older: bool,
@@ -69,6 +71,9 @@ pub struct Connection {
     /// When Privateer last answered, in ms since the epoch.
     pub checked_ms: Option<i64>,
     pub feed: Feed,
+    /// Every ship the fleet knows, A to Z, read once per connection.
+    pub ships: Vec<Ship>,
+    reading_ships: bool,
 }
 
 /// The Feed as read so far: the conversation, each message's Markdown, and
@@ -97,6 +102,8 @@ impl Connection {
             error: None,
             checked_ms: None,
             feed: Feed::default(),
+            ships: Vec::new(),
+            reading_ships: false,
         }
     }
 
@@ -141,7 +148,31 @@ impl Connection {
     }
 
     pub fn poll(&mut self) -> Task<Message> {
-        Task::batch([self.poll_waiting(), self.read_feed(false)])
+        Task::batch([
+            self.poll_waiting(),
+            self.read_feed(false),
+            self.read_ships(),
+        ])
+    }
+
+    /// The fleet's ships, until they have been read once.
+    fn read_ships(&mut self) -> Task<Message> {
+        if !self.ships.is_empty() || self.reading_ships {
+            return Task::none();
+        }
+        self.reading_ships = true;
+        let client = self.client.clone();
+        let generation = self.generation;
+        Task::perform(
+            async move {
+                let value = client.run("ship.list", json!({})).await?;
+                ships::parse(value).map_err(|error| Error::Command {
+                    command: "ship.list".into(),
+                    error: format!("unexpected answer: {error}"),
+                })
+            },
+            move |result| Message::Ships(generation, result),
+        )
     }
 
     /// Read new mail, or the newest page when nothing is read yet; with
@@ -205,6 +236,16 @@ impl Connection {
         match message {
             Message::Poll => self.poll(),
             Message::LoadOlder => self.read_feed(true),
+            Message::Ships(generation, result) => {
+                if generation == self.generation {
+                    self.reading_ships = false;
+                    match result {
+                        Ok(ships) => self.ships = ships,
+                        Err(error) => log::warn!("{error}"),
+                    }
+                }
+                Task::none()
+            }
             Message::FeedRead {
                 generation,
                 older,

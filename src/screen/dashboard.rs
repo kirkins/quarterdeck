@@ -55,6 +55,7 @@ pub struct Dashboard {
     triage: Triage,
     /// Asks whose answer controls are open under them in the Feed.
     answering: HashSet<String>,
+    composer: feed::Composer,
 }
 
 impl Dashboard {
@@ -67,6 +68,7 @@ impl Dashboard {
             focus,
             triage: Triage::default(),
             answering: HashSet::new(),
+            composer: feed::Composer::default(),
         }
     }
 
@@ -83,7 +85,11 @@ impl Dashboard {
         key: String,
         result: Result<data::privateer::Sent, data::privateer::Error>,
     ) {
-        self.triage.written(key, result);
+        if key == feed::COMPOSE_KEY {
+            self.composer.written(result);
+        } else {
+            self.triage.written(key, result);
+        }
     }
 
     pub fn update(
@@ -160,6 +166,14 @@ impl Dashboard {
                     self.answering.insert(key);
                 }
                 None
+            }
+            Message::Feed(feed::Message::Compose(message)) => {
+                let (command, args) = self.composer.update(message)?;
+                Some(Event::Write {
+                    key: feed::COMPOSE_KEY.to_owned(),
+                    command,
+                    args,
+                })
             }
             Message::Feed(feed::Message::Triage(message)) => {
                 self.update(Message::Triage(message), connection)
@@ -328,10 +342,14 @@ impl Dashboard {
                 View::Triage => {
                     self.triage.view(connection, theme).map(Message::Triage)
                 }
-                View::Feed => {
-                    feed::view(connection, &self.triage, &self.answering, theme)
-                        .map(Message::Feed)
-                }
+                View::Feed => feed::view(
+                    connection,
+                    &self.triage,
+                    &self.answering,
+                    &self.composer,
+                    theme,
+                )
+                .map(Message::Feed),
                 view => placeholder(view),
             };
 

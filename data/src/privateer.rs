@@ -145,6 +145,9 @@ fn fixture(command: &str) -> Result<Value, Error> {
     let text = match command {
         "captain.waiting" => WAITING_FIXTURE,
         "captain.feed" => FEED_FIXTURE,
+        "ship.list" => {
+            r#"{"ships": [{"name": "billing"}, {"name": "status-page"}, {"name": "chandlery"}]}"#
+        }
         _ => return Err(Error::NoFixture(command.to_owned())),
     };
     serde_json::from_str(text).map_err(|_| Error::Parse {
