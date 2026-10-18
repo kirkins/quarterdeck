@@ -230,7 +230,8 @@
 					{/if}
 				</div>
 			{:else}
-				{#if entry.body}
+				<!-- A captain message with comments shows its comments line instead of its body, which only repeats it. -->
+				{#if entry.body && !comments}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- a link written in a ship's message, not app navigation -->
 					<p class="body">
 						{#each segmentsOf(entry.body) as seg, i (i)}{#if seg.href}<a
