@@ -87,7 +87,6 @@ pub struct Connection {
 /// A live session's last screen.
 pub struct Screen {
     pub ship: String,
-    pub revision: u64,
     /// The screen as read, to tell whether it changed: some hosts report
     /// no revision.
     pub raw: String,
@@ -317,7 +316,6 @@ impl Connection {
                 self.reading_session = false;
                 let screen = match result {
                     Ok(read) => {
-                        let revision = read["revision"].as_u64().unwrap_or(0);
                         let raw = read["text"].as_str().unwrap_or_default();
                         let status =
                             read["agent_status"].as_str().unwrap_or("unknown");
@@ -332,7 +330,6 @@ impl Connection {
                         }
                         Screen {
                             ship,
-                            revision,
                             raw: raw.to_owned(),
                             agent_status: status.to_owned(),
                             lines: data::ansi::parse(raw),
@@ -341,7 +338,6 @@ impl Connection {
                     }
                     Err(error) => Screen {
                         ship,
-                        revision: 0,
                         raw: String::new(),
                         agent_status: "unknown".into(),
                         lines: Vec::new(),
