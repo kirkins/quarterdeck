@@ -301,12 +301,16 @@
 
 	/** Older messages above the top, keeping the captain where they were. */
 	async function loadOlder(): Promise<void> {
-		if (loadingOlder || !hasOlder || olderCursor === null) return;
+		// A reload brings its own cursors: an older page asked for before it lands would be stale.
+		if (loadingOlder || reloading || !hasOlder || olderCursor === null) return;
 		loadingOlder = true;
 		const height = document.documentElement.scrollHeight;
 		const y = window.scrollY;
+		const asked = fetchedFor;
 		try {
 			const result = await fetchFeed({ before: olderCursor, ...filterParams() });
+			// The filter changed while this page was read: it belongs to the old filter, so it is dropped.
+			if (asked !== fetchedFor) return;
 			entries = mergeEntries(entries, result.entries);
 			olderCursor = result.first ?? olderCursor;
 			hasOlder = result.more;

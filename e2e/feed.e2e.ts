@@ -208,7 +208,10 @@ test('ship-to-ship mail is behind a toggle, and drawn apart', async ({ page }) =
 	await expect(page.getByText('Refund totals match the ledger for March.')).toHaveCount(0);
 
 	await toggle.check();
+	// Asking again reads the newest page with ship mail in it, which can put the older mail
+	// past the page's end: load older pages the way the captain would, until it is there.
 	const mail = page.locator('li.msg.s2s').filter({ hasText: 'Refund totals match the ledger' });
+	await reveal(page, mail);
 	await expect(mail).toBeVisible();
 	await expect(mail).toContainText('billing → chandlery');
 });
