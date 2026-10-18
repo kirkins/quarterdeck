@@ -302,6 +302,8 @@ export interface UsageMachineView {
 	asOf: string | null;
 	/** Why it is not fully in the totals: not reached, or the homes not read. Null when complete. */
 	problem: string | null;
+	/** Its carried usage is in the totals, but it was last heard from a while ago. `asOf` says when. */
+	stale: boolean;
 }
 
 export interface UsageView {
@@ -340,17 +342,27 @@ function rowFor(group: UsageGroup, grouping: Grouping, max: number): UsageRowVie
 
 /** A machine's line in the usage section: whether it is in the totals, and what is missing. */
 export function machineView(machine: UsageMachine, now: number): UsageMachineView {
+	// A collected machine with an as_of has its carried usage folded into the totals, even when it is not reached now.
 	const asOf =
 		machine.via === 'collect' && machine.asOf !== null
 			? `as of ${formatSpan(Math.max(0, now - machine.asOf))} ago`
 			: null;
+	if (!machine.reached && asOf === null) {
+		return {
+			name: machine.name,
+			included: false,
+			asOf: null,
+			problem: machine.error ?? 'not reached',
+			stale: false
+		};
+	}
 	if (!machine.reached) {
-		return { name: machine.name, included: false, asOf, problem: machine.error ?? 'not reached' };
+		return { name: machine.name, included: true, asOf, problem: 'not up to date', stale: true };
 	}
 	const problem =
 		machine.error ??
 		(machine.unknown.length > 0 ? `homes not read: ${machine.unknown.join(', ')}` : null);
-	return { name: machine.name, included: true, asOf, problem };
+	return { name: machine.name, included: true, asOf, problem, stale: false };
 }
 
 /**

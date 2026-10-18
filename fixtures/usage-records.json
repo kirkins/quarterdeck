@@ -16,7 +16,8 @@
 			"via": "collect",
 			"as_of_ms": 1792289200000,
 			"error": "nothing carried from laptop lately"
-		}
+		},
+		{ "name": "bosun", "reached": false, "error": "connection refused" }
 	],
 	"records": [
 		{

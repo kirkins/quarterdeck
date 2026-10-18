@@ -490,7 +490,8 @@ describe('buildUsage with machines that are not in the totals', () => {
 				asOf: NOW - 3 * HOUR,
 				unknown: [],
 				error: 'nothing carried from laptop lately'
-			}
+			},
+			{ name: 'bosun', reached: false, via: null, asOf: null, unknown: [], error: 'timed out' }
 		]
 	};
 
@@ -499,29 +500,54 @@ describe('buildUsage with machines that are not in the totals', () => {
 		expect(view.missing).toEqual([
 			{
 				name: 'laptop',
-				included: false,
+				included: true,
 				asOf: 'as of 3h ago',
-				problem: 'nothing carried from laptop lately'
-			}
+				problem: 'not up to date',
+				stale: true
+			},
+			{ name: 'bosun', included: false, asOf: null, problem: 'timed out', stale: false }
 		]);
 		expect(view.machines.find((m) => m.name === 'calypso')).toEqual({
 			name: 'calypso',
 			included: true,
 			asOf: 'as of 5m ago',
-			problem: null
+			problem: null,
+			stale: false
+		});
+	});
+
+	it('keeps a collected machine not reached now in the totals, as not up to date', () => {
+		const view = buildUsage(summary, 'machine', NOW);
+		expect(view.machines.find((m) => m.name === 'laptop')).toEqual({
+			name: 'laptop',
+			included: true,
+			asOf: 'as of 3h ago',
+			problem: 'not up to date',
+			stale: true
+		});
+	});
+
+	it('leaves out a machine not reached with no carried data, and says why', () => {
+		const view = buildUsage(summary, 'machine', NOW);
+		expect(view.machines.find((m) => m.name === 'bosun')).toEqual({
+			name: 'bosun',
+			included: false,
+			asOf: null,
+			problem: 'timed out',
+			stale: false
 		});
 	});
 
 	it('lists an unreached machine by machine with no numbers, rather than dropping it', () => {
 		const view = buildUsage(summary, 'machine', NOW);
-		const laptop = view.rows.find((r) => r.key === 'laptop');
-		expect(laptop).toMatchObject({
+		const bosun = view.rows.find((r) => r.key === 'bosun');
+		expect(bosun).toMatchObject({
 			jobs: null,
 			total: null,
 			totalLabel: 'not reached',
-			notReached: 'nothing carried from laptop lately'
+			notReached: 'timed out'
 		});
-		expect(view.rows.map((r) => r.key)).toEqual(['atlas', 'calypso', 'laptop']);
+		expect(view.rows.map((r) => r.key)).toEqual(['atlas', 'calypso', 'bosun']);
 	});
 
 	it('does not add an unreached machine to the other groupings', () => {
@@ -548,7 +574,13 @@ describe('buildUsage with machines that are not in the totals', () => {
 			NOW
 		);
 		expect(view.missing).toEqual([
-			{ name: 'atlas', included: true, asOf: null, problem: 'homes not read: home:ledger' }
+			{
+				name: 'atlas',
+				included: true,
+				asOf: null,
+				problem: 'homes not read: home:ledger',
+				stale: false
+			}
 		]);
 	});
 

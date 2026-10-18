@@ -18,6 +18,7 @@
 		handsTextOf,
 		isOpen,
 		isWaiting,
+		captainNoteOf,
 		reportTitleOf,
 		segmentsOf,
 		shipMark,
@@ -89,6 +90,8 @@
 	const waits = $derived(isWaiting(entry));
 	const question = $derived(toQuestion(toMailItem(entry), now));
 	const title = $derived(reportTitleOf(entry));
+	// With comments, the body repeats "N comments on <title>", so only the captain's own note is drawn.
+	const note = $derived(comments ? captainNoteOf(entry) : null);
 	const mark = $derived(shipMark(entry.ship));
 	const asks = $derived(
 		open && (kind === 'decision' || kind === 'request' || kind === 'needs_hands')
@@ -110,6 +113,18 @@
 			: dismissLabel('request', kind === 'needs_hands')
 	);
 </script>
+
+<!-- Text a ship or the captain wrote, as text nodes and anchors, never HTML. -->
+{#snippet noteText(text: string)}
+	<!-- eslint-disable svelte/no-navigation-without-resolve -- a link written in a ship's message, not app navigation -->
+	<p class="body">
+		{#each segmentsOf(text) as seg, i (i)}{#if seg.href}<a
+					href={seg.href}
+					rel="noopener noreferrer nofollow">{seg.text}</a
+				>{:else}{seg.text}{/if}{/each}
+	</p>
+	<!-- eslint-enable svelte/no-navigation-without-resolve -->
+{/snippet}
 
 <li
 	class="msg"
@@ -230,16 +245,8 @@
 					{/if}
 				</div>
 			{:else}
-				<!-- A captain message with comments shows its comments line instead of its body, which only repeats it. -->
 				{#if entry.body && !comments}
-					<!-- eslint-disable svelte/no-navigation-without-resolve -- a link written in a ship's message, not app navigation -->
-					<p class="body">
-						{#each segmentsOf(entry.body) as seg, i (i)}{#if seg.href}<a
-									href={seg.href}
-									rel="noopener noreferrer nofollow">{seg.text}</a
-								>{:else}{seg.text}{/if}{/each}
-					</p>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					{@render noteText(entry.body)}
 				{/if}
 
 				{#if title}
@@ -252,6 +259,10 @@
 
 				{#if comments}
 					<p class="comments"><Icon name="doc" size={15} /> {comments}</p>
+				{/if}
+
+				{#if note}
+					{@render noteText(note)}
 				{/if}
 
 				{#if entry.local && !entry.local.sent}

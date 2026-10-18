@@ -102,17 +102,19 @@ test('a machine not reached is named as partial, and listed by machine with no n
 	page
 }) => {
 	await openSpend(page);
-	const notice = page.locator('p.partial[data-machine="laptop"]');
-	await expect(notice).toContainText(
-		'Partial: laptop not included (nothing carried from laptop lately; data as of'
+	const notice = page.locator('p.partial[data-machine="bosun"]');
+	await expect(notice).toContainText('Partial: bosun not included (connection refused).');
+	// Carried usage from a machine not reached now is in the totals, and is dated.
+	await expect(page.locator('p.partial[data-machine="laptop"]')).toContainText(
+		'Partial: laptop: not up to date (as of '
 	);
 	await expect(page.locator('p.period')).toContainText('from the machines reached');
 	await expect(page.locator('dl.totals')).toContainText('Total tokens');
 
 	await openSpend(page, '?group=machine');
-	const laptop = page.locator('li.rank[data-key="laptop"]');
-	await expect(laptop).toHaveAttribute('data-not-reached', 'true');
-	await expect(laptop.locator('.rank-value')).toHaveText('not reached');
+	const bosun = page.locator('li.rank[data-key="bosun"]');
+	await expect(bosun).toHaveAttribute('data-not-reached', 'true');
+	await expect(bosun.locator('.rank-value')).toHaveText('not reached');
 	await expect(page.locator('li.rank[data-key="atlas"]')).toHaveAttribute(
 		'data-not-reached',
 		'false'

@@ -19,7 +19,8 @@ export const KIND_LABELS: Record<TriageKind, string> = {
 
 export const SECTIONS: { id: Section; title: string }[] = [
 	{ id: 'now', title: 'Needs you now' },
-	{ id: 'waiting', title: 'Waiting on you' },
+	// Mixed kinds, notices among them: "Waiting on you" is only for what the captain must answer.
+	{ id: 'waiting', title: 'Next up' },
 	{ id: 'later', title: 'When you have a moment' }
 ];
 
