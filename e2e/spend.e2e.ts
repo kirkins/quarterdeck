@@ -98,9 +98,42 @@ test('a harness that reports no usage is named next to the numbers', async ({ pa
 	await expect(page.locator('li.rank[data-key="analytics"]')).toContainText('not reported');
 });
 
+test('a machine not reached is named as partial, and listed by machine with no numbers', async ({
+	page
+}) => {
+	await openSpend(page);
+	const notice = page.locator('p.partial[data-machine="laptop"]');
+	await expect(notice).toContainText(
+		'Partial: laptop not included (nothing carried from laptop lately; data as of'
+	);
+	await expect(page.locator('p.period')).toContainText('from the machines reached');
+	await expect(page.locator('dl.totals')).toContainText('Total tokens');
+
+	await openSpend(page, '?group=machine');
+	const laptop = page.locator('li.rank[data-key="laptop"]');
+	await expect(laptop).toHaveAttribute('data-not-reached', 'true');
+	await expect(laptop.locator('.rank-value')).toHaveText('not reached');
+	await expect(page.locator('li.rank[data-key="atlas"]')).toHaveAttribute(
+		'data-not-reached',
+		'false'
+	);
+});
+
+test('a collected machine shows its data as of when it was read, and trimmed logs are named', async ({
+	page
+}) => {
+	await openSpend(page, '?period=7d&group=machine');
+	await expect(page.locator('ul.machines li[data-machine="calypso"]')).toContainText(
+		/as of \S+ ago/
+	);
+	await expect(page.locator('p.trimmed')).toHaveText('Some logs were trimmed; totals may be low.');
+});
+
 test('cache tokens are labelled apart from input and output', async ({ page }) => {
 	await openSpend(page);
-	await expect(page.locator('p.cache')).toContainText('Cache tokens are reported apart');
+	await expect(page.locator('p.cache', { hasText: 'Cache tokens' })).toContainText(
+		'Cache tokens are reported apart'
+	);
 });
 
 test('fits a 375 px phone with no horizontal scroll, and the nav reaches Spend', async ({

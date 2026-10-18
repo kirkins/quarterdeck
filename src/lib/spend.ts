@@ -11,6 +11,7 @@ import type {
 	RouteConfig,
 	RoutesConfig,
 	UsageGroup,
+	UsageMachine,
 	UsageSummary,
 	UsageTotals
 } from '#lib/shapes.ts';
@@ -60,6 +61,12 @@ export function sinceFor(period: Period, now: number): number {
 	if (wholeDays === null) return now - span;
 	const midnight = Math.floor(now / DAY) * DAY;
 	return midnight - (wholeDays - 1) * DAY;
+}
+
+/** The end of a period of whole days, exclusive: the UTC midnight after today. Undefined for the 24 h period. */
+export function untilFor(period: Period, now: number): number | undefined {
+	if (PERIODS[period].wholeDays === null) return undefined;
+	return Math.floor(now / DAY) * DAY + DAY;
 }
 
 export type CostClass = 'free' | 'plan' | 'credits' | 'unknown';
@@ -271,6 +278,10 @@ export interface UsageRowView {
 	share: number;
 	/** Harnesses in this group that report no usage. */
 	gaps: string[];
+	/** A machine whose usage is not in the totals: a by-machine row with no numbers, and why. */
+	notReached: string | null;
+	/** Jobs in this group whose log was trimmed mid-run. */
+	partialJobs: number;
 }
 
 /** The period's totals, formatted for the page. Each is "not reported" when nothing reports it. */
@@ -282,6 +293,17 @@ export interface UsageTotalsLabels {
 	cacheWrite: string;
 }
 
+/** A machine as the usage section names it. */
+export interface UsageMachineView {
+	name: string;
+	/** Its usage is in the totals (possibly only some of its homes). */
+	included: boolean;
+	/** "as of 5m ago" for a machine whose usage came on its collect exchange; else null. */
+	asOf: string | null;
+	/** Why it is not fully in the totals: not reached, or the homes not read. Null when complete. */
+	problem: string | null;
+}
+
 export interface UsageView {
 	grouping: Grouping;
 	rows: UsageRowView[];
@@ -290,6 +312,11 @@ export interface UsageView {
 	jobs: number;
 	/** Every harness that reports no usage anywhere in the period. */
 	gaps: string[];
+	machines: UsageMachineView[];
+	/** The machines whose usage is missing or partly read. Non-empty means the totals are partial. */
+	missing: UsageMachineView[];
+	/** Jobs whose log was trimmed mid-run, so their usage may be low. */
+	trimmedJobs: number;
 }
 
 function rowFor(group: UsageGroup, grouping: Grouping, max: number): UsageRowView {
@@ -305,19 +332,61 @@ function rowFor(group: UsageGroup, grouping: Grouping, max: number): UsageRowVie
 		cacheRead: formatTokens(group.usage?.cacheRead ?? null),
 		cacheWrite: formatTokens(group.usage?.cacheWrite ?? null),
 		share: total !== null && max > 0 ? Math.max(2, (total / max) * 100) : 0,
-		gaps: group.gaps
+		gaps: group.gaps,
+		notReached: null,
+		partialJobs: group.partialJobs
 	};
 }
 
-/** Rows for the usage list or the day chart, with the period's totals and gaps. */
-export function buildUsage(summary: UsageSummary, grouping: Grouping): UsageView {
+/** A machine's line in the usage section: whether it is in the totals, and what is missing. */
+export function machineView(machine: UsageMachine, now: number): UsageMachineView {
+	const asOf =
+		machine.via === 'collect' && machine.asOf !== null
+			? `as of ${formatSpan(Math.max(0, now - machine.asOf))} ago`
+			: null;
+	if (!machine.reached) {
+		return { name: machine.name, included: false, asOf, problem: machine.error ?? 'not reached' };
+	}
+	const problem =
+		machine.error ??
+		(machine.unknown.length > 0 ? `homes not read: ${machine.unknown.join(', ')}` : null);
+	return { name: machine.name, included: true, asOf, problem };
+}
+
+/**
+ * Rows for the usage list or the day chart, with the period's totals, gaps, and which
+ * machines the totals leave out. By machine, a machine not reached is listed with no numbers.
+ */
+export function buildUsage(summary: UsageSummary, grouping: Grouping, now: number): UsageView {
 	const max = Math.max(0, ...summary.groups.map((g) => g.usage?.totalTokens ?? 0));
 	const rows = summary.groups.map((g) => rowFor(g, grouping, max));
 	const totals = summary.groups.reduce<UsageTotals | null>(
 		(sum, g) => addUsage(sum, g.usage),
 		null
 	);
-	const gaps = [...new Set(summary.groups.flatMap((g) => g.gaps))].sort();
+	const machines = summary.machines.map((m) => machineView(m, now));
+	const missing = machines.filter((m) => m.problem !== null);
+	if (grouping === 'machine') {
+		const named = new Set(rows.map((r) => r.key));
+		for (const machine of machines) {
+			if (machine.included || named.has(machine.name)) continue;
+			rows.push({
+				key: machine.name,
+				label: machine.name,
+				jobs: null,
+				total: null,
+				totalLabel: 'not reached',
+				input: 'not reached',
+				output: 'not reached',
+				cacheRead: 'not reached',
+				cacheWrite: 'not reached',
+				share: 0,
+				gaps: [],
+				notReached: machine.problem,
+				partialJobs: 0
+			});
+		}
+	}
 	return {
 		grouping,
 		rows,
@@ -330,6 +399,9 @@ export function buildUsage(summary: UsageSummary, grouping: Grouping): UsageView
 			cacheWrite: formatTokens(totals?.cacheWrite ?? null)
 		},
 		jobs: summary.groups.reduce((n, g) => n + (g.jobs ?? 0), 0),
-		gaps
+		gaps: [...new Set(summary.groups.flatMap((g) => g.gaps))].sort(),
+		machines,
+		missing,
+		trimmedJobs: summary.groups.reduce((n, g) => n + g.partialJobs, 0)
 	};
 }

@@ -1,6 +1,13 @@
 import { getPortal } from '#lib/server/app.ts';
 import { errorText } from '#lib/server/submit.ts';
-import { buildRoutes, buildUsage, parseGrouping, parsePeriod, sinceFor } from '#lib/spend.ts';
+import {
+	buildRoutes,
+	buildUsage,
+	parseGrouping,
+	parsePeriod,
+	sinceFor,
+	untilFor
+} from '#lib/spend.ts';
 import type { RoutesConfig, UsageSummary, FleetSnapshot } from '#lib/shapes.ts';
 import type { PageServerLoad } from './$types';
 
@@ -35,7 +42,11 @@ export const load: PageServerLoad = async ({ depends, url }) => {
 			return read.status === 'ok' ? { status: 'ok', value: read.value } : read;
 		}, 'route configuration'),
 		section<UsageSummary>(async () => {
-			const read = await source.usage({ since_ms: sinceFor(period, now), group_by: grouping });
+			const read = await source.usage({
+				since_ms: sinceFor(period, now),
+				until_ms: untilFor(period, now),
+				group_by: grouping
+			});
 			return read.status === 'ok' ? { status: 'ok', value: read.value } : read;
 		}, 'usage')
 	]);
@@ -55,7 +66,7 @@ export const load: PageServerLoad = async ({ depends, url }) => {
 				: fleet,
 		usage:
 			usage.status === 'ok'
-				? { status: 'ok' as const, view: buildUsage(usage.value, grouping) }
+				? { status: 'ok' as const, view: buildUsage(usage.value, grouping, now) }
 				: usage
 	};
 };

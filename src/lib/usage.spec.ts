@@ -18,6 +18,7 @@ function record(overrides: Partial<UsageRecord>): UsageRecord {
 		harness: 'tidewater',
 		jobs: 1,
 		usage: totals(100, 10),
+		partial: false,
 		...overrides
 	};
 }
@@ -29,7 +30,9 @@ describe('summarizeRecords', () => {
 			record({ ts_ms: NOW - 3 * DAY, usage: totals(900, 0) })
 		];
 		const summary = summarizeRecords(records, { since_ms: NOW - DAY, group_by: 'ship' });
-		expect(summary.groups).toEqual([{ key: 'billing', jobs: 1, usage: totals(100, 0), gaps: [] }]);
+		expect(summary.groups).toEqual([
+			{ key: 'billing', jobs: 1, usage: totals(100, 0), gaps: [], partialJobs: 0 }
+		]);
 	});
 
 	it('groups by route, ship, machine and day', () => {
@@ -88,7 +91,7 @@ describe('summarizeRecords', () => {
 		];
 		const summary = summarizeRecords(records, { since_ms: NOW - DAY, group_by: 'ship' });
 		expect(summary.groups).toEqual([
-			{ key: 'analytics', jobs: 3, usage: totals(40, 4), gaps: ['ferry'] }
+			{ key: 'analytics', jobs: 3, usage: totals(40, 4), gaps: ['ferry'], partialJobs: 0 }
 		]);
 	});
 
@@ -98,7 +101,7 @@ describe('summarizeRecords', () => {
 		];
 		const summary = summarizeRecords(records, { since_ms: NOW - DAY, group_by: 'route' });
 		expect(summary.groups).toEqual([
-			{ key: 'credits-reserve', jobs: 4, usage: null, gaps: ['ferry'] }
+			{ key: 'credits-reserve', jobs: 4, usage: null, gaps: ['ferry'], partialJobs: 0 }
 		]);
 	});
 

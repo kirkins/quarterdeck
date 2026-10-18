@@ -42,14 +42,23 @@ export function addUsage(a: UsageTotals | null, b: UsageTotals | null): UsageTot
  * Groups are ranked by total tokens, except by day, which runs oldest first.
  */
 export function summarizeRecords(records: UsageRecord[], query: UsageQuery): UsageSummary {
-	const groups = new Map<string, { jobs: number; usage: UsageTotals | null; gaps: Set<string> }>();
+	const groups = new Map<
+		string,
+		{ jobs: number; usage: UsageTotals | null; gaps: Set<string>; partialJobs: number }
+	>();
 	for (const record of records) {
 		if (record.ts_ms < query.since_ms) continue;
 		if (query.until_ms !== undefined && record.ts_ms >= query.until_ms) continue;
 		const key = keyOf(record, query.group_by);
-		const group = groups.get(key) ?? { jobs: 0, usage: null, gaps: new Set<string>() };
+		const group = groups.get(key) ?? {
+			jobs: 0,
+			usage: null,
+			gaps: new Set<string>(),
+			partialJobs: 0
+		};
 		group.jobs += record.jobs;
 		if (record.usage === null) group.gaps.add(record.harness);
+		if (record.partial) group.partialJobs += record.jobs;
 		group.usage = addUsage(group.usage, record.usage);
 		groups.set(key, group);
 	}
@@ -58,7 +67,8 @@ export function summarizeRecords(records: UsageRecord[], query: UsageQuery): Usa
 		key,
 		jobs: group.jobs,
 		usage: group.usage,
-		gaps: [...group.gaps].sort()
+		gaps: [...group.gaps].sort(),
+		partialJobs: group.partialJobs
 	}));
 	out.sort((a, b) => {
 		if (query.group_by === 'day') return a.key.localeCompare(b.key);
@@ -70,6 +80,7 @@ export function summarizeRecords(records: UsageRecord[], query: UsageQuery): Usa
 		since_ms: query.since_ms,
 		until_ms: query.until_ms ?? null,
 		group_by: query.group_by,
-		groups: out
+		groups: out,
+		machines: []
 	};
 }

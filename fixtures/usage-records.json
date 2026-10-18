@@ -1,5 +1,23 @@
 {
 	"fixture_now_ms": 1792300000000,
+	"machines": [
+		{ "name": "atlas", "reached": true, "unknown": [] },
+		{ "name": "boreas", "reached": true, "unknown": [] },
+		{
+			"name": "calypso",
+			"reached": true,
+			"via": "collect",
+			"as_of_ms": 1792299700000,
+			"unknown": []
+		},
+		{
+			"name": "laptop",
+			"reached": false,
+			"via": "collect",
+			"as_of_ms": 1792289200000,
+			"error": "nothing carried from laptop lately"
+		}
+	],
 	"records": [
 		{
 			"ts_ms": 1789733200000,
@@ -3695,7 +3713,8 @@
 				"output": 15600,
 				"cacheRead": 143000,
 				"cacheWrite": 6500
-			}
+			},
+			"partial": true
 		}
 	]
 }
