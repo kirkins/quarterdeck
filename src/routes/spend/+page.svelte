@@ -400,7 +400,7 @@
 	.cost-free {
 		background: var(--sea-soft);
 		border-color: var(--sea-soft);
-		color: var(--sea-ink);
+		color: var(--sea-strong);
 	}
 	.cost-plan {
 		background: var(--brass-soft);

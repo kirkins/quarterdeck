@@ -85,7 +85,7 @@ test('grouping by ship ranks ships, and by day draws the day chart', async ({ pa
 });
 
 test('a harness that reports no usage is named next to the numbers', async ({ page }) => {
-	await openSpend(page);
+	await openSpend(page, '?group=ship');
 	const note = page.getByRole('note').filter({ hasText: 'ferry reports no usage' });
 	await expect(note).toBeVisible();
 	await expect(page.locator('li.rank[data-key="analytics"]')).toContainText('not reported');
