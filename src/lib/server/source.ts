@@ -321,8 +321,9 @@ export class FixtureSource implements Source {
 	/**
 	 * One message's place in the feed, given when it arrives, so a cursor never
 	 * moves once it has been handed out. A message collected late from another
-	 * machine gets a cursor at the newest end while keeping its own older
-	 * `created_ms`, which is exactly why paging is done on cursors and not times.
+	 * machine keeps the cursor its fixture gives it, older than the newest, and its
+	 * own older `created_ms`: paging is done on cursors and not times, and a forward
+	 * poll from the newest cursor never sees it.
 	 */
 	#cursorFor(key: string): string {
 		const held = this.#cursors.get(key);
@@ -393,9 +394,9 @@ export class FixtureSource implements Source {
 	 * feed, so a poll sees only what is really new. An entry with `arrives_in_s`
 	 * is held back until that many seconds after then, so the live feed can be
 	 * seen to bring a message in. An entry marked `desk_copy` is a copy collected
-	 * late from another machine: it keeps its own older `created_ms` and takes a
-	 * cursor at the newest end, so forward polling on created_ms alone would
-	 * never have shown it.
+	 * late from another machine: it keeps its own older `created_ms` and the cursor
+	 * its fixture gives it, older than the newest, so a forward poll from the newest
+	 * cursor does not see it, and only an open refresh over the whole history does.
 	 */
 	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
 		if (query.before === 'now') throw new Error('now is not a feed cursor');
@@ -419,10 +420,10 @@ export class FixtureSource implements Source {
 				if (!this.#arrivals.has(id)) this.#arrivals.set(id, this.#now());
 				created = this.#arrivals.get(id);
 			}
-			arrived.push(
-				...parseFeed({ entries: [{ ...entry, created_ms: created, cursor: this.#cursorFor(key) }] })
-					.entries
-			);
+			// A desk copy keeps the cursor its fixture gives it; every other message takes its arrival place.
+			const cursor =
+				deskCopy && typeof entry.cursor === 'string' ? entry.cursor : this.#cursorFor(key);
+			arrived.push(...parseFeed({ entries: [{ ...entry, created_ms: created, cursor }] }).entries);
 		}
 		const visible = arrived
 			.filter((e) => query.include_ship_mail || !isShipToShip(e))

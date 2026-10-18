@@ -1582,7 +1582,8 @@
 			"body": "The export ran on the other machine overnight. Shall I keep that as the nightly job?",
 			"payload": {},
 			"arrives_in_s": 8,
-			"desk_copy": true
+			"desk_copy": true,
+			"cursor": "f1.0"
 		}
 	]
 }

@@ -181,7 +181,7 @@ describe('the fixture feed', () => {
 		advance(10_000);
 		// Forward polling asks after the newest cursor, and still does not see it.
 		const poll = ok(await source.feed({ limit: 50, include_ship_mail: false, after: at }));
-		expect(poll.entries.map((e) => e.body)).not.toContain(late);
+		expect(poll.entries.some((e) => e.body?.includes(late))).toBe(false);
 
 		// The open refresh reads the whole history over open_only, and does.
 		const open = ok(await source.feed({ ...newest, limit: 200, open_only: true }));
@@ -196,8 +196,9 @@ describe('the fixture feed', () => {
 				all.findIndex((o) => `${o.from}\u0000${o.id}` === `${e.from}\u0000${e.id}`) === i
 		);
 		expect(merged.filter((e) => e.body?.includes(late))).toHaveLength(1);
-		// And it now leads the forward cursor, so it is not asked for again.
-		expect(forwardCursorOf(open.entries)).toBe(copy?.cursor);
+		// It is older than the cursor the poll reads on from, so the open read does not move that cursor.
+		expect(copy?.cursor).not.toBe(at);
+		expect(forwardCursorOf(open.entries)).not.toBe(copy?.cursor);
 	});
 });
 
