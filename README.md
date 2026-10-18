@@ -18,9 +18,11 @@ Status: early development. Decisions, Triage, Fleet and Reports are live. Fleet 
 ## Security
 
 > [!WARNING]
-> Quarterdeck acts as the captain: anyone who can load it can answer for you. Version 0 has **no authentication**. It listens on `127.0.0.1` by default and must sit behind an authenticating reverse proxy before it is exposed beyond the local machine in any way (LAN, tunnel or public host).
+> Quarterdeck acts as the captain: anyone who can load it can answer for you. Version 0 has **no authentication**. It listens on `127.0.0.1` by default. Do not expose it beyond the local machine (LAN, VPN or public host) until a login exists; if you do, put an authenticating proxy in front and firewall the port. [docs/DEPLOY.md](docs/DEPLOY.md) is the step-by-step guide for a server.
 
-- `HOST` changes the listen address. Leave it at loopback unless an authenticating proxy is in front.
+- `HOST` changes the listen address. Leave it at loopback unless an authenticating proxy is in front, or you are deliberately deploying behind a firewalled VPN address (see the guide).
+- **Startup guard.** The server refuses to start when `HOST` is not loopback **and** `QD_ALLOW_SEND=1` **and** no `QD_LOGIN_SECRET` is set. It also refuses `QD_ALLOW_SEND=1` with `QD_SOURCE=fixtures`. Refusal exits with status 78 and says why.
+- **Host check.** With a non-loopback `HOST`, requests whose `Host` header is not `HOST:PORT` or the `ORIGIN` host get 403. `ORIGIN` should be set to the address the browser uses; startup warns when it is not.
 - Privateer is called with `execFile` and an argv array, never through a shell.
 - Answers are only logged, not sent, unless `QD_SOURCE=cli` **and** `QD_ALLOW_SEND=1`.
 
@@ -40,17 +42,21 @@ npm run build
 npm start              # http://127.0.0.1:3000 (HOST and PORT to change)
 ```
 
+To run it on a server, reachable only over a VPN, follow [docs/DEPLOY.md](docs/DEPLOY.md). It includes a systemd user unit template in `deploy/`.
+
 ### Configuration
 
 All settings come from the environment (see [.env.example](.env.example)). `npm start` also reads a `.env` file if there is one.
 
-| Variable                          | Default     | Meaning                                                                              |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
-| `QD_SOURCE`                       | `fixtures`  | `fixtures` reads JSON from `fixtures/`; `cli` asks a live Privateer home.            |
-| `PRIVATEER_BIN`, `PRIVATEER_HOME` |             | The privateer binary and home, for `QD_SOURCE=cli`.                                  |
-| `QD_ALLOW_SEND`                   | off         | Exactly `1` to really send answers from the `cli` source. Otherwise they are logged. |
-| `QD_FIXTURES_DIR`                 | `fixtures`  | Where the fixture source reads `captain.waiting.json` and `runtime.needs.json`.      |
-| `HOST`, `PORT`                    | `127.0.0.1` | Listen address. `PORT` defaults to 3000 for `npm start`, 5173 for `npm run dev`.     |
+| Variable                          | Default     | Meaning                                                                                 |
+| --------------------------------- | ----------- | --------------------------------------------------------------------------------------- |
+| `QD_SOURCE`                       | `fixtures`  | `fixtures` reads JSON from `fixtures/`; `cli` asks a live Privateer home.               |
+| `PRIVATEER_BIN`, `PRIVATEER_HOME` |             | The privateer binary and home, for `QD_SOURCE=cli`.                                     |
+| `QD_ALLOW_SEND`                   | off         | Exactly `1` to really send answers from the `cli` source. Otherwise they are logged.    |
+| `QD_LOGIN_SECRET`                 |             | Read by the startup guard only: its presence counts as a login. Login is not built yet. |
+| `QD_FIXTURES_DIR`                 | `fixtures`  | Where the fixture source reads `captain.waiting.json` and `runtime.needs.json`.         |
+| `HOST`, `PORT`                    | `127.0.0.1` | Listen address. `PORT` defaults to 3000 for `npm start`, 5173 for `npm run dev`.        |
+| `ORIGIN`                          |             | The browser's address, `http://<host>:<port>`. Required when `HOST` is not loopback.    |
 
 The live source runs `captain.waiting` and `runtime.needs`. `captain.waiting` is open to the captain and the captain's liaison; `runtime.needs` is an operator command. The process needs one of those rights on that home, or Privateer refuses both.
 
@@ -93,6 +99,7 @@ Layout:
 - `src/lib/triage.ts`: triage kinds, sections, sort order and filters.
 - `src/lib/fleet.ts`: the fleet map's summary, needs per ship, and machine and ship sort order.
 - `src/lib/server/answer.ts`: builds the reply from the captain's choice.
+- `startup-guard.js`: the startup checks (`server.js` runs them) and the Host check (`src/hooks.server.ts`).
 - `src/routes/+page.server.ts`: loads cards; the `answer` form action.
 - `fixtures/`: invented ships and asks covering every card variant.
 
