@@ -14,7 +14,7 @@ Palette: sail-canvas paper, deep navy ink, sea-glass for action and selection, b
 
 ## 3. Dependencies
 
-There are **no runtime dependencies** beyond SvelteKit: everything in `package.json` is a dev dependency and the built server bundles what it needs.
+There are **no runtime dependencies** beyond SvelteKit, with one exception: `marked`, which renders Markdown reports on the server (section 14). Everything else in `package.json` is a dev dependency and the built server bundles what it needs.
 
 - `@fontsource-variable/fraunces` (dev dependency, OFL-1.1): the display face for the wordmark and card questions, self-hosted and bundled at build time so pages never call a font CDN. Only the Latin subsets a page actually uses are downloaded (`unicode-range`). Body text uses the system UI font.
 - Tooling: vitest (data layer and schema), Playwright (smoke test and screenshots, chromium only), eslint + prettier + svelte-check. These came from the official `sv create` templates.
@@ -158,3 +158,25 @@ It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field i
 **Sorting** (`buildRoutes` in `src/lib/spend.ts`). Throttled routes first (backing off or capped on any machine), then by try order, then by name. A route is listed even when no machine reports it, if `routes.show` names it.
 
 **Switches** are plain links (`?period=…&group=…`), so the page works without JavaScript. The page re-runs its load every 60 s while the tab is visible, and on focus or when the tab becomes visible.
+
+## 15. Reports: read in a sandbox, annotated by the captain
+
+A ship can hand the captain a **report**: a long Markdown or HTML document. It arrives as `payload.report` on a request or a notice, either inline `{title, format, content}` (up to 256 KiB) or by reference `{title, format, report_id}`, which the portal fetches with `report.get {id}` from whichever home holds it. Reports appear in Triage and on Decisions with a "Report" marker and an "Open report" action; `/report/<key>` is the reader, where `<key>` is the ask key (sender and mail id, URL-encoded).
+
+**The portal acts as the captain, so a report never runs in the portal's origin.** The reader embeds the report in an `iframe` with `srcdoc` and `sandbox="allow-scripts"`: no `allow-same-origin`, no navigation, no forms, no popups. The document's Content Security Policy is `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'nonce-<random>'; base-uri 'none'; form-action 'none'`. Only the portal's own annotator carries the nonce, so the report's scripts do not run, and nothing loads from the network (an external image is refused by the CSP). The annotator sits in the head, ahead of the report, so a report cannot stop it from running. Links in the report do nothing, and a `<meta http-equiv="refresh">` is stripped, since CSP does not stop a frame navigating itself. The document is built on the server (`src/lib/server/render.ts`).
+
+**Markdown** is rendered on the server with `marked`, the one runtime dependency this project has added. Raw HTML in Markdown is escaped and shown as text, never as markup; the frame's CSP is a second line of defence, not the first. Why `marked`: it is small, well known, renders GFM tables and code, and has a renderer hook that lets us escape raw HTML in one place. It does not sanitise, so the escape and the sandbox do the work.
+
+**Messages** cross the frame boundary by `postMessage` only. The portal accepts a message only from the frame's own `contentWindow`, and validates every field and length (`parseFromFrame` in `src/lib/report.ts`) before it uses it. The frame accepts messages only from its parent, and checks the type and size of each.
+
+**Anchors.** A selected passage is `{quote, prefix, suffix}` (W3C text-quote style, with up to 32 characters of context either side). A tapped block is `{selector, quote}`: `selector` is the block's path of child indexes, and `quote` is its text. The frame flattens the report's text with a newline between blocks; the portal matches quotes on that text (`findQuote`). Where a quote occurs more than once, the occurrence whose context still matches wins. A comment whose text is gone is kept and shown as "No longer in the report", never dropped or moved.
+
+**Highlights** use the CSS Custom Highlight API where the browser has it. Where it does not, the block containing the comment is tinted instead.
+
+**Phone and desktop.** On desktop, select text and a "Comment" pop-up appears. On a phone, where selection is fiddly, tap a paragraph and a "Comment on this" pill appears. Both are inside the frame, so they are part of the frame's own script, and both need an explicit press, so a tap to read does not open a composer. The comments are a side column on desktop and a bottom sheet on a phone.
+
+**Sending.** Every comment goes back as one `captain.reply {id, body, payload: {annotations: [{anchor, comment}]}}`, after a confirm step that shows the count. Up to 100 entries; each comment up to 4096 characters; each quote up to 2000. The body is "N comments on <title>", followed by the captain's optional note. The portal checks the list again on the server, since the client is not trusted. A report can be sent once: its record in the answers map says so, as it does for a decision. Nothing is sent unless `QD_SOURCE=cli` and `QD_ALLOW_SEND=1`; otherwise the exact arguments are logged.
+
+**Drafts** are kept per report in `localStorage`, saved as the captain works, restored on return, and cleared only after a successful send. Storage that is refused is not an error: the comments still work for that visit.
+
+**What is not done.** The frame's links do nothing, rather than opening anywhere. A report by id is fetched on each read; nothing is cached. Comments are not persisted on the server, so a draft lives in one browser until it is sent. The `report.get` shape is read as `{format, content}` at the top level or under `report`, which is a guess until Privateer's command lands; see `parseFetched` in `src/lib/server/source.ts`.

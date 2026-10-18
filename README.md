@@ -5,10 +5,11 @@ A web portal for a [Privateer](https://github.com/kirkins/privateer) fleet: wher
 - **Decisions**: one card per thing the captain must decide, with options, costs and the ship's recommendation.
 - **Triage**: everything owed to the captain, in one list: decisions, requests, approvals and blocked items, sorted by urgency, then deadline, then age.
 - **Fleet**: machines, ships and crew, with what each is doing. Read-only; refreshes every 15 s while visible.
+- **Reports**: a ship's Markdown or HTML report, read in a sandboxed frame. Select a passage (or tap a paragraph on a phone) to comment; send every comment back to the ship as one reply.
 
 Quarterdeck reads Privateer only through its JSON commands, and answers as the captain. It must never be reachable without authentication.
 
-Status: early development. Decisions, Triage and Fleet are live. Fleet reads a provisional `fleet.snapshot` shape; see [docs/DECISIONS.md](docs/DECISIONS.md) section 13.
+Status: early development. Decisions, Triage, Fleet and Reports are live. Fleet reads a provisional `fleet.snapshot` shape; see [docs/DECISIONS.md](docs/DECISIONS.md) section 13.
 
 | Phone, light                                      | Phone, dark                                     | Desktop                                               |
 | ------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
