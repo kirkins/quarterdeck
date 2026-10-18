@@ -1,10 +1,12 @@
 /**
  * The report reader against a production build serving fixtures (see
  * playwright.config.ts). Comments are logged by the server, never sent. The
- * fixtures hold two reports: an inline Markdown one from archive-sync, and an
- * HTML one held by id from metrics-rollup. Only the Markdown one is sent, and
- * sending it answers it, so the tests run in order and this file runs before
- * triage, which reads the same fixtures.
+ * fixtures hold an inline Markdown notice from archive-sync (in the feed, as
+ * captain.waiting does not carry notices), an HTML request held by id from
+ * metrics-rollup, and a notice by id from ledger, which is on another machine,
+ * so report.get here does not hold it. A notice's comments are kept but not
+ * sent, so only the request is sent, and sending it answers it. That test is
+ * the last in this file, and runs before triage, which reads the same fixtures.
  */
 import { createServer, type Server } from 'node:http';
 import { expect, test, type Frame, type Page } from '@playwright/test';
@@ -13,6 +15,7 @@ test.describe.configure({ mode: 'serial' });
 
 const MARKDOWN = `/report/${encodeURIComponent('archive-sync\u0000f0010-archive-review')}`;
 const HTML = `/report/${encodeURIComponent('metrics-rollup\u0000f0011-rollup-report')}`;
+const ELSEWHERE = `/report/${encodeURIComponent('ledger\u0000f0020-ledger-reconcile')}`;
 
 /**
  * A local listener the HTML fixture's links and its encoded meta refresh point
@@ -85,6 +88,15 @@ test('a report is read, and a passage in it is commented on', async ({ page }) =
 	await expect(page.getByRole('heading', { name: 'Your comments' })).toBeVisible();
 });
 
+test('a report stored on another machine reads as a calm state, not an error', async ({ page }) => {
+	await page.goto(ELSEWHERE);
+	await expect(
+		page.getByText("This report is stored on another machine and can't be opened here yet.")
+	).toBeVisible();
+	await expect(page.getByRole('alert')).toHaveCount(0);
+	await expect(page.locator('iframe.frame')).toHaveCount(0);
+});
+
 test('the marks follow the comment into the report', async ({ page }) => {
 	await page.goto(MARKDOWN);
 	await commentOn(page, 'The cold tier moved', 'Keep the old bucket read-only for 30 days.');
@@ -119,25 +131,6 @@ test('a comment can be edited and deleted', async ({ page }) => {
 	await page.getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('list').getByText('Keep it for 60 days.')).toHaveCount(0);
 	await expect(page.getByText('Nothing yet.')).toBeVisible();
-});
-
-// Sending answers the report for the rest of the server's life, so this stays the last test that reads it.
-test('sending logs the reply and clears the draft', async ({ page }) => {
-	await page.goto(MARKDOWN);
-	await commentOn(page, 'Nothing was lost', 'Yes, re-encrypt them.');
-
-	await page.getByRole('button', { name: 'Send 1 comment' }).click();
-	await page.getByRole('button', { name: 'Send all' }).click();
-
-	await expect(page.getByRole('status').filter({ hasText: 'Logged, not sent' })).toBeVisible();
-
-	// Answered, so the comment column is gone; the draft in this browser is gone too.
-	await page.reload();
-	await expect(page.getByRole('status').filter({ hasText: 'Already answered' })).toBeVisible();
-	const drafts = await page.evaluate(
-		() => Object.keys(localStorage).filter((key) => key.startsWith('quarterdeck.report')).length
-	);
-	expect(drafts).toBe(0);
 });
 
 test('a link in a report does nothing and a script in an HTML report does not run', async ({
@@ -230,6 +223,19 @@ test('a frame that is navigated anyway is closed, its messages ignored, and can 
 test.describe('on a phone', () => {
 	test.use({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true });
 
+	test('a paragraph longer than a quote can be tapped and commented on', async ({ page }) => {
+		await page.goto(HTML);
+		const frame = await frameOf(page);
+		const long = frame.locator('p', { hasText: 'Each series needs an owner' });
+		await expect(long).toBeVisible();
+
+		await long.tap();
+		await frame.getByRole('button', { name: 'Comment on this' }).tap();
+		await page.getByRole('textbox', { name: 'Your comment' }).fill('Name the owner for each one.');
+		await page.getByRole('button', { name: 'Save comment' }).click();
+		await expect(page.getByRole('list').getByText('Name the owner for each one.')).toBeVisible();
+	});
+
 	test('tapping a paragraph comments on it, and the page does not scroll sideways', async ({
 		page
 	}) => {
@@ -249,4 +255,29 @@ test.describe('on a phone', () => {
 		await page.getByRole('button', { name: 'Save comment' }).click();
 		await expect(page.getByRole('list').getByText('Keep the query-volume series.')).toBeVisible();
 	});
+});
+
+// Sending answers the request for the rest of the server's life, so this stays the last test that reads it.
+test('sending a request logs the reply and clears the draft', async ({ page }) => {
+	await page.goto(HTML);
+	// A click on a paragraph offers the block's Comment pop-up, the same as a tap on a phone.
+	const frame = await frameOf(page);
+	await frame.locator('p', { hasText: 'Tell me which of these' }).click();
+	await frame.getByRole('button', { name: 'Comment on this' }).click();
+	await page.getByRole('textbox', { name: 'Your comment' }).fill('Keep the query-volume series.');
+	await page.getByRole('button', { name: 'Save comment' }).click();
+	await expect(page.getByRole('list').getByText('Keep the query-volume series.')).toBeVisible();
+
+	await page.getByRole('button', { name: 'Send 1 comment' }).click();
+	await page.getByRole('button', { name: 'Send all' }).click();
+
+	await expect(page.getByRole('status').filter({ hasText: 'Logged, not sent' })).toBeVisible();
+
+	// Answered, so the comment column is gone; the draft in this browser is gone too.
+	await page.reload();
+	await expect(page.getByRole('status').filter({ hasText: 'Already answered' })).toBeVisible();
+	const drafts = await page.evaluate(
+		() => Object.keys(localStorage).filter((key) => key.startsWith('quarterdeck.report')).length
+	);
+	expect(drafts).toBe(0);
 });

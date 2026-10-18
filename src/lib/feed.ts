@@ -552,6 +552,31 @@ export function reportTitleOf(entry: FeedEntry): string | null {
 	return reported?.ok ? reported.value.title : null;
 }
 
+/**
+ * The comments a captain reply or notice carries, as a line for the feed:
+ * "N comments on <title>". The title is the report the reply answers, found
+ * among the entries by its correlation. Keyed by entryKey; entries with no
+ * comments are absent.
+ */
+export function commentsOf(entries: readonly FeedEntry[]): Map<string, string> {
+	const titles = new Map<string, string>();
+	for (const entry of entries) {
+		const title = reportTitleOf(entry);
+		if (title) titles.set(entryKey(entry), title);
+	}
+	const out = new Map<string, string>();
+	for (const entry of entries) {
+		const annotations = entry.payload?.annotations;
+		if (entry.from !== CAPTAIN || !Array.isArray(annotations) || annotations.length === 0) continue;
+		const title =
+			titles.get(entryKey(entry)) ??
+			(entry.correlation ? titles.get(askKey(entry.to, entry.correlation)) : undefined);
+		const count = `${annotations.length} comment${annotations.length === 1 ? '' : 's'}`;
+		out.set(entryKey(entry), title ? `${count} on ${title}` : count);
+	}
+	return out;
+}
+
 /** A ship's mark: its initial and a colour that is the same for that name everywhere. */
 export function shipMark(name: string): { initial: string; hue: number } {
 	let hash = 0;

@@ -75,12 +75,12 @@ export interface FetchedReport {
 }
 
 /**
- * Read `report.get`. Its answer may carry the report at the top level or
- * under `report`; either way the content must be a string within the limit.
+ * Read `report.get`: `{id, ship, title, format, bytes, created_ms, content}` at
+ * the top level, as Privateer returns it. The format must be markdown or html,
+ * and the content a string within the limit.
  */
 export function parseFetched(result: unknown, id: string): FetchedReport {
-	const root = rec(result);
-	const body = rec(root?.report) ?? root;
+	const body = rec(result);
 	const format = body?.format;
 	if (!REPORT_FORMATS.includes(format as ReportFormat)) {
 		throw new Error(`report ${id} came back without a markdown or html format`);
@@ -88,6 +88,40 @@ export function parseFetched(result: unknown, id: string): FetchedReport {
 	const content = checkContent(body?.content);
 	if (!content.ok) throw new Error(`report ${id}: ${content.error}`);
 	return { format: format as ReportFormat, content: content.value };
+}
+
+/**
+ * Privateer's answer when no fleet home on this machine holds the report. A
+ * report stored on another machine is not reached yet, so it reads the same.
+ */
+const NOT_HELD_HERE = /^no report \S+ in the fleet$/;
+
+/**
+ * Privateer's words for a refused command. A refusal is JSON on stdout, which the
+ * runner reads as a PrivateerCommandError, or JSON on stderr with a non-zero exit,
+ * which it reads as a PrivateerExecError. Null when the error carries no refusal.
+ */
+export function refusalOf(error: unknown): string | null {
+	if (error instanceof PrivateerCommandError) {
+		return typeof error.error === 'string' ? error.error : null;
+	}
+	if (error instanceof PrivateerExecError) {
+		for (const line of error.stderr.split('\n')) {
+			try {
+				const refusal = rec(JSON.parse(line.trim()))?.error;
+				if (typeof refusal === 'string') return refusal;
+			} catch {
+				// Not JSON: keep looking.
+			}
+		}
+	}
+	return null;
+}
+
+/** True when `report.get` said the report is not held on this machine. */
+export function notHeldHere(error: unknown): boolean {
+	const refusal = refusalOf(error);
+	return refusal !== null && NOT_HELD_HERE.test(refusal);
 }
 
 function rec(value: unknown): Record<string, unknown> | null {
@@ -389,7 +423,16 @@ export class FixtureSource implements Source {
 	async report(id: string): Promise<FetchedReport> {
 		const raw = rec(await this.#read(REPORT_FIXTURE));
 		const held = rec(raw?.reports)?.[id];
-		if (!held) throw new Error(`report ${id} is not in the fixtures`);
+		// What the real runner raises for report.get on a report no home here holds: the
+		// CLI exits 1 with its JSON error on stderr, and nothing on stdout.
+		if (!held) {
+			const error = JSON.stringify({ ok: false, error: `no report ${id} in the fleet` });
+			throw new PrivateerExecError(
+				'report.get',
+				'privateer report.get exited with status 1',
+				error
+			);
+		}
 		return parseFetched(held, id);
 	}
 

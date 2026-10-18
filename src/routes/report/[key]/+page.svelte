@@ -14,6 +14,7 @@
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import {
 		checkAnnotation,
@@ -307,6 +308,16 @@
 		</p>
 		<p class="callout callout-danger" role="alert"><Icon name="alert" size={16} />{data.error}</p>
 	</section>
+{:else if data.elsewhere}
+	<section class="page">
+		<p class="back">
+			<a href={resolve('/triage')}><Icon name="arrow-left" size={16} /> Triage</a>
+		</p>
+		<EmptyState tone="quiet" title={data.elsewhere.title} icon="doc">
+			<p>This report is stored on another machine and can't be opened here yet.</p>
+			<p>It is from {data.elsewhere.ship}. Open it from that machine's Privateer.</p>
+		</EmptyState>
+	</section>
 {:else if ask && data.frame}
 	<section class="page">
 		<header class="head">
@@ -486,7 +497,12 @@
 						{/if}
 
 						{#if composing}
-							{#if !confirming}
+							{#if !ask.canSend}
+								<p class="callout" role="status">
+									Sending comments on this report needs a Privateer update. Your comments are kept
+									here as a draft.
+								</p>
+							{:else if !confirming}
 								<button
 									type="button"
 									class="btn btn-primary send"

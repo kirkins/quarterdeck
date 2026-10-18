@@ -3,6 +3,7 @@ import {
 	REPORT_LIMITS,
 	checkAnnotation,
 	checkAnnotations,
+	commentRights,
 	findQuote,
 	parseFromFrame,
 	reportOf
@@ -67,8 +68,8 @@ describe('checkAnnotation and checkAnnotations', () => {
 		expect(checkAnnotation({ anchor: { quote }, comment: 'ok' })).toMatchObject({ ok: false });
 	});
 
-	it('refuses context over 32 characters and an anchor without a quote', () => {
-		const prefix = 'p'.repeat(REPORT_LIMITS.context + 1);
+	it('refuses context over 2000 characters and an anchor without a quote', () => {
+		const prefix = 'p'.repeat(REPORT_LIMITS.quote + 1);
 		expect(checkAnnotation({ anchor: { quote: 'a', prefix }, comment: 'ok' })).toMatchObject({
 			ok: false
 		});
@@ -173,5 +174,54 @@ describe('parseFromFrame', () => {
 		expect(
 			parse(signed({ type: 'select', anchor: { quote: 'x'.repeat(REPORT_LIMITS.quote + 1) } }))
 		).toBeNull();
+	});
+});
+
+describe('anchor limits as Privateer checks them', () => {
+	it('allows a selector and a prefix up to 2000 characters, and refuses more', () => {
+		const max = 'x'.repeat(REPORT_LIMITS.quote);
+		const over = max + 'x';
+		expect(
+			checkAnnotation({ anchor: { selector: '0/1', quote: max }, comment: 'ok' })
+		).toMatchObject({ ok: true });
+		expect(
+			checkAnnotation({ anchor: { selector: '0/1', quote: 'a' }, comment: 'ok' })
+		).toMatchObject({ ok: true });
+		expect(
+			checkAnnotation({ anchor: { quote: 'a', prefix: max, suffix: max }, comment: 'ok' })
+		).toMatchObject({ ok: true });
+		expect(
+			checkAnnotation({ anchor: { selector: over, quote: 'a' }, comment: 'ok' })
+		).toMatchObject({ ok: false });
+		expect(checkAnnotation({ anchor: { quote: 'a', suffix: over }, comment: 'ok' })).toMatchObject({
+			ok: false
+		});
+	});
+
+	it('leaves an empty prefix or suffix off the wire rather than sending ""', () => {
+		const checked = checkAnnotation({
+			anchor: { quote: 'a', prefix: '', suffix: '' },
+			comment: 'ok'
+		});
+		expect(checked).toEqual({ ok: true, value: { anchor: { quote: 'a' }, comment: 'ok' } });
+	});
+});
+
+describe('commentRights', () => {
+	it('takes comments on a request, and sends them', () => {
+		expect(commentRights('request', 'request')).toEqual({ comment: true, send: true });
+	});
+
+	it('takes comments on a notice, but does not send them until Privateer accepts them', () => {
+		expect(commentRights('notice', 'notice')).toEqual({ comment: true, send: false });
+	});
+
+	it('reads a report on its own, and takes no comments on it', () => {
+		expect(commentRights('report', 'notice')).toEqual({ comment: false, send: false });
+	});
+
+	it('takes no comments on a decision or an approval', () => {
+		expect(commentRights('decision', 'decision')).toEqual({ comment: false, send: false });
+		expect(commentRights('request', 'approval')).toEqual({ comment: false, send: false });
 	});
 });

@@ -28,6 +28,10 @@
 	var BLOCK = 'p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote,td,th,dt,dd,figcaption,caption,hr';
 	var CONTEXT = 32;
 	var QUOTE = 2000;
+	/* Cut by character, never by UTF-16 unit: a split surrogate pair is not valid text. */
+	function chars(value, from, to) {
+		return Array.from(value).slice(from, to).join('');
+	}
 	var MAX_MARKS = 100;
 
 	var spans = [];
@@ -113,7 +117,7 @@
 			if (start < 0) start = s.start;
 			end = s.end;
 		}
-		if (start >= 0) quote = text.slice(start, Math.min(end, start + QUOTE));
+		if (start >= 0) quote = chars(text.slice(start, end), 0, QUOTE);
 		return { selector: pathOf(block), quote: quote.trim() };
 	}
 
@@ -128,11 +132,11 @@
 	}
 
 	function quoteAt(span) {
-		var quote = text.slice(span.start, span.end);
+		// Two units per character at most, so this much text holds CONTEXT characters either side.
 		return {
-			quote: quote.slice(0, QUOTE),
-			prefix: text.slice(Math.max(0, span.start - CONTEXT), span.start),
-			suffix: text.slice(span.end, span.end + CONTEXT)
+			quote: chars(text.slice(span.start, span.end), 0, QUOTE),
+			prefix: chars(text.slice(Math.max(0, span.start - CONTEXT * 2), span.start), -CONTEXT),
+			suffix: chars(text.slice(span.end, span.end + CONTEXT * 2), 0, CONTEXT)
 		};
 	}
 
@@ -186,8 +190,13 @@
 	/* The Comment pop-up on a selection, and the block pill for a tap. */
 
 	function hideAll() {
-		if (popover) popover.hidden = true;
+		hideSelection();
 		if (pill) pill.hidden = true;
+	}
+
+	/* A selection that goes away hides its own pop-up, not a block's pill: a tap moves the selection. */
+	function hideSelection() {
+		if (popover) popover.hidden = true;
 	}
 
 	function button(label, className, onpress) {
@@ -236,14 +245,14 @@
 
 	function showSelection() {
 		var selection = window.getSelection();
-		if (!selection || selection.isCollapsed || selection.rangeCount === 0) return hideAll();
+		if (!selection || selection.isCollapsed || selection.rangeCount === 0) return hideSelection();
 		var range = selection.getRangeAt(0);
 		var span = spanOf(range);
-		if (!span) return hideAll();
+		if (!span) return hideSelection();
 		var rect = range.getBoundingClientRect();
 		var el = ensurePopover();
 		el.anchor = quoteAt(span);
-		if (span.end - span.start > QUOTE) {
+		if (Array.from(text.slice(span.start, span.end)).length > QUOTE) {
 			el.anchor = null;
 		}
 		el.style.top = rect.top + window.scrollY + 'px';
@@ -262,7 +271,9 @@
 		var rect = block.getBoundingClientRect();
 		var el = ensurePill();
 		el.anchor = blockAnchor(block);
-		el.style.top = rect.top + window.scrollY - 8 + 'px';
+		// Level with the tap, within the block: a tall block's top edge may be off screen.
+		var at = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
+		el.style.top = at + window.scrollY - 8 + 'px';
 		el.style.left = rect.right + window.scrollX - 8 + 'px';
 		el.hidden = false;
 	}

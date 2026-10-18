@@ -9,8 +9,10 @@ import {
 	applyLocalAnswers,
 	atBottom,
 	buildRows,
+	commentsOf,
 	closedAtOf,
 	dayLabel,
+	entryKey,
 	endReasonOf,
 	feedKindOf,
 	feedQuery,
@@ -653,5 +655,41 @@ describe('waiting versus unread', () => {
 		const only = visibleEntries([notice, request], { ...EMPTY_FILTER, onlyWaiting: true });
 		expect(only.map((e) => e.id)).toEqual(['r']);
 		expect(visibleEntries([notice, request], EMPTY_FILTER)).toHaveLength(2);
+	});
+});
+
+describe('commentsOf', () => {
+	const report = { title: 'Audit', format: 'markdown', content: '# Audit' };
+	const ask = entry({ from: 'analytics', id: 'a-1', kind: 'notice', payload: { report } });
+	const note = { anchor: { quote: 'Audit' }, comment: 'Keep this' };
+
+	it('says how many comments a captain reply carries, and on which report', () => {
+		const reply = entry({
+			from: CAPTAIN,
+			to: 'analytics',
+			id: 'r-1',
+			kind: 'reply',
+			correlation: 'a-1',
+			payload: { annotations: [note, note] }
+		});
+		expect(commentsOf([ask, reply]).get(entryKey(reply))).toBe('2 comments on Audit');
+	});
+
+	it('reads the singular, and leaves out the title when the report is not in the list', () => {
+		const reply = entry({
+			from: CAPTAIN,
+			to: 'analytics',
+			id: 'r-2',
+			kind: 'reply',
+			correlation: 'gone',
+			payload: { annotations: [note] }
+		});
+		expect(commentsOf([reply]).get(entryKey(reply))).toBe('1 comment');
+	});
+
+	it('leaves out messages with no comments, and comments from anyone but the captain', () => {
+		const plain = entry({ from: CAPTAIN, id: 'r-3', kind: 'reply', payload: {} });
+		const ship = entry({ from: 'analytics', id: 'a-9', payload: { annotations: [note] } });
+		expect(commentsOf([ask, plain, ship]).size).toBe(0);
 	});
 });

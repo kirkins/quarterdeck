@@ -2,6 +2,65 @@
 	"fixture_now_ms": 1792300000000,
 	"entries": [
 		{
+			"machine": "lab-box",
+			"home": "desk-lab",
+			"ship": "archive-sync",
+			"id": "f0010-archive-review",
+			"created_ms": 1792298000000,
+			"from": "archive-sync",
+			"to": "captain",
+			"kind": "notice",
+			"request_kind": null,
+			"correlation": null,
+			"task_id": "archive-migrate",
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"end_reason": null,
+			"answered_by": null,
+			"answered_ms": null,
+			"ended_by": null,
+			"ended_ms": null,
+			"body": "The archive migration is ready to read. Three questions need you.",
+			"payload": {
+				"report": {
+					"title": "Archive migration: review",
+					"format": "markdown",
+					"content": "# Archive migration: review\n\nThe cold tier moved to the new bucket on Tuesday. Nothing was lost, but three things need a decision before the old bucket is retired.\n\n## What moved\n\n- **2.4 TB** of archived logs, verified by checksum\n- 118 lifecycle rules, rewritten for the new class names\n- The nightly restore drill passed on the first run\n\n## Open questions\n\n1. Keep the old bucket read-only for 30 days, or retire it now?\n2. Do the 2019 exports need re-encrypting with the new key?\n3. Should restore drills run weekly instead of nightly?\n\n| Dataset | Size | Status |\n|---|---|---|\n| access-logs | 1.9 TB | verified |\n| invoices | 310 GB | verified |\n| media-thumbs | 190 GB | re-encoding |\n\n> The restore drill is the best evidence we have. Keep it running until the old bucket is gone.\n\nRun the check with:\n\n```sh\narchive-sync verify --bucket cold --sample 1000\n```\n\nReply with your answer to each question in the comment on this report.\n"
+				}
+			}
+		},
+		{
+			"machine": "boreas",
+			"home": "boreas",
+			"ship": "ledger",
+			"id": "f0020-ledger-reconcile",
+			"created_ms": 1792299000000,
+			"from": "ledger",
+			"to": "captain",
+			"kind": "notice",
+			"request_kind": null,
+			"correlation": null,
+			"task_id": "ledger-reconcile",
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"end_reason": null,
+			"answered_by": null,
+			"answered_ms": null,
+			"ended_by": null,
+			"ended_ms": null,
+			"body": "The reconciliation is ready to read. It was written on boreas.",
+			"payload": {
+				"report": {
+					"title": "Ledger reconciliation, March",
+					"format": "markdown",
+					"report_id": "rep-ledger-4",
+					"bytes": 1450
+				}
+			}
+		},
+		{
 			"machine": "north-rig",
 			"home": "desk-north",
 			"ship": "billing",
@@ -281,6 +340,45 @@
 					"format": "markdown",
 					"content": "# Onboarding\n\nA new captain reads three things first:\n\n- the Decisions page\n- the Feed\n- the Fleet map\n\nSee https://example.test/guide for the full text."
 				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"home": "desk-lab",
+			"ship": "docs-site",
+			"id": "c-701",
+			"created_ms": 1792058000000,
+			"from": "captain",
+			"to": "docs-site",
+			"kind": "reply",
+			"request_kind": null,
+			"correlation": "d-701",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"end_reason": null,
+			"answered_by": null,
+			"answered_ms": null,
+			"ended_by": null,
+			"ended_ms": null,
+			"body": "Two changes before the tag, both in the comments.",
+			"payload": {
+				"annotations": [
+					{
+						"anchor": {
+							"quote": "A new captain reads three things first:"
+						},
+						"comment": "Say who the captain is."
+					},
+					{
+						"anchor": {
+							"selector": "1/0",
+							"quote": "the Decisions page"
+						},
+						"comment": "Keep the order."
+					}
+				]
 			}
 		},
 		{

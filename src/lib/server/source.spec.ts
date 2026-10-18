@@ -8,6 +8,8 @@ import {
 	CliSource,
 	FixtureSource,
 	isUnknownCommand,
+	notHeldHere,
+	refusalOf,
 	parseFetched,
 	rebaseFixture,
 	sendDismiss,
@@ -561,22 +563,46 @@ describe('spend reads (routes.show, usage.summary)', () => {
 });
 
 describe('reports by id', () => {
-	it('reads report.get at the top level or under report, and checks its format and size', () => {
-		expect(parseFetched({ format: 'html', content: '<p>x</p>' }, 'r')).toEqual({
+	it('reads report.get as Privateer returns it, at the top level, and checks its format and size', () => {
+		const fetched = {
+			id: 'r-7',
+			ship: 'analytics',
+			title: 'Audit',
 			format: 'html',
+			bytes: 4,
+			created_ms: 1,
 			content: '<p>x</p>'
-		});
-		expect(parseFetched({ ok: true, report: { format: 'markdown', content: '# x' } }, 'r')).toEqual(
-			{
-				format: 'markdown',
-				content: '# x'
-			}
+		};
+		expect(parseFetched(fetched, 'r')).toEqual({ format: 'html', content: '<p>x</p>' });
+		expect(() => parseFetched({ ok: true, report: fetched }, 'r')).toThrow(/format/);
+		expect(() => parseFetched({ ...fetched, format: 'pdf' }, 'r')).toThrow(/format/);
+		expect(() => parseFetched({ ...fetched, content: undefined }, 'r')).toThrow(/content/);
+		expect(() => parseFetched({ ...fetched, content: 'a'.repeat(256 * 1024 + 1) }, 'r')).toThrow(
+			/content|larger/
 		);
-		expect(() => parseFetched({ format: 'pdf', content: 'x' }, 'r')).toThrow(/format/);
-		expect(() => parseFetched({ format: 'html' }, 'r')).toThrow(/content/);
-		expect(() =>
-			parseFetched({ format: 'html', content: 'a'.repeat(256 * 1024 + 1) }, 'r')
-		).toThrow(/larger/);
+	});
+
+	it('recognises the error report.get gives for a report no home here holds', () => {
+		const held = new PrivateerCommandError('report.get', 'no report report-7 in the fleet');
+		expect(notHeldHere(held)).toBe(true);
+		expect(notHeldHere(new PrivateerCommandError('report.get', 'identifier is invalid'))).toBe(
+			false
+		);
+		expect(notHeldHere(new Error('no report report-7 in the fleet'))).toBe(false);
+	});
+
+	it('recognises the same refusal when the CLI puts it on stderr and exits non-zero', () => {
+		// The runner reads a refusal on stderr as an exec error, which is what a live read gets.
+		const onStderr = (stderr: string) =>
+			new PrivateerExecError('report.get', 'privateer report.get exited with status 1', stderr);
+		expect(notHeldHere(onStderr('{"ok":false,"error":"no report report-7 in the fleet"}\n'))).toBe(
+			true
+		);
+		expect(
+			notHeldHere(onStderr('warning: slow\n{"ok":false,"error":"no report report-7 in the fleet"}'))
+		).toBe(true);
+		expect(notHeldHere(onStderr('{"ok":false,"error":"identifier is invalid"}'))).toBe(false);
+		expect(notHeldHere(onStderr('privateer: cannot open home'))).toBe(false);
 	});
 
 	it('CliSource asks report.get for the id', async () => {
@@ -597,7 +623,10 @@ describe('reports by id', () => {
 			format: 'html',
 			content: '<h1>Audit</h1>'
 		});
-		await expect(source.report('nope')).rejects.toThrow(/not in the fixtures/);
+		const missing = await source.report('nope').catch((e: unknown) => e);
+		expect(missing).toBeInstanceOf(PrivateerExecError);
+		expect(refusalOf(missing)).toBe('no report nope in the fleet');
+		expect(notHeldHere(missing)).toBe(true);
 	});
 });
 

@@ -10,7 +10,9 @@
  *
  * Annotations go back as captain.reply {id, body, payload: {annotations}}.
  * An anchor is { quote, prefix?, suffix? } for a passage the captain selected,
- * or { selector, quote } for a block they tapped.
+ * or { selector, quote } for a block they tapped. Every anchor field is at
+ * most 2000 characters, as Privateer checks them, and an empty prefix or
+ * suffix is left off the wire rather than sent as "".
  */
 
 export const REPORT_LIMITS = {
@@ -19,11 +21,9 @@ export const REPORT_LIMITS = {
 	bytes: 256 * 1024,
 	annotations: 100,
 	comment: 4096,
-	/** The text an anchor quotes, in characters. */
+	/** The text an anchor quotes, in characters. Also the most any anchor field may hold. */
 	quote: 2000,
-	/** Text kept either side of a quote, to find it again if it moves. */
-	context: 32,
-	selector: 200,
+	selector: 2000,
 	note: 2000,
 	id: 64
 } as const;
@@ -107,6 +107,18 @@ export function reportOf(payload: unknown): Checked<ReportRef> | null {
 	};
 }
 
+/**
+ * What the captain may do with a report's comments on one ask. Comments are
+ * taken on a request or a notice; a report on its own is read only. A reply
+ * is sent on a request. A notice's comments stay a draft until Privateer
+ * accepts them: captain.reply finds requests and decisions, not notices.
+ * `kind` is the mail kind, `triage` the kind triageKind gives the item.
+ */
+export function commentRights(kind: string, triage: string): { comment: boolean; send: boolean } {
+	const comment = kind !== 'report' && (triage === 'request' || triage === 'notice');
+	return { comment, send: comment && triage === 'request' };
+}
+
 /** Check report content fetched by id, against the same size limit as inline content. */
 export function checkContent(content: unknown): Checked<string> {
 	if (typeof content !== 'string') return { ok: false, error: 'report content must be a string' };
@@ -140,8 +152,9 @@ export function checkAnchor(input: unknown): Checked<Anchor> {
 
 	const anchor: { quote: string; prefix?: string; suffix?: string } = { quote: quote.value };
 	for (const key of ['prefix', 'suffix'] as const) {
-		if (raw[key] === undefined) continue;
-		const context = boundedText(raw[key], REPORT_LIMITS.context, `anchor.${key}`, 0);
+		// Empty context is no context: Privateer refuses an empty string here.
+		if (raw[key] === undefined || raw[key] === '') continue;
+		const context = boundedText(raw[key], REPORT_LIMITS.quote, `anchor.${key}`);
 		if (!context.ok) return context;
 		anchor[key] = context.value;
 	}
@@ -209,7 +222,7 @@ export function findQuote(
 /** What the annotator frame may tell the portal. */
 export type FromFrame =
 	| { type: 'text'; text: string }
-	| { type: 'select'; anchor: { quote: string; prefix: string; suffix: string } }
+	| { type: 'select'; anchor: { quote: string; prefix?: string; suffix?: string } }
 	| { type: 'block'; anchor: { selector: string; quote: string } };
 
 /**
@@ -229,22 +242,12 @@ export function parseFromFrame(data: unknown, token: string): FromFrame | null {
 	if (msg.type === 'select') {
 		const anchor = checkAnchor(msg.anchor);
 		if (!anchor.ok || 'selector' in anchor.value) return null;
-		return {
-			type: 'select',
-			anchor: {
-				quote: anchor.value.quote,
-				prefix: anchor.value.prefix ?? '',
-				suffix: anchor.value.suffix ?? ''
-			}
-		};
+		return { type: 'select', anchor: anchor.value };
 	}
 	if (msg.type === 'block') {
 		const anchor = checkAnchor(msg.anchor);
 		if (!anchor.ok || !('selector' in anchor.value)) return null;
-		return {
-			type: 'block',
-			anchor: { selector: anchor.value.selector, quote: anchor.value.quote }
-		};
+		return { type: 'block', anchor: anchor.value };
 	}
 	return null;
 }
