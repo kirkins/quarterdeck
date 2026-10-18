@@ -122,7 +122,31 @@ test('a ship asleep and a ship on another machine show their place', async ({ pa
 	await expect(page.getByText('asleep', { exact: true })).toBeVisible();
 
 	await openShip(page, 'search-index');
-	await expect(page.getByText('On boreas')).toBeVisible();
+	await expect(page.getByText('On boreas', { exact: true })).toBeVisible();
+});
+
+test('a ship on another machine says its tools are read there, calmly', async ({ page }) => {
+	await openShip(page, 'search-index', '?tab=tools');
+	await expect(page.getByText('This ship runs on boreas')).toBeVisible();
+	await expect(page.getByRole('alert')).toBeHidden();
+	await expect(page.locator('#tools-skills')).toBeHidden();
+	// The header still places the ship, and the conversation tab is unaffected.
+	await expect(page.getByText('On boreas', { exact: true })).toBeVisible();
+});
+
+test('a failed tool plan, a fractional idle time and an unbounded first mate read plainly', async ({
+	page
+}) => {
+	await openShip(page, 'chandlery', '?tab=tools');
+	await expect(page.getByText('could not be built: bundle catalogue-pages')).toBeVisible();
+	await expect(page.getByText('Sleeps after 7.5 min idle')).toBeVisible();
+	await expect(page.getByText('The charter is inactive.')).toBeVisible();
+
+	await openShip(page, 'docs-site', '?tab=tools');
+	await expect(
+		page.locator('#tools-skills').getByText('Not listed: this first mate loads its own skills.')
+	).toBeVisible();
+	await expect(page.getByText('No routes', { exact: true }).first()).toBeVisible();
 });
 
 test('a name that is not a ship shows a designed not-found state', async ({ page }) => {

@@ -34,10 +34,23 @@
 		return 'List not reported';
 	}
 
-	function sleepLabel(policy: string | null): string {
-		if (policy === 'after_idle') return 'Sleeps when idle';
-		if (policy === 'never') return 'Stays awake';
-		return policy ?? 'Not reported';
+	function sleepLabel(sleep: ShipProfile['sleep']): string {
+		if (sleep.policy === 'after_idle') {
+			return sleep.idle_minutes === null
+				? 'Sleeps when idle'
+				: `Sleeps after ${sleep.idle_minutes} min idle`;
+		}
+		if (sleep.policy === 'never') return 'Stays awake';
+		if (sleep.policy === 'not_hosted') return 'Not hosted: woken for each turn';
+		return sleep.policy ?? 'Not reported';
+	}
+
+	/** A plugin's name is a path such as `attended/mail.ts`: the folder is shown quieter than the file. */
+	function pluginParts(name: string): { dir: string; base: string } {
+		const at = name.lastIndexOf('/');
+		return at < 0
+			? { dir: '', base: name }
+			: { dir: name.slice(0, at + 1), base: name.slice(at + 1) };
 	}
 
 	function yesNo(value: boolean | null): string {
@@ -58,6 +71,9 @@
 	function none(p: ShipProfile): boolean {
 		return p.skills.length + p.mcpServers.length + p.plugins.length === 0;
 	}
+
+	/** Privateer lists skills and servers only for a bounded plan; otherwise the harness loads its own. */
+	const bounded = $derived(profile?.toolBundles.bounded !== false);
 </script>
 
 {#if view.profileState === 'unsupported'}
@@ -71,12 +87,27 @@
 	<EmptyState tone="quiet" title="Privateer has no profile for {view.name}" icon="ship">
 		<p>The fleet knows this ship, but it has not reported its tools.</p>
 	</EmptyState>
+{:else if view.profileState === 'elsewhere'}
+	<EmptyState
+		tone="quiet"
+		title="This ship runs on {view.profileMachine ?? 'another machine'}"
+		icon="ship"
+	>
+		<p>Its tools are read on that machine. The conversation on this page still works here.</p>
+	</EmptyState>
 {:else if view.profileState === 'error' || !profile}
 	<p class="callout callout-danger" role="alert">
 		<Icon name="alert" size={16} />{view.profileError ?? 'The ship’s tools could not be read.'}
 	</p>
 	<p class="hint">Check that Privateer is reachable from this machine, then reload.</p>
 {:else}
+	{#if profile.toolBundles.error}
+		<p class="callout callout-danger">
+			<Icon name="alert" size={16} />The first mate’s tool plan could not be built: {profile
+				.toolBundles.error}
+		</p>
+	{/if}
+
 	<div class="search">
 		<label class="visually-hidden" for="tools-find">Find a skill, server or plugin</label>
 		<input
@@ -109,13 +140,19 @@
 						<div>
 							<dt>{routeLabel(route)}</dt>
 							<dd>
-								<span class="list">{listLabel(route.list)}</span>
-								{#if route.names.length > 0}
-									<ul class="names" aria-label="{routeLabel(route)} routes">
-										{#each route.names as name (name)}<li class="tag tag-outline">{name}</li>{/each}
-									</ul>
-								{:else}
+								{#if route.list === 'none'}
 									<span class="none">No routes</span>
+								{:else}
+									<span class="list">{listLabel(route.list)}</span>
+									{#if route.names.length > 0}
+										<ul class="names" aria-label="{routeLabel(route)} routes">
+											{#each route.names as name (name)}<li class="tag tag-outline">
+													{name}
+												</li>{/each}
+										</ul>
+									{:else}
+										<span class="none">No routes</span>
+									{/if}
 								{/if}
 							</dd>
 						</div>
@@ -151,6 +188,9 @@
 
 		<section class="group" id="tools-charter" aria-labelledby="h-charter">
 			<h2 id="h-charter">Charter</h2>
+			{#if profile.charter.active === false}
+				<p class="hint">The charter is inactive.</p>
+			{/if}
 			{#if profile.charter.actions.length === 0}
 				<p class="none">No charter actions reported.</p>
 			{:else}
@@ -176,21 +216,16 @@
 					{#each profile.permissions.fleetRules as rule (rule)}<li>{rule}</li>{/each}
 				</ul>
 			{/if}
-			<h3>Ship rules</h3>
-			{#if profile.permissions.shipRules.length === 0}
-				<p class="none">None.</p>
-			{:else}
-				<ul class="plain">
-					{#each profile.permissions.shipRules as rule (rule)}<li>{rule}</li>{/each}
-				</ul>
-			{/if}
 		</section>
 
 		<section class="group" id="tools-skills" aria-labelledby="h-skills">
 			<h2 id="h-skills">
 				Skills <span class="count">{matches?.skills.length ?? 0}</span>
 			</h2>
-			{#if matches && matches.skills.length > 0}
+			<p class="hint">From the first mate’s bounded plan.</p>
+			{#if !bounded}
+				<p class="none">Not listed: this first mate loads its own skills.</p>
+			{:else if matches && matches.skills.length > 0}
 				<Collapsible items={matches.skills} noun="skill" all={searching}>
 					{#snippet row(skill)}
 						<p class="item-name">{skill.name}</p>
@@ -206,10 +241,14 @@
 			<h2 id="h-mcp">
 				MCP servers <span class="count">{matches?.mcpServers.length ?? 0}</span>
 			</h2>
-			{#if matches && matches.mcpServers.length > 0}
+			<p class="hint">From the first mate’s bounded plan.</p>
+			{#if !bounded}
+				<p class="none">Not listed: this first mate loads its own servers.</p>
+			{:else if matches && matches.mcpServers.length > 0}
 				<Collapsible items={matches.mcpServers} noun="server" all={searching}>
 					{#snippet row(server)}
 						<p class="item-name">{server.name}</p>
+						{#if server.description}<p class="item-text">{server.description}</p>{/if}
 						{#if server.url}<p class="item-text url">{server.url}</p>{/if}
 						{#if server.credentials.length > 0}
 							<p class="creds">
@@ -233,7 +272,10 @@
 			{#if matches && matches.plugins.length > 0}
 				<Collapsible items={matches.plugins} noun="plugin" all={searching}>
 					{#snippet row(plugin)}
-						<p class="item-name">{plugin.name}</p>
+						{@const parts = pluginParts(plugin.name)}
+						<p class="item-name">
+							{#if parts.dir}<span class="dir">{parts.dir}</span>{/if}{parts.base}
+						</p>
 						{#if plugin.description}<p class="item-text">{plugin.description}</p>{/if}
 					{/snippet}
 				</Collapsible>
@@ -255,19 +297,13 @@
 				</div>
 				<div>
 					<dt>Sleep</dt>
-					<dd>{sleepLabel(profile.sleep.policy)}</dd>
+					<dd>{sleepLabel(profile.sleep)}</dd>
 				</div>
-				{#if profile.sleep.idle_minutes !== null}
-					<div>
-						<dt>Idle before sleep</dt>
-						<dd>{profile.sleep.idle_minutes} min</dd>
-					</div>
-				{/if}
 			</dl>
 		</section>
 	</div>
 
-	{#if none(profile) && !searching}
+	{#if bounded && none(profile) && !searching}
 		<p class="hint">This ship carries no skills, servers or plugins.</p>
 	{/if}
 {/if}
@@ -426,6 +462,10 @@
 		margin: var(--s-2) 0 0;
 		font-size: var(--text-xs);
 		color: var(--ink-3);
+	}
+	.item-name .dir {
+		color: var(--ink-3);
+		font-weight: 400;
 	}
 	.creds :global(.icon) {
 		color: var(--ink-3);

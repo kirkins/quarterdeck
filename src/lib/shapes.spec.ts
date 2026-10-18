@@ -664,40 +664,48 @@ describe('parseUsageRecords', () => {
 	});
 });
 
-describe('parseShipProfile (provisional)', () => {
+describe('parseShipProfile', () => {
 	const full = {
+		ship: 'billing',
 		machine: 'atlas',
 		hosted: true,
-		sleep: { policy: 'after_idle', idle_minutes: 30 },
+		sleep: { policy: 'after_idle', idle_minutes: 7.5 },
 		first_mate: {
-			harness: 'tidewater',
-			options: { model: 'large', max_turns: 40, api_key: 'do-not-show-this' }
+			harness: 'pi',
+			options: {
+				model: 'large',
+				max_turns: 40,
+				api_key: '<set>',
+				retry: { max: 3, token: '<set>' }
+			}
 		},
 		routes: {
 			first_mate: { list: 'ship', names: ['plan-main'] },
 			crew: { list: 'fleet', names: ['plan-main', 'free-pool'] },
-			errand: { list: 'sideways', names: ['free-pool'] }
+			errand: { list: 'none', names: [] }
 		},
-		charter: { actions: ['read the ledger', 'reply to the captain'] },
+		charter: { actions: ['read the ledger', 'reply to the captain'], active: false },
 		permissions: {
 			fleet_mode: 'ask',
 			fleet_rules: ['Never charge a card'],
-			ship_rules: ['Keep retries under three']
+			ship_rules: []
 		},
+		tool_bundles: { bounded: true, selected: { skills: ['retry-policy'] } },
 		skills: [{ name: 'retry-policy', description: 'Draft a policy' }, { name: 'bare' }],
 		mcp_servers: [
 			{
 				name: 'stripe',
-				url: 'https://mcp.example.test/stripe?token=do-not-show-this',
+				url: 'https://mcp.example.test?token=do-not-show-this',
+				description: 'Test-mode tools',
 				credentials: ['STRIPE_API_KEY']
 			},
 			{
 				name: 'ledger-db',
 				url: 'https://user:do-not-show-this@db.example.test/mcp',
-				credentials: { DB_PASSWORD: 'do-not-show-this' }
+				credentials: ['DB_PASSWORD']
 			}
 		],
-		plugins: [{ name: 'ledger-tools', description: 'Read-only views' }]
+		plugins: [{ name: 'attended/mail.ts', description: 'Mailbox' }]
 	};
 
 	it('reads a full profile into one shape', () => {
@@ -706,21 +714,31 @@ describe('parseShipProfile (provisional)', () => {
 			ship: 'billing',
 			machine: 'atlas',
 			hosted: true,
-			sleep: { policy: 'after_idle', idle_minutes: 30 },
-			firstMate: { harness: 'tidewater' },
-			charter: { actions: ['read the ledger', 'reply to the captain'] },
+			sleep: { policy: 'after_idle', idle_minutes: 7.5 },
+			firstMate: { harness: 'pi' },
+			charter: { actions: ['read the ledger', 'reply to the captain'], active: false },
 			permissions: { fleetMode: 'ask', fleetRules: ['Never charge a card'] },
+			toolBundles: { bounded: true, error: null },
 			skills: [
 				{ name: 'retry-policy', description: 'Draft a policy' },
 				{ name: 'bare', description: null }
 			],
-			plugins: [{ name: 'ledger-tools', description: 'Read-only views' }]
+			plugins: [{ name: 'attended/mail.ts', description: 'Mailbox' }]
 		});
 		expect(profile.routes).toEqual([
 			{ kind: 'first_mate', list: 'ship', names: ['plan-main'] },
 			{ kind: 'crew', list: 'fleet', names: ['plan-main', 'free-pool'] },
-			{ kind: 'errand', list: null, names: ['free-pool'] }
+			{ kind: 'errand', list: 'none', names: [] }
 		]);
+	});
+
+	it('keeps no ship rules, since a ship has none of its own', () => {
+		expect(parseShipProfile(full, 'billing').permissions).not.toHaveProperty('shipRules');
+	});
+
+	it('reads a route list it does not know as not reported', () => {
+		const { routes } = parseShipProfile({ routes: { crew: { list: 'sideways' } } }, 'x');
+		expect(routes).toEqual([{ kind: 'crew', list: null, names: [] }]);
 	});
 
 	it('masks a secret-looking option to set or not set, and never keeps its value', () => {
@@ -728,9 +746,25 @@ describe('parseShipProfile (provisional)', () => {
 		expect(firstMate.options).toEqual([
 			{ name: 'model', value: 'large', secret: false, set: true },
 			{ name: 'max_turns', value: '40', secret: false, set: true },
-			{ name: 'api_key', value: null, secret: true, set: true }
+			{ name: 'api_key', value: null, secret: true, set: true },
+			{
+				name: 'retry',
+				value: '{"max":3,"token":"<set>"}',
+				secret: false,
+				set: true
+			}
 		]);
 		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
+	});
+
+	it('hides a value Privateer masked, even under a name this list does not know', () => {
+		const { firstMate } = parseShipProfile(
+			{ first_mate: { options: { 'session-id': '<set>' } } },
+			'x'
+		);
+		expect(firstMate.options).toEqual([
+			{ name: 'session-id', value: null, secret: true, set: true }
+		]);
 	});
 
 	it('scrubs credentials from a URL held in a non-secret option', () => {
@@ -754,17 +788,66 @@ describe('parseShipProfile (provisional)', () => {
 		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
 	});
 
+	it('masks secret keys and scrubs URLs nested inside a non-secret option', () => {
+		const profile = {
+			first_mate: {
+				harness: 'pi',
+				options: {
+					env: {
+						REGION: 'eu',
+						API_KEY: 'do-not-show-this',
+						nested: [{ session: 'do-not-show-this' }, 'https://u:do-not-show-this@x.test/']
+					}
+				}
+			}
+		};
+		const [env] = parseShipProfile(profile, 'billing').firstMate.options;
+		expect(env.secret).toBe(false);
+		expect(env.value).not.toContain('do-not-show-this');
+		expect(JSON.parse(env.value ?? '')).toEqual({
+			REGION: 'eu',
+			API_KEY: '<set>',
+			nested: [{ session: '<set>' }, 'https://x.test/']
+		});
+	});
+
 	it('keeps credential names only, and hides secret query values and user names in URLs', () => {
 		const { mcpServers } = parseShipProfile(full, 'billing');
 		expect(mcpServers).toEqual([
 			{
 				name: 'stripe',
-				url: 'https://mcp.example.test/stripe?token=hidden',
+				url: 'https://mcp.example.test/?token=hidden',
+				description: 'Test-mode tools',
 				credentials: ['STRIPE_API_KEY']
 			},
-			{ name: 'ledger-db', url: 'https://db.example.test/mcp', credentials: ['DB_PASSWORD'] }
+			{
+				name: 'ledger-db',
+				url: 'https://db.example.test/mcp',
+				description: null,
+				credentials: ['DB_PASSWORD']
+			}
 		]);
 		expect(JSON.stringify(mcpServers)).not.toContain('do-not-show-this');
+	});
+
+	it('reads the bounded plan, and the error that stops it being built', () => {
+		const { toolBundles } = parseShipProfile(
+			{
+				tool_bundles: { bounded: true, selected: {}, error: 'bundle retry: no SKILL.md' }
+			},
+			'x'
+		);
+		expect(toolBundles).toEqual({ bounded: true, error: 'bundle retry: no SKILL.md' });
+		expect(parseShipProfile({ tool_bundles: { bounded: false } }, 'x').toolBundles).toEqual({
+			bounded: false,
+			error: null
+		});
+	});
+
+	it('reads a sleep policy of not_hosted, and no idle time', () => {
+		expect(
+			parseShipProfile({ sleep: { policy: 'not_hosted', idle_minutes: null } }, 'x').sleep
+		).toEqual({ policy: 'not_hosted', idle_minutes: null });
 	});
 
 	it('reads a partial or empty profile without failing, with gaps as null, empty or false', () => {
@@ -775,8 +858,9 @@ describe('parseShipProfile (provisional)', () => {
 			sleep: { policy: null, idle_minutes: null },
 			firstMate: { harness: null, options: [] },
 			routes: [],
-			charter: { actions: [] },
-			permissions: { fleetMode: null, fleetRules: [], shipRules: [] },
+			charter: { actions: [], active: null },
+			permissions: { fleetMode: null, fleetRules: [] },
+			toolBundles: { bounded: null, error: null },
 			skills: [],
 			mcpServers: [],
 			plugins: []

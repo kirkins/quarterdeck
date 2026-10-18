@@ -38,8 +38,9 @@ const okProfile: ShipRead = {
 		sleep: { policy: null, idle_minutes: null },
 		firstMate: { harness: null, options: [] },
 		routes: [],
-		charter: { actions: [] },
-		permissions: { fleetMode: null, fleetRules: [], shipRules: [] },
+		charter: { actions: [], active: null },
+		permissions: { fleetMode: null, fleetRules: [] },
+		toolBundles: { bounded: null, error: null },
 		skills: [],
 		mcpServers: [],
 		plugins: []
@@ -97,6 +98,21 @@ describe('loadShipView', () => {
 			factsState: 'error',
 			factsError: 'fleet exploded',
 			profileState: 'ok'
+		});
+	});
+
+	it('says a ship on another machine is read there, and is not a not-found page', async () => {
+		const { source } = sourceWith(
+			{ status: 'ok', snapshot },
+			{ status: 'elsewhere', machine: 'boreas' }
+		);
+		const view = await loadShipView(source, 'search-index');
+		expect(view).toMatchObject({
+			notFound: false,
+			profileState: 'elsewhere',
+			profileMachine: 'boreas',
+			profile: null,
+			profileError: null
 		});
 	});
 

@@ -8,8 +8,11 @@ import type { ShipProfile } from '#lib/shapes.ts';
 import { errorText } from './submit.ts';
 import type { Source } from './source.ts';
 
-/** `error` is a read that failed; `unsupported` is an older Privateer; `not_found` is a ship it does not know. */
-export type ProfileState = 'ok' | 'unsupported' | 'error' | 'not_found';
+/**
+ * `error` is a read that failed; `unsupported` is an older Privateer; `not_found` is a ship it
+ * does not know; `elsewhere` is a ship that runs on another machine, whose Privateer answers for it.
+ */
+export type ProfileState = 'ok' | 'unsupported' | 'error' | 'not_found' | 'elsewhere';
 export type FactsState = 'ok' | 'unsupported' | 'error';
 
 export interface ShipView {
@@ -22,6 +25,8 @@ export interface ShipView {
 	profile: ShipProfile | null;
 	profileState: ProfileState;
 	profileError: string | null;
+	/** The machine that runs the ship, when its tools are read there. */
+	profileMachine: string | null;
 }
 
 export async function loadShipView(source: Source, name: string): Promise<ShipView> {
@@ -34,7 +39,8 @@ export async function loadShipView(source: Source, name: string): Promise<ShipVi
 			factsError: null,
 			profile: null,
 			profileState: 'not_found',
-			profileError: null
+			profileError: null,
+			profileMachine: null
 		};
 	}
 	const [snapshot, profile] = await Promise.allSettled([
@@ -57,12 +63,14 @@ export async function loadShipView(source: Source, name: string): Promise<ShipVi
 	let shipProfile: ShipProfile | null = null;
 	let profileState: ProfileState;
 	let profileError: string | null = null;
+	let profileMachine: string | null = null;
 	if (profile.status === 'rejected') {
 		profileState = 'error';
 		profileError = errorText(profile.reason);
 	} else {
 		profileState = profile.value.status;
 		if (profile.value.status === 'ok') shipProfile = profile.value.value;
+		if (profile.value.status === 'elsewhere') profileMachine = profile.value.machine;
 	}
 
 	return {
@@ -73,6 +81,7 @@ export async function loadShipView(source: Source, name: string): Promise<ShipVi
 		factsError,
 		profile: shipProfile,
 		profileState,
-		profileError
+		profileError,
+		profileMachine
 	};
 }
