@@ -710,6 +710,27 @@ describe('parseShipProfile (provisional)', () => {
 		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
 	});
 
+	it('scrubs credentials from a URL held in a non-secret option', () => {
+		const profile = {
+			first_mate: {
+				harness: 'claude',
+				options: {
+					base_url: 'https://user:do-not-show-this@api.example.test/v1?token=do-not-show-this'
+				}
+			}
+		};
+		const { firstMate } = parseShipProfile(profile, 'billing');
+		expect(firstMate.options).toEqual([
+			{
+				name: 'base_url',
+				value: 'https://api.example.test/v1?token=hidden',
+				secret: false,
+				set: true
+			}
+		]);
+		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
+	});
+
 	it('keeps credential names only, and hides secret query values and user names in URLs', () => {
 		const { mcpServers } = parseShipProfile(full, 'billing');
 		expect(mcpServers).toEqual([

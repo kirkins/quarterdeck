@@ -639,7 +639,9 @@ export function displayUrl(raw: unknown): string | null {
 function option(name: string, raw: unknown): ProfileOption {
 	const value = typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : str(raw);
 	const secret = SECRET_NAME.test(name);
-	return { name, value: secret ? null : value, secret, set: value !== null };
+	// A non-secret option can still hold a URL with credentials in it: scrub it.
+	const shown = secret || value === null ? null : (displayUrl(value) ?? value);
+	return { name, value: shown, secret, set: value !== null };
 }
 
 /** A keyed object (`{ name: value }`) read in its key order. */
