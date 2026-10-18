@@ -220,9 +220,16 @@ describe('period and grouping switches', () => {
 		expect(parseGrouping(undefined)).toBe('route');
 	});
 
-	it('counts the period back from now', () => {
+	it('counts a 24 h period back from now', () => {
 		expect(sinceFor('24h', NOW)).toBe(NOW - 24 * HOUR);
-		expect(sinceFor('30d', NOW)).toBe(NOW - 30 * 24 * HOUR);
+	});
+
+	it('starts a period of days at the midnight that opens its first day, whatever the hour', () => {
+		const midnight = Date.UTC(2026, 9, 17);
+		expect(sinceFor('7d', NOW)).toBe(midnight - 6 * 24 * HOUR);
+		expect(sinceFor('30d', NOW)).toBe(midnight - 29 * 24 * HOUR);
+		// Late in the day and early in it give the same thirty days.
+		expect(sinceFor('30d', midnight + 23 * HOUR)).toBe(sinceFor('30d', midnight + HOUR));
 	});
 });
 

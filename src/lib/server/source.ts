@@ -92,6 +92,13 @@ function rec(value: unknown): Record<string, unknown> | null {
 }
 
 /** The feed's own order: by cursor, which is arrival order, not creation time. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The UTC midnight a time falls after: the day the usage chart's buckets are keyed by. */
+function dayStart(time: number): number {
+	return Math.floor(time / DAY_MS) * DAY_MS;
+}
+
 /** A fixture cursor's place in arrival order, read from its `f1.<n>` form. */
 function ordinalOf(cursor: string | null): number {
 	return Number(cursor?.replace(/^f1\./, '') ?? 0);
@@ -311,8 +318,12 @@ export class FixtureSource implements Source {
 		return cursor;
 	}
 
-	/** One fixture file as parsed JSON, or null when it is absent. */
-	async #read(file: string, now: number = this.#now()): Promise<unknown> {
+	/**
+	 * One fixture file as parsed JSON, or null when it is absent. `byDay` shifts it
+	 * by whole days, so its midnight lands on the midnight `now` falls in: each
+	 * record keeps its time of day, and the days it falls on do not move with the hour.
+	 */
+	async #read(file: string, now: number = this.#now(), byDay = false): Promise<unknown> {
 		let text: string;
 		try {
 			text = await readFile(path.resolve(this.#dir, file), 'utf8');
@@ -321,9 +332,10 @@ export class FixtureSource implements Source {
 			throw error;
 		}
 		const json = JSON.parse(text) as { fixture_now_ms?: unknown };
-		return typeof json.fixture_now_ms === 'number'
-			? rebaseFixture(json, json.fixture_now_ms, now)
-			: json;
+		if (typeof json.fixture_now_ms !== 'number') return json;
+		const fixtureNow = json.fixture_now_ms;
+		const target = byDay ? fixtureNow + dayStart(now) - dayStart(fixtureNow) : now;
+		return rebaseFixture(json, fixtureNow, target);
 	}
 
 	async waiting(): Promise<Waiting> {
@@ -452,7 +464,7 @@ export class FixtureSource implements Source {
 
 	/** Records are grouped here, the way usage.summary would group them live. */
 	async usage(query: UsageQuery): Promise<Read<UsageSummary>> {
-		const raw = await this.#read(USAGE_FIXTURE);
+		const raw = await this.#read(USAGE_FIXTURE, this.#now(), true);
 		if (raw === null) return { status: 'unsupported' };
 		return { status: 'ok', value: summarizeRecords(parseUsageRecords(raw), query) };
 	}
