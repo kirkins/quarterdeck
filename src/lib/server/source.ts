@@ -8,14 +8,21 @@ import path from 'node:path';
 import { assemble, type Waiting } from '#lib/shapes.ts';
 import type { MailSendArgs } from './answer.ts';
 import type { Config } from './config.ts';
+import type { DismissArgs } from './dismiss.ts';
 import { createRunner, privateerArgv, type ExecFile, type Runner } from './privateer.ts';
+
+/** The privateer commands Quarterdeck writes. Everything else is a read. */
+export type WriteCommand = 'mail.send' | 'captain.dismiss';
 
 export interface Source {
 	readonly mode: 'fixtures' | 'cli';
 	/** Everything owed to the captain: captain.waiting and runtime.needs, merged. */
 	waiting(): Promise<Waiting>;
-	/** Really send a captain reply. Callers go through `sendReply`, which decides whether to. */
-	send(args: MailSendArgs): Promise<unknown>;
+	/**
+	 * Really run a write. Callers go through `sendWrite`, which decides whether to.
+	 * This is the only place privateer is written to.
+	 */
+	write(command: WriteCommand, args: MailSendArgs | DismissArgs): Promise<unknown>;
 }
 
 export class CliSource implements Source {
@@ -40,8 +47,13 @@ export class CliSource implements Source {
 		return assemble(waiting, needs, Date.now());
 	}
 
-	send(args: MailSendArgs): Promise<unknown> {
-		return this.#run('mail.send', { ...args });
+	/**
+	 * The one function that writes to privateer. Where a write goes (which
+	 * --home, or captain.relay for an ask in another fleet home) is an open
+	 * question to Privateer; see docs/DECISIONS.md section 12 before changing it.
+	 */
+	write(command: WriteCommand, args: MailSendArgs | DismissArgs): Promise<unknown> {
+		return this.#run(command, { ...args });
 	}
 }
 
@@ -102,8 +114,8 @@ export class FixtureSource implements Source {
 		return assemble(captain, needs, this.#now());
 	}
 
-	send(): Promise<unknown> {
-		return Promise.reject(new Error('FixtureSource never sends mail'));
+	write(): Promise<unknown> {
+		return Promise.reject(new Error('FixtureSource never writes to privateer'));
 	}
 }
 
@@ -119,26 +131,47 @@ export interface SendOutcome {
 }
 
 /**
- * Send a reply, or only log it. Nothing is sent unless the source is live
- * (QD_SOURCE=cli) and QD_ALLOW_SEND=1; otherwise the exact mail.send args (and
- * the argv that would run) are logged and the answer is treated as accepted.
+ * Run a write, or only log it. Nothing is sent unless the source is live
+ * (QD_SOURCE=cli) and QD_ALLOW_SEND=1; otherwise the exact args (and the argv
+ * that would run) are logged and the action is treated as accepted.
  */
-export async function sendReply(
+export async function sendWrite(
 	source: Source,
 	config: Pick<Config, 'allowSend' | 'privateerBin' | 'privateerHome'>,
-	args: MailSendArgs,
+	command: WriteCommand,
+	args: MailSendArgs | DismissArgs,
 	log: (message: string) => void = console.info
 ): Promise<SendOutcome> {
 	if (source.mode === 'cli' && config.allowSend) {
-		return { sent: true, result: await source.send(args) };
+		return { sent: true, result: await source.write(command, args) };
 	}
 	const reason = source.mode === 'fixtures' ? 'fixture mode' : 'QD_ALLOW_SEND is not 1';
 	const argv = privateerArgv(
 		{ bin: config.privateerBin || 'privateer', home: config.privateerHome || '$PRIVATEER_HOME' },
-		'mail.send',
+		command,
 		{ ...args }
 	);
-	log(`[quarterdeck] not sent (${reason}): mail.send ${JSON.stringify(args)}`);
+	log(`[quarterdeck] not sent (${reason}): ${command} ${JSON.stringify(args)}`);
 	log(`[quarterdeck] would run: ${JSON.stringify(argv)}`);
 	return { sent: false };
+}
+
+/** Send a captain reply (`mail.send`). */
+export function sendReply(
+	source: Source,
+	config: Pick<Config, 'allowSend' | 'privateerBin' | 'privateerHome'>,
+	args: MailSendArgs,
+	log?: (message: string) => void
+): Promise<SendOutcome> {
+	return sendWrite(source, config, 'mail.send', args, log);
+}
+
+/** Close an ask without a reply (`captain.dismiss`). */
+export function sendDismiss(
+	source: Source,
+	config: Pick<Config, 'allowSend' | 'privateerBin' | 'privateerHome'>,
+	args: DismissArgs,
+	log?: (message: string) => void
+): Promise<SendOutcome> {
+	return sendWrite(source, config, 'captain.dismiss', args, log);
 }

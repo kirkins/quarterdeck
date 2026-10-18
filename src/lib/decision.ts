@@ -205,7 +205,10 @@ export interface CardOption {
 export interface Answered {
 	option_id?: string;
 	label?: string;
+	/** The captain's own answer, or a note given with a dismiss. */
 	text?: string;
+	/** Closed without a reply (captain.dismiss), rather than answered. */
+	dismissed?: boolean;
 	at_ms: number;
 	/** False when the answer was only logged (fixture mode or sending disabled). */
 	sent: boolean;
@@ -242,6 +245,15 @@ export interface Card {
 	deadline_ms: number | null;
 	/** When the oldest question was asked. */
 	asked_ms: number;
+}
+
+/**
+ * The key every answered-or-dismissed map and every form uses to find an ask.
+ * Ships choose their own mail ids, so an id alone is not unique: the key is
+ * the sender plus the id.
+ */
+export function askKey(from: string, id: string): string {
+	return `${from}\u0000${id}`;
 }
 
 /** True when a mail item belongs on the Decisions page. */
@@ -385,12 +397,12 @@ export function buildCards(
 	const cards = new Map<string, Card>();
 
 	for (const item of items) {
-		if (!item || typeof item.id !== 'string' || seen.has(item.id) || !isDecisionMail(item)) {
-			continue;
-		}
-		seen.add(item.id);
+		if (!item || typeof item.id !== 'string' || !isDecisionMail(item)) continue;
+		const ask = askKey(item.from, item.id);
+		if (seen.has(ask)) continue;
+		seen.add(ask);
 		const question = toQuestion(item, now);
-		question.answered = answered.get(item.id) ?? null;
+		question.answered = answered.get(ask) ?? null;
 		const group = groupOf(item);
 		const key = group ? `${item.from}\u0000${group}` : `id\u0000${item.id}`;
 		const card = cards.get(key);

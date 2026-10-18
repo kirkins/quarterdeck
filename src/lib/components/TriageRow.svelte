@@ -1,23 +1,26 @@
 <script lang="ts">
 	import { buildCards, toQuestion } from '#lib/decision.ts';
+	import { dismissLabel } from '#lib/dismiss.ts';
+	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, isoTime, urgencyOf } from '#lib/time.ts';
 	import { KIND_LABELS, type TriageKind, type TriageRow } from '#lib/triage.ts';
 	import DecisionCard from './DecisionCard.svelte';
+	import Dismiss from './Dismiss.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
-
-	type Failure = { id: string; error: string; option_id: string | null; text: string | null };
 
 	let {
 		row,
 		now,
 		open,
 		failure = null,
+		dismissFailure = null,
 		ontoggle
 	}: {
 		row: TriageRow;
 		now: number;
 		open: boolean;
 		failure?: Failure | null;
+		dismissFailure?: Failure | null;
 		ontoggle: () => void;
 	} = $props();
 
@@ -25,6 +28,7 @@
 		decision: 'compass',
 		request: 'hand',
 		approval: 'lock',
+		notice: 'bell',
 		blocker: 'alert'
 	};
 
@@ -32,7 +36,12 @@
 	const question = $derived(toQuestion(item, now));
 	const urgency = $derived(urgencyOf(row.deadline_ms, now));
 	const card = $derived(row.kind === 'decision' ? buildCards([item], now)[0] : null);
-	const failed = $derived(failure?.id === item.id ? failure : null);
+	/** A failure belongs to this row only when it names this ask. */
+	const forThisAsk = (f: Failure | null) =>
+		f && f.from === item.from && f.id === item.id ? f : null;
+	const failed = $derived(forThisAsk(failure));
+	const dismissed = $derived(forThisAsk(dismissFailure));
+	const dismissText = $derived(dismissLabel(row.kind, row.needsHands));
 	const step = $derived(typeof item.hands_on === 'string' ? item.hands_on.trim() : '');
 	const panel = $derived(`triage-${encodeURIComponent(item.from)}-${encodeURIComponent(item.id)}`);
 
@@ -92,7 +101,7 @@
 	{#if open}
 		<div class="panel" id={panel}>
 			{#if row.kind === 'decision' && card}
-				<DecisionCard {card} {now} {failure} />
+				<DecisionCard {card} {now} failure={failed} dismissFailure={dismissed} />
 			{:else if row.kind === 'request'}
 				{#if step}
 					<section class="step" aria-label="The step for you">
@@ -104,6 +113,7 @@
 								{copied ? 'Copied' : 'Copy step'}
 							</button>
 							<form method="POST" action="?/reply">
+								<input type="hidden" name="from" value={item.from} />
 								<input type="hidden" name="id" value={item.id} />
 								<input type="hidden" name="text" value="Done." />
 								<button type="submit" class="btn btn-primary">
@@ -119,6 +129,7 @@
 				{/if}
 
 				<form method="POST" action="?/reply" class="reply">
+					<input type="hidden" name="from" value={item.from} />
 					<input type="hidden" name="id" value={item.id} />
 					<label>
 						<span class="label">Reply to {item.from || 'the ship'}</span>
@@ -132,6 +143,8 @@
 					{#if failed}<p class="error" role="alert">{failed.error}</p>{/if}
 					<button type="submit" class="btn btn-primary">Send reply</button>
 				</form>
+
+				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
 			{:else if row.kind === 'approval'}
 				<p class="context">
 					Production approvals are answered in Privateer, where the exact grant or denial is
@@ -147,6 +160,14 @@
 						{/each}
 					</dl>
 				{/if}
+
+				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
+			{:else if row.kind === 'notice'}
+				{#if question.why}
+					<p class="context">{question.why}</p>
+				{/if}
+
+				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
 			{:else}
 				<p class="context">
 					Quarterdeck has no action for this yet. Privateer reports it until its owner clears it.
@@ -181,6 +202,9 @@
 	}
 	.row.kind-approval::before {
 		background: var(--ink-3);
+	}
+	.row.kind-notice::before {
+		background: var(--sea);
 	}
 	.row.kind-blocker::before {
 		background: var(--danger);

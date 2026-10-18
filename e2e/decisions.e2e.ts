@@ -17,7 +17,7 @@ test('lists decision cards from fixtures, most urgent first', async ({ page }) =
 	);
 
 	const cards = page.locator('[data-card]');
-	await expect(cards).toHaveCount(6);
+	await expect(cards).toHaveCount(7);
 	// Earliest deadline first: the mobile-app ask was due an hour ago, the billing one 40 minutes ago.
 	await expect(cards.first()).toContainText('mobile-app');
 	await expect(cards.first()).toContainText(/Overdue by/);
@@ -61,8 +61,8 @@ test('answering takes a choice and a confirm, and can be cancelled', async ({ pa
 
 	await expect(card.getByRole('status')).toContainText('Smart retries over 7 days');
 	await expect(card.getByRole('status')).toContainText('Logged, not sent');
-	// Seven questions were open (the analytics pair is one card); this one is answered.
-	await expect(page.getByRole('link', { name: /Decisions/ })).toContainText('6');
+	// Eight questions were open (the analytics pair is one card); this one is answered.
+	await expect(page.getByRole('link', { name: /Decisions/ })).toContainText('7');
 	// The answered card sinks to the bottom.
 	await expect(page.locator('[data-card]').last()).toContainText('retry policy');
 });

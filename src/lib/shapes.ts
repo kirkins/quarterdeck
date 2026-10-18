@@ -16,8 +16,11 @@
  *              kind: decision | approval | blocker, ship, task_id, question,
  *              choices, correlation, created_ms, actions, artifact,
  *              environment, evidence, status, summary }
- *     `correlation` is the mail id for mail needs. Mail needs carry no
- *     urgency, deadline or mail kind; captain.waiting supplies those.
+ *     `correlation` is the mail id for mail needs. Newer Privateer also sends
+ *     urgency, deadline_ms, asked_ms and mail_id on any need, and a mail need's
+ *     `kind` may be a mail kind (request | notice | report) rather than a need
+ *     kind. Older Privateer omits these, so every one is optional here, and
+ *     captain.waiting still supplies them when it lists the same ask.
  */
 import type { MailItem } from '#lib/decision.ts';
 
@@ -35,6 +38,17 @@ function str(value: unknown): string | null {
 
 function num(value: unknown): number | null {
 	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function urgencyOf(value: unknown): string {
+	return value === 'high' || value === 'low' ? value : 'normal';
+}
+
+/** A mail need's mail kind: its own `kind` when that is a mail kind, else decision or approval. */
+function mailKindOf(need: Rec): string {
+	const kind = str(need.kind);
+	if (kind === 'request' || kind === 'notice' || kind === 'report') return kind;
+	return kind === 'approval' ? 'approval' : 'decision';
 }
 
 function list(value: unknown): unknown[] {
@@ -101,34 +115,41 @@ export function parseRuntimeNeeds(result: unknown, now: number): Waiting {
 		if (!need || !needId) continue;
 		const ship = str(need.ship) ?? '';
 
+		// Timing is optional on every need (see the header); older Privateer sends none.
+		const asked = num(need.asked_ms) ?? num(need.created_ms) ?? now;
+		const timing = {
+			urgency: urgencyOf(need.urgency),
+			deadline_ms: num(need.deadline_ms),
+			asked_ms: asked,
+			age_ms: Math.max(0, now - asked)
+		};
+
 		if (need.source === 'mail') {
-			const id = str(need.correlation) ?? str(need.source_id);
+			const id = str(need.mail_id) ?? str(need.correlation) ?? str(need.source_id);
 			if (!id) continue;
-			const asked = num(need.created_ms) ?? now;
-			const approval = need.kind === 'approval';
+			const kind = mailKindOf(need);
 			items.push({
 				id,
 				from: ship,
 				to: 'captain',
-				kind: approval ? 'approval' : 'decision',
+				kind,
 				body: str(need.question),
 				// Decisions carry their choices; approvals carry what is being granted.
-				payload: approval
-					? { artifact: str(need.artifact), environment: str(need.environment) }
-					: { choices: strings(need.choices) },
+				payload:
+					kind === 'approval'
+						? { artifact: str(need.artifact), environment: str(need.environment) }
+						: kind === 'decision'
+							? { choices: strings(need.choices) }
+							: {},
 				task_id: str(need.task_id),
 				correlation: id,
 				state: 'open',
-				urgency: 'normal',
-				deadline_ms: null,
-				asked_ms: asked,
-				age_ms: Math.max(0, now - asked),
+				...timing,
 				hands_on: null,
 				actions: strings(need.actions)
 			});
 		} else if (need.source === 'job' || need.source === 'schedule' || need.source === 'workspace') {
 			const evidence = str(need.evidence) ?? '';
-			const asked = num(need.created_ms) ?? now;
 			items.push({
 				id: needId,
 				from: ship,
@@ -139,10 +160,7 @@ export function parseRuntimeNeeds(result: unknown, now: number): Waiting {
 				status: str(need.status),
 				task_id: str(need.task_id),
 				state: 'open',
-				urgency: 'normal',
-				deadline_ms: null,
-				asked_ms: asked,
-				age_ms: Math.max(0, now - asked),
+				...timing,
 				hands_on: null,
 				actions: []
 			});

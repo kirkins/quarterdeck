@@ -3,6 +3,8 @@
 	import { refreshAll } from '$app/navigation';
 	import Icon from '#lib/components/Icon.svelte';
 	import TriageRow from '#lib/components/TriageRow.svelte';
+	import { askKey } from '#lib/decision.ts';
+	import { failureFrom } from '#lib/form.ts';
 	import { formatAge } from '#lib/time.ts';
 	import {
 		filterRows,
@@ -17,7 +19,14 @@
 	let { data, form }: PageProps = $props();
 
 	const STORAGE_KEY = 'quarterdeck.triage.filter';
-	const KINDS: (TriageKind | null)[] = [null, 'decision', 'request', 'approval', 'blocker'];
+	const KINDS: (TriageKind | null)[] = [
+		null,
+		'decision',
+		'request',
+		'approval',
+		'notice',
+		'blocker'
+	];
 	const REFRESH_MS = 60_000;
 
 	// Relative times tick on the client; the first render uses the server's clock.
@@ -27,21 +36,14 @@
 	let refreshing = $state(false);
 	let filter = $state<Filter>({ ship: null, kind: null });
 	let ready = $state(false);
-	let openId = $state<string | null>(null);
+	/** The open row, by its ask key (sender and mail id). */
+	let openKey = $state<string | null>(null);
 
 	const rows = $derived(filterRows(data.rows, filter));
 	const sections = $derived(groupSections(rows));
 	const filtering = $derived(filter.ship !== null || filter.kind !== null);
-	const failure = $derived(
-		form && 'error' in form && typeof form.id === 'string'
-			? {
-					id: form.id,
-					error: String(form.error),
-					option_id: form.option_id ?? null,
-					text: form.text ?? null
-				}
-			: null
-	);
+	const failure = $derived(failureFrom(form, ['answer', 'reply']));
+	const dismissFailure = $derived(failureFrom(form, ['dismiss']));
 
 	// Each fresh load restarts the "updated" clock.
 	$effect(() => {
@@ -91,8 +93,8 @@
 		};
 	});
 
-	function toggle(id: string) {
-		openId = openId === id ? null : id;
+	function toggle(key: string) {
+		openKey = openKey === key ? null : key;
 	}
 
 	function clearFilters() {
@@ -208,13 +210,15 @@
 					<span class="count">{section.rows.length}</span>
 				</h2>
 				<ul class="rows">
-					{#each section.rows as row (`${row.item.from}/${row.item.id}`)}
+					{#each section.rows as row (askKey(row.item.from, row.item.id))}
+						{@const key = askKey(row.item.from, row.item.id)}
 						<TriageRow
 							{row}
 							{now}
 							{failure}
-							open={openId === row.item.id}
-							ontoggle={() => toggle(row.item.id)}
+							{dismissFailure}
+							open={openKey === key}
+							ontoggle={() => toggle(key)}
 						/>
 					{/each}
 				</ul>

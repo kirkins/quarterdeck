@@ -90,3 +90,19 @@ Answering, replying and sending all go through one guard: nothing is sent unless
 **Reads are cached for five seconds** (`loadItems`), so the nav badge in the layout and the page share one round trip. Any answer or reply reads fresh and clears the cache.
 
 **Filters** by ship and kind are chips. The last filter is remembered in `localStorage` (guarded by try/catch). The list refreshes every 60 seconds and on window focus, and shows "Updated Xs ago".
+
+## 12. Dismiss, one write path, and one key for an ask
+
+**Dismiss** ends one captain-addressed ask without a reply, through `captain.dismiss {id, note?}`. A request or decision ends as dismissed, a notice or report is marked acknowledged for the captain, and a needs_hands ask closes. The action is a quiet `<details>` summary; its confirm step holds the optional note and the submit, so a stray tap only opens it. A cancel sends nothing. It works without JavaScript, and a refused dismiss reopens the step with the error on the item.
+
+Wording comes from one module (`src/lib/dismiss.ts`): **Dismiss** for requests, decisions and approvals, **Mark read** for notices and reports, and **Done, nothing to add** for a needs_hands step (the **Done, I did this** reply stays beside it). Blockers have no dismiss: they are not captain mail, and `captain.dismiss` is for captain-addressed items.
+
+**One key for an ask.** A ship picks its own mail ids, so an id alone is not unique. `askKey(from, id)` in `src/lib/decision.ts` is the key everywhere: the answered and dismissed map, the card and row dedup, the open row on Triage, the forms (they post `from` and `id`), and the lookup in `submit.ts`. An id that two ships both use is two asks.
+
+**One write path.** Every privateer write goes through `CliSource.write` in `src/lib/server/source.ts`, and the send guard (`sendWrite`) sits in front of it: nothing is written unless `QD_SOURCE=cli` and `QD_ALLOW_SEND=1`. Open questions for Privateer, deliberately not guessed here:
+
+- Whether a reply or dismiss for an ask in another fleet home needs a different `--home`, or `captain.relay`. If so, change it in `CliSource.write` and nowhere else.
+- `captain.dismiss` takes only `id`. Since ids are only unique per ship, should it also carry `from`?
+- A mail need's `kind` in runtime.needs may now be `request`, `notice` or `report` as well as `decision` and `approval`. Quarterdeck reads it that way until Privateer's PR lands and confirms the names.
+
+**Newer runtime.needs fields are optional.** `urgency`, `deadline_ms`, `asked_ms` and `mail_id` are read when present. Older Privateer sends none of them, so those asks sort as normal urgency with no deadline, and captain.waiting still supplies them when it lists the same ask.

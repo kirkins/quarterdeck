@@ -1,17 +1,26 @@
 <script lang="ts">
 	import type { Card } from '#lib/decision.ts';
+	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, isoTime, urgencyOf } from '#lib/time.ts';
 	import Blocked from './Blocked.svelte';
 	import Icon from './Icon.svelte';
 	import QuestionForm from './QuestionForm.svelte';
 
-	type Failure = { id: string; error: string; option_id: string | null; text: string | null };
-
 	let {
 		card,
 		now,
-		failure = null
-	}: { card: Card; now: number; failure?: Failure | null } = $props();
+		failure = null,
+		dismissFailure = null
+	}: {
+		card: Card;
+		now: number;
+		failure?: Failure | null;
+		dismissFailure?: Failure | null;
+	} = $props();
+
+	/** A failure belongs to one question: the sender and id must both match. */
+	const forQuestion = (f: Failure | null, q: Card['questions'][number]) =>
+		f && f.from === q.from && f.id === q.id ? f : null;
 
 	const answered = $derived(card.questions.filter((q) => q.answered).length);
 	const done = $derived(answered === card.questions.length);
@@ -82,7 +91,8 @@
 				total={card.questions.length}
 				showBlocked={!sharedBlocked}
 				showDeadline={!sharedDeadline}
-				failure={failure?.id === question.id ? failure : null}
+				failure={forQuestion(failure, question)}
+				dismissFailure={forQuestion(dismissFailure, question)}
 			/>
 		{/each}
 	</div>

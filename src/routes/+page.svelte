@@ -3,6 +3,7 @@
 	import { refreshAll } from '$app/navigation';
 	import DecisionCard from '#lib/components/DecisionCard.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import { failureFrom } from '#lib/form.ts';
 	import { formatDeadline, urgencyOf } from '#lib/time.ts';
 	import type { PageProps } from './$types';
 
@@ -27,16 +28,8 @@
 			.filter((d): d is number => d !== null && d > now)
 			.sort((a, b) => a - b)[0] ?? null
 	);
-	const failure = $derived(
-		form && 'error' in form && typeof form.id === 'string'
-			? {
-					id: form.id,
-					error: String(form.error),
-					option_id: form.option_id ?? null,
-					text: form.text ?? null
-				}
-			: null
-	);
+	const failure = $derived(failureFrom(form, ['answer']));
+	const dismissFailure = $derived(failureFrom(form, ['dismiss']));
 
 	async function refresh() {
 		refreshing = true;
@@ -102,7 +95,7 @@
 {:else}
 	<ol class="cards">
 		{#each data.cards as card (card.key)}
-			<li><DecisionCard {card} {now} {failure} /></li>
+			<li><DecisionCard {card} {now} {failure} {dismissFailure} /></li>
 		{/each}
 	</ol>
 {/if}

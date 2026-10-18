@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
-import { buildCards, isDecisionMail } from '#lib/decision.ts';
+import { buildCards, isDecisionMail, type MailItem } from '#lib/decision.ts';
 import { getPortal, loadItems } from '#lib/server/app.ts';
-import { errorText, submitAnswer } from '#lib/server/submit.ts';
+import { errorText, submitAnswer, submitDismiss } from '#lib/server/submit.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -18,18 +18,36 @@ export const load: PageServerLoad = async () => {
 	}
 };
 
+/** Read the ask a form names: its sender and its mail id. */
+function askOf(form: FormData) {
+	return { from: String(form.get('from') ?? ''), id: String(form.get('id') ?? '') };
+}
+
+/** Only decisions are answered or dismissed here; everything else is on Triage. */
+const decisionOnly = (item: MailItem) =>
+	isDecisionMail(item) ? null : 'This ask is not a decision.';
+
 export const actions: Actions = {
 	answer: async ({ request }) => {
 		const form = await request.formData();
-		const id = String(form.get('id') ?? '');
+		const ask = askOf(form);
 		const option_id = form.get('option_id')?.toString() ?? null;
 		const text = form.get('text')?.toString() ?? null;
-		const echo = { id, option_id, text };
+		const echo = { action: 'answer', ...ask, option_id, text };
 
-		const result = await submitAnswer(id, { option_id, text }, (item) =>
-			isDecisionMail(item) ? null : 'This ask is not a decision.'
-		);
+		const result = await submitAnswer(ask, { option_id, text }, decisionOnly);
 		if (!result.ok) return fail(result.status, { ...echo, error: result.error });
-		return { id, sent: result.sent };
+		return { action: 'answer', id: result.id, from: ask.from, sent: result.sent };
+	},
+
+	dismiss: async ({ request }) => {
+		const form = await request.formData();
+		const ask = askOf(form);
+		const note = form.get('note')?.toString() ?? null;
+		const echo = { action: 'dismiss', ...ask, option_id: null, text: note };
+
+		const result = await submitDismiss(ask, note, decisionOnly);
+		if (!result.ok) return fail(result.status, { ...echo, error: result.error });
+		return { action: 'dismiss', id: result.id, from: ask.from, sent: result.sent };
 	}
 };

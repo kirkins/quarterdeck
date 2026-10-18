@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	askKey,
 	buildCards,
 	isDecisionMail,
 	splitBody,
@@ -332,7 +333,7 @@ describe('buildCards', () => {
 				g('z', null, NOW)
 			],
 			NOW,
-			new Map([['y', { at_ms: NOW, sent: false, option_id: 'yes' }]])
+			new Map([[askKey('storefront', 'y'), { at_ms: NOW, sent: false, option_id: 'yes' }]])
 		);
 		expect(card.deadline_ms).toBe(NOW + 5 * HOUR);
 		expect(card.asked_ms).toBe(NOW - 4 * HOUR);
@@ -348,8 +349,22 @@ describe('buildCards', () => {
 				mail({ id: 'plain', kind: 'request', payload: {} })
 			],
 			NOW,
-			new Map([['done', { at_ms: NOW, sent: false }]])
+			new Map([[askKey('storefront', 'done'), { at_ms: NOW, sent: false }]])
 		);
 		expect(cards.map((c) => c.key)).toEqual(['open', 'done']);
+	});
+
+	it('keys asks by sender and id, so one id from two ships is two asks', () => {
+		const cards = buildCards(
+			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'storefront' })],
+			NOW,
+			new Map([[askKey('storefront', 'a'), { at_ms: NOW, sent: false, dismissed: true }]])
+		);
+		const questions = cards.flatMap((c) => c.questions);
+		expect(questions).toHaveLength(2);
+		expect(questions.find((q) => q.from === 'storefront')?.answered).toMatchObject({
+			dismissed: true
+		});
+		expect(questions.find((q) => q.from === 'billing')?.answered).toBeNull();
 	});
 });

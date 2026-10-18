@@ -133,6 +133,19 @@ test.describe('triage phone', () => {
 		await page.mouse.move(0, 0);
 		await page.screenshot({ path: `${dir}/triage-phone-hands.png` });
 	});
+
+	test('dismiss confirm step', async ({ page }) => {
+		await openTriage(page, 'light');
+		const row = page.locator('[data-row="f0022-backup-verified"]');
+		await row.locator('button.head').click();
+		await row.locator('details.dismiss > summary').click();
+		await row.locator('details.dismiss textarea[name="note"]').fill('Checked on the dashboard.');
+		await row.evaluate((el) =>
+			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 120)
+		);
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/triage-phone-dismiss.png` });
+	});
 });
 
 test.describe('triage desktop', () => {
