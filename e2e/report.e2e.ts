@@ -2,9 +2,10 @@
  * The report reader against a production build serving fixtures (see
  * playwright.config.ts). Comments are logged by the server, never sent. The
  * fixtures hold two reports: an inline Markdown one from archive-sync, and an
- * HTML one held by id from metrics-rollup. Only the Markdown one is sent, and
- * sending it answers it, so the tests run in order and this file runs before
- * triage, which reads the same fixtures.
+ * HTML one held by id from metrics-rollup. A third, by id from ledger, is on
+ * another machine, so report.get here does not hold it. Only the Markdown one
+ * is sent, and sending it answers it, so the tests run in order and this file
+ * runs before triage, which reads the same fixtures.
  */
 import { createServer, type Server } from 'node:http';
 import { expect, test, type Frame, type Page } from '@playwright/test';
@@ -13,6 +14,7 @@ test.describe.configure({ mode: 'serial' });
 
 const MARKDOWN = `/report/${encodeURIComponent('archive-sync\u0000f0010-archive-review')}`;
 const HTML = `/report/${encodeURIComponent('metrics-rollup\u0000f0011-rollup-report')}`;
+const ELSEWHERE = `/report/${encodeURIComponent('ledger\u0000f0020-ledger-reconcile')}`;
 
 /**
  * A local listener the HTML fixture's links and its encoded meta refresh point
@@ -83,6 +85,15 @@ test('a report is read, and a passage in it is commented on', async ({ page }) =
 
 	await commentOn(page, 'The cold tier moved', 'Keep the old bucket read-only for 30 days.');
 	await expect(page.getByRole('heading', { name: 'Your comments' })).toBeVisible();
+});
+
+test('a report stored on another machine reads as a calm state, not an error', async ({ page }) => {
+	await page.goto(ELSEWHERE);
+	await expect(
+		page.getByText("This report is stored on another machine and can't be opened here yet.")
+	).toBeVisible();
+	await expect(page.getByRole('alert')).toHaveCount(0);
+	await expect(page.locator('iframe.frame')).toHaveCount(0);
 });
 
 test('the marks follow the comment into the report', async ({ page }) => {
@@ -229,6 +240,19 @@ test('a frame that is navigated anyway is closed, its messages ignored, and can 
 
 test.describe('on a phone', () => {
 	test.use({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true });
+
+	test('a paragraph longer than a quote can be tapped and commented on', async ({ page }) => {
+		await page.goto(HTML);
+		const frame = await frameOf(page);
+		const long = frame.locator('p', { hasText: 'Each series needs an owner' });
+		await expect(long).toBeVisible();
+
+		await long.tap();
+		await frame.getByRole('button', { name: 'Comment on this' }).tap();
+		await page.getByRole('textbox', { name: 'Your comment' }).fill('Name the owner for each one.');
+		await page.getByRole('button', { name: 'Save comment' }).click();
+		await expect(page.getByRole('list').getByText('Name the owner for each one.')).toBeVisible();
+	});
 
 	test('tapping a paragraph comments on it, and the page does not scroll sideways', async ({
 		page

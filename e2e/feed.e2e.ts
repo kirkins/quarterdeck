@@ -236,3 +236,17 @@ test('the feed fits a 375 px phone without sideways scrolling', async ({ page })
 	);
 	expect(overflows).toBe(false);
 });
+
+test('a captain reply with comments says how many, and the report it answers is one link away', async ({
+	page
+}) => {
+	await openFeed(page);
+	const reply = page.locator('li.msg[data-entry="c-701"]');
+	await reveal(page, reply);
+	await expect(reply.locator('.comments')).toHaveText('2 comments on Onboarding guide, draft 2');
+
+	const report = page.locator('li.msg[data-entry="d-701"]');
+	await expect(
+		report.getByRole('link', { name: 'Open report: Onboarding guide, draft 2' })
+	).toBeVisible();
+});

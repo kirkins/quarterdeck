@@ -284,6 +284,45 @@
 			}
 		},
 		{
+			"machine": "lab-box",
+			"home": "desk-lab",
+			"ship": "docs-site",
+			"id": "c-701",
+			"created_ms": 1792058000000,
+			"from": "captain",
+			"to": "docs-site",
+			"kind": "reply",
+			"request_kind": null,
+			"correlation": "d-701",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"end_reason": null,
+			"answered_by": null,
+			"answered_ms": null,
+			"ended_by": null,
+			"ended_ms": null,
+			"body": "Two changes before the tag, both in the comments.",
+			"payload": {
+				"annotations": [
+					{
+						"anchor": {
+							"quote": "A new captain reads three things first:"
+						},
+						"comment": "Say who the captain is."
+					},
+					{
+						"anchor": {
+							"selector": "1/0",
+							"quote": "the Decisions page"
+						},
+						"comment": "Keep the order."
+					}
+				]
+			}
+		},
+		{
 			"machine": "north-rig",
 			"home": "desk-north",
 			"ship": "ops",

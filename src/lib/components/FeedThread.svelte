@@ -23,6 +23,7 @@
 		forwardCursorOf,
 		mergeEntries,
 		newestOf,
+		commentsOf,
 		outcomesOf,
 		readUpTo,
 		readLastRead,
@@ -146,6 +147,7 @@
 	const failure = $derived(failureFrom(form, ['answer']));
 	const dismissFailure = $derived(failureFrom(form, ['dismiss']));
 	const outcomes = $derived(outcomesOf(entries, now));
+	const comments = $derived(commentsOf(entries));
 	/** An ask whose answer or dismiss failed opens, so the error is seen where it was made. */
 	const failedKeys = $derived(
 		[failure, dismissFailure].flatMap((f) => (f ? [askKey(f.from, f.id)] : []))
@@ -448,6 +450,7 @@
 					{dismissFailure}
 					fresh={freshKeys.includes(row.key)}
 					outcome={outcomes.get(row.key) ?? null}
+					comments={comments.get(row.key) ?? null}
 					expanded={expandedKey === row.key || failedKeys.includes(row.key)}
 					ontoggle={() => toggleAsk(row.key)}
 				/>

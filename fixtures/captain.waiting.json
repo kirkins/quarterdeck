@@ -519,7 +519,36 @@
 					"report": {
 						"title": "Rollup audit",
 						"format": "html",
-						"report_id": "rollup-audit-7"
+						"report_id": "rollup-audit-7",
+						"bytes": 1200
+					}
+				}
+			}
+		},
+		{
+			"ship": "ledger",
+			"asked_ms": 1792299000000,
+			"age_ms": 1000000,
+			"step": null,
+			"mail": {
+				"id": "f0020-ledger-reconcile",
+				"from": "ledger",
+				"to": "captain",
+				"kind": "notice",
+				"request_kind": null,
+				"task_id": "ledger-reconcile",
+				"correlation": null,
+				"created_ms": 1792299000000,
+				"urgency": "normal",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "The reconciliation is ready to read. It was written on boreas.",
+				"payload": {
+					"report": {
+						"title": "Ledger reconciliation, March",
+						"format": "markdown",
+						"report_id": "rep-ledger-4",
+						"bytes": 1450
 					}
 				}
 			}

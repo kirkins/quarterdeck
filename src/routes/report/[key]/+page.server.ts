@@ -5,10 +5,22 @@ import { triageKind } from '#lib/triage.ts';
 import { getPortal, loadItems } from '#lib/server/app.ts';
 import { renderFrame } from '#lib/server/render.ts';
 import { errorText, submitAnnotations } from '#lib/server/submit.ts';
+import { notHeldHere } from '#lib/server/source.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Only a request or a notice carries a report the captain comments on. */
 const REPORT_KINDS = new Set(['request', 'notice']);
+
+/**
+ * True when the ship that sent the report runs on another machine. Its report
+ * is stored there, and report.get on this machine cannot reach it yet.
+ */
+async function sentFromElsewhere(ship: string): Promise<boolean> {
+	const read = await getPortal().source.snapshot();
+	if (read.status !== 'ok') return false;
+	const machine = read.snapshot.machines.find((m) => m.ships.some((s) => s.name === ship));
+	return machine !== undefined && machine.link !== 'here';
+}
 
 export const load: PageServerLoad = async ({ params }) => {
 	const { answers } = getPortal();
@@ -17,7 +29,13 @@ export const load: PageServerLoad = async ({ params }) => {
 	try {
 		found = await loadItems();
 	} catch (error) {
-		return { now, ask: null, error: `Could not reach Privateer: ${errorText(error)}`, frame: null };
+		return {
+			now,
+			ask: null,
+			error: `Could not reach Privateer: ${errorText(error)}`,
+			elsewhere: null,
+			frame: null
+		};
 	}
 	const key = params.key;
 	const item = found.items.find((m) => askKey(m.from, m.id) === key);
@@ -26,7 +44,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const reported = reportOf(item.payload);
 	if (!reported) error(404, 'This ask has no report.');
 	if (!reported.ok) {
-		return { now, ask: null, error: reported.error, frame: null };
+		return { now, ask: null, error: reported.error, elsewhere: null, frame: null };
 	}
 
 	const ref = reported.value;
@@ -37,15 +55,26 @@ export const load: PageServerLoad = async ({ params }) => {
 		} else {
 			const fetched = await getPortal().source.report(ref.report_id);
 			const checked = checkContent(fetched.content);
-			if (!checked.ok) return { now, ask: null, error: checked.error, frame: null };
+			if (!checked.ok)
+				return { now, ask: null, error: checked.error, elsewhere: null, frame: null };
 			content = checked.value;
 		}
 	} catch (error) {
+		if (ref.kind === 'by_id' && notHeldHere(error) && (await sentFromElsewhere(item.from))) {
+			return {
+				now,
+				ask: null,
+				error: null,
+				elsewhere: { ship: item.from, title: ref.title },
+				frame: null
+			};
+		}
 		console.error('[quarterdeck] could not load report:', error);
 		return {
 			now,
 			ask: null,
 			error: `Could not load this report: ${errorText(error)}`,
+			elsewhere: null,
 			frame: null
 		};
 	}
@@ -54,6 +83,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	return {
 		now,
 		error: null,
+		elsewhere: null,
 		ask: {
 			key,
 			from: item.from,

@@ -203,6 +203,8 @@ hr { border: 0; border-top: 1px solid light-dark(rgb(15 29 46 / 0.12), rgb(196 2
 	color: light-dark(#f4f1ea, #08121d);
 	box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
 	cursor: pointer;
+	/* Absolute, so it shrinks to the room left of its point: one line, or it stacks letters. */
+	white-space: nowrap;
 }
 .qd-pop:disabled { opacity: 0.5; cursor: default; }
 .qd-pill { transform: translate(-100%, -100%); }

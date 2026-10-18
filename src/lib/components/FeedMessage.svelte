@@ -51,6 +51,8 @@
 		fresh?: boolean;
 		/** What happened to a closed ask, in words (outcomesOf); null while open or for a plain message. */
 		outcome: string | null;
+		/** The comments a captain reply or notice carries, as one line (commentsOf); null when none. */
+		comments: string | null;
 		/** An open ask whose form is showing. A failed answer opens it too. */
 		expanded: boolean;
 		/** Opens or closes an open ask's form. */
@@ -70,6 +72,7 @@
 		dismissFailure,
 		fresh = false,
 		outcome,
+		comments,
 		expanded,
 		ontoggle
 	}: Props = $props();
@@ -238,12 +241,16 @@
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				{/if}
 
-				{#if kind === 'report' && title}
+				{#if title}
 					<p class="report">
 						<a class="open-report" href={resolve('/report/[key]', { key })}>
 							<Icon name="doc" size={15} /> Open report: {title}
 						</a>
 					</p>
+				{/if}
+
+				{#if comments}
+					<p class="comments"><Icon name="doc" size={15} /> {comments}</p>
 				{/if}
 
 				{#if entry.local && !entry.local.sent}
@@ -554,6 +561,14 @@
 
 	.report {
 		margin: 0;
+	}
+	.comments {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		margin: 0;
+		color: var(--sea-strong);
+		font-size: var(--text-sm);
 	}
 	.open-report {
 		display: inline-flex;

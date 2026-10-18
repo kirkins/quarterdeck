@@ -75,12 +75,12 @@ export interface FetchedReport {
 }
 
 /**
- * Read `report.get`. Its answer may carry the report at the top level or
- * under `report`; either way the content must be a string within the limit.
+ * Read `report.get`: `{id, ship, title, format, bytes, created_ms, content}` at
+ * the top level, as Privateer returns it. The format must be markdown or html,
+ * and the content a string within the limit.
  */
 export function parseFetched(result: unknown, id: string): FetchedReport {
-	const root = rec(result);
-	const body = rec(root?.report) ?? root;
+	const body = rec(result);
 	const format = body?.format;
 	if (!REPORT_FORMATS.includes(format as ReportFormat)) {
 		throw new Error(`report ${id} came back without a markdown or html format`);
@@ -88,6 +88,21 @@ export function parseFetched(result: unknown, id: string): FetchedReport {
 	const content = checkContent(body?.content);
 	if (!content.ok) throw new Error(`report ${id}: ${content.error}`);
 	return { format: format as ReportFormat, content: content.value };
+}
+
+/**
+ * Privateer's answer when no fleet home on this machine holds the report. A
+ * report stored on another machine is not reached yet, so it reads the same.
+ */
+const NOT_HELD_HERE = /^no report \S+ in the fleet$/;
+
+/** True when `report.get` said the report is not held on this machine. */
+export function notHeldHere(error: unknown): boolean {
+	return (
+		error instanceof PrivateerCommandError &&
+		typeof error.error === 'string' &&
+		NOT_HELD_HERE.test(error.error)
+	);
 }
 
 function rec(value: unknown): Record<string, unknown> | null {
@@ -389,7 +404,8 @@ export class FixtureSource implements Source {
 	async report(id: string): Promise<FetchedReport> {
 		const raw = rec(await this.#read(REPORT_FIXTURE));
 		const held = rec(raw?.reports)?.[id];
-		if (!held) throw new Error(`report ${id} is not in the fixtures`);
+		// What report.get says for a report no home on this machine holds.
+		if (!held) throw new PrivateerCommandError('report.get', `no report ${id} in the fleet`);
 		return parseFetched(held, id);
 	}
 
