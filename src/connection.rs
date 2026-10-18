@@ -2,10 +2,12 @@
 //! attempt worked. Polls never overlap, and an answer to a poll made under an
 //! older config is dropped.
 
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use data::captain::Waiting;
 use data::config::{self, Source};
+use data::markdown::{self, Document};
 use data::privateer::{Client, Error};
 use iced::Task;
 use serde_json::json;
@@ -23,6 +25,8 @@ pub struct Connection {
     in_flight: bool,
     /// The last answer that worked, kept while a later poll fails.
     pub waiting: Option<Waiting>,
+    /// Each ask's body as Markdown, by mail id, parsed once per answer.
+    pub bodies: HashMap<String, Document>,
     pub error: Option<Error>,
     /// When Privateer last answered, in ms since the epoch.
     pub checked_ms: Option<i64>,
@@ -36,6 +40,7 @@ impl Connection {
             generation: 0,
             in_flight: false,
             waiting: None,
+            bodies: HashMap::new(),
             error: None,
             checked_ms: None,
         }
@@ -95,6 +100,16 @@ impl Connection {
                 self.in_flight = false;
                 match result {
                     Ok(waiting) => {
+                        self.bodies = waiting
+                            .waiting
+                            .iter()
+                            .map(|item| {
+                                (
+                                    item.mail.id.clone(),
+                                    markdown::parse(&item.mail.body, None),
+                                )
+                            })
+                            .collect();
                         self.waiting = Some(waiting);
                         self.error = None;
                         self.checked_ms = Some(now_ms());

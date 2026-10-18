@@ -59,13 +59,14 @@ Layout:
 - `src/screen/settings.rs`: the settings window.
 - `src/connection.rs`: polling Privateer, and what it last answered.
 - `data/src/privateer.rs`: running the privateer binary. `data/src/captain.rs`: what `captain.waiting` returns.
+- `data/src/markdown.rs` and `src/widget/markdown.rs`: Markdown into a document model, and drawing it. Ported from halloy-extend's Doc Lib parser and extension rich-text blocks; inline `$...$` math is not read, so prices stay text.
 - `fixtures/`: invented data for `source = "fixtures"`.
 - `src/appearance/`, `src/widget/`, `src/font.rs`, `src/icon.rs`, `src/window.rs`: the theme, widgets, fonts and window handling, from Halloy.
 - `data/`: config, themes, the saved layout and window, with no UI.
 
 ## Credits
 
-Quarterdeck builds on [Halloy](https://github.com/squidowl/halloy), the IRC client, and on halloy-extend, a fork of it. The theme system, widgets, font and icon handling and window persistence (`src/appearance/`, `src/widget/`, `src/font.rs`, `src/icon.rs`, `src/window.rs`, `data/src/appearance/`, `data/src/window/`) come from there, modified for Quarterdeck. It uses the same fork of [iced](https://github.com/iced-rs/iced) as Halloy. The bundled fonts are [Iosevka](https://github.com/be5invis/Iosevka) (SIL Open Font License) and Halloy's icon font built with [Fontello](https://fontello.com).
+Quarterdeck builds on [Halloy](https://github.com/squidowl/halloy), the IRC client, and on halloy-extend, a fork of it. The theme system, widgets, font and icon handling and window persistence (`src/appearance/`, `src/widget/`, `src/font.rs`, `src/icon.rs`, `src/window.rs`, `data/src/appearance/`, `data/src/window/`) come from there, modified for Quarterdeck, as does the Markdown parser and renderer. It uses the same fork of [iced](https://github.com/iced-rs/iced) as Halloy. The bundled fonts are [Iosevka](https://github.com/be5invis/Iosevka) (SIL Open Font License) and Halloy's icon font built with [Fontello](https://fontello.com).
 
 ## License
 

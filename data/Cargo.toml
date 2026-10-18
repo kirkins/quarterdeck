@@ -24,6 +24,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "process", "io-util", "time", "macros"] }
 toml = { workspace = true }
 toml_edit = { workspace = true }
+url = "2.5"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

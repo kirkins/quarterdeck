@@ -91,6 +91,18 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Open a web link from a message in the browser. Ships write these links,
+/// so only http and https are opened.
+fn open_link(url: &str) {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        log::info!("not opening {url}: only web links open from messages");
+        return;
+    }
+    if let Err(error) = open::that_detached(url) {
+        log::warn!("could not open {url}: {error}");
+    }
+}
+
 fn setup_logging() {
     let level = if cfg!(debug_assertions) {
         log::LevelFilter::Debug
@@ -222,6 +234,10 @@ impl Quarterdeck {
             {
                 Some(dashboard::Event::LayoutChanged) => self.save_layout(),
                 Some(dashboard::Event::OpenSettings) => self.open_settings(),
+                Some(dashboard::Event::OpenLink(url)) => {
+                    open_link(&url);
+                    Task::none()
+                }
                 Some(dashboard::Event::Refresh) => {
                     self.connection.poll().map(Message::Connection)
                 }
@@ -353,7 +369,7 @@ impl Quarterdeck {
 
         let dashboard = self
             .dashboard
-            .view(&self.config, &self.connection)
+            .view(&self.config, &self.connection, &self.theme)
             .map(Message::Dashboard);
 
         let content: Element<'_, Message> = match &self.config_error {
