@@ -244,6 +244,8 @@ test('a captain reply with comments says how many, and the report it answers is 
 	const reply = page.locator('li.msg[data-entry="c-701"]');
 	await reveal(page, reply);
 	await expect(reply.locator('.comments')).toHaveText('2 comments on Onboarding guide, draft 2');
+	// The comments line stands for the body, which only repeats it.
+	await expect(reply.locator('.body')).toHaveCount(0);
 
 	const report = page.locator('li.msg[data-entry="d-701"]');
 	await expect(

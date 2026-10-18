@@ -5,10 +5,13 @@
  * the two pages cannot disagree about what an action does.
  */
 import { askKey, toQuestion, type Answered, type MailItem } from '#lib/decision.ts';
+import { MAX_LIMIT as FIND_LIMIT } from '#lib/feed.ts';
 import { reportOf, type Annotation } from '#lib/report.ts';
+import type { FeedEntry } from '#lib/shapes.ts';
 import { buildReply, type AnswerInput, type ReplyArgs } from './answer.ts';
 import { getPortal, invalidateItems, loadItems } from './app.ts';
 import { buildDismiss } from './dismiss.ts';
+import { loadFeed } from './feed.ts';
 import { sendDismiss, sendReply } from './source.ts';
 
 /** Asks with a write on their way, so a double tap cannot act twice. */
@@ -34,20 +37,48 @@ type Prepared =
 	| { error: string }
 	| { record: Omit<Answered, 'at_ms' | 'sent'>; run: () => Promise<{ sent: boolean }> };
 
+function mailOf(entry: FeedEntry): MailItem {
+	return {
+		id: entry.id,
+		from: entry.from,
+		to: entry.to,
+		kind: entry.kind,
+		body: entry.body,
+		payload: entry.payload,
+		task_id: entry.task_id,
+		correlation: entry.correlation,
+		request_kind: entry.request_kind,
+		deadline_ms: entry.deadline_ms,
+		created_ms: entry.created_ms ?? undefined,
+		urgency: entry.urgency
+	};
+}
+
+/**
+ * An open item by its key, from the feed. A notice, and a report on its own, is not in
+ * captain.waiting, so it is found here. Null when the feed is not offered.
+ */
+export async function findOpenItem(key: string): Promise<MailItem | null> {
+	const read = await loadFeed({ limit: FIND_LIMIT, include_ship_mail: false, open_only: true });
+	if (read.status === 'unsupported') return null;
+	const entry = read.page.entries.find((e) => askKey(e.from, e.id) === key);
+	return entry ? mailOf(entry) : null;
+}
+
 /** Find the ask in what is owed now, and check it may take this action. */
 async function locate(
 	ref: AskRef,
 	refuse: Refuse
 ): Promise<{ ok: true; item: MailItem } | Extract<SubmitResult, { ok: false }>> {
-	let found;
+	const key = askKey(ref.from, ref.id);
+	let item: MailItem | null;
 	try {
 		// Always read fresh: the captain should never act on something already handled.
-		found = await loadItems(true);
+		const found = await loadItems(true);
+		item = found.items.find((m) => askKey(m.from, m.id) === key) ?? (await findOpenItem(key));
 	} catch (error) {
 		return { ok: false, status: 502, error: `Could not reach Privateer: ${errorText(error)}` };
 	}
-	const key = askKey(ref.from, ref.id);
-	const item = found.items.find((m) => askKey(m.from, m.id) === key);
 	if (!item) return { ok: false, status: 404, error: 'This ask is no longer waiting.' };
 	const why = refuse(item);
 	if (why) return { ok: false, status: 400, error: why };

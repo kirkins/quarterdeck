@@ -654,6 +654,22 @@ export interface UsageGroup {
 	usage: UsageTotals | null;
 	/** Harnesses in this group that report no usage. */
 	gaps: string[];
+	/** Jobs whose log was trimmed mid-run, so their usage may be low. */
+	partialJobs: number;
+}
+
+/**
+ * A machine in `usage.summary`'s `machines`. `reached` false means its usage is not in
+ * the totals. `via` "collect" means its usage came on its fleet.collect exchange, dated
+ * `asOf`. `unknown` names homes on a reached machine that were not read.
+ */
+export interface UsageMachine {
+	name: string;
+	reached: boolean;
+	via: string | null;
+	asOf: number | null;
+	unknown: string[];
+	error: string | null;
 }
 
 export interface UsageSummary {
@@ -661,6 +677,7 @@ export interface UsageSummary {
 	until_ms: number | null;
 	group_by: string;
 	groups: UsageGroup[];
+	machines: UsageMachine[];
 }
 
 /** A usage object's totals; totalTokens is derived when Privateer does not send it. */
@@ -682,7 +699,7 @@ export function parseUsageTotals(value: unknown): UsageTotals | null {
 	};
 }
 
-/** Read `usage.summary`. Each group carries its totals, its job count and its gaps. */
+/** Read `usage.summary`. Each group carries its totals, its job count, its gaps and its trimmed jobs. */
 export function parseUsageSummary(result: unknown): UsageSummary {
 	const root = rec(result);
 	return {
@@ -698,12 +715,34 @@ export function parseUsageSummary(result: unknown): UsageSummary {
 							key,
 							jobs: num(group.jobs),
 							usage: parseUsageTotals(group.usage),
-							gaps: strings(group.gaps)
+							gaps: strings(group.gaps),
+							partialJobs: num(group.partial_jobs) ?? 0
 						}
 					]
 				: [];
-		})
+		}),
+		machines: parseUsageMachines(root?.machines)
 	};
+}
+
+/** `usage.summary`'s machines. Each is listed whether or not its usage was read; no name, no entry. */
+export function parseUsageMachines(value: unknown): UsageMachine[] {
+	return list(value).flatMap((raw) => {
+		const machine = rec(raw);
+		const name = str(machine?.name);
+		return machine && name
+			? [
+					{
+						name,
+						reached: machine.reached !== false,
+						via: str(machine.via),
+						asOf: num(machine.as_of_ms),
+						unknown: strings(machine.unknown),
+						error: str(machine.error)
+					}
+				]
+			: [];
+	});
 }
 
 /**
@@ -719,6 +758,8 @@ export interface UsageRecord {
 	harness: string;
 	jobs: number;
 	usage: UsageTotals | null;
+	/** The job's log was trimmed mid-run, so its usage may be low. */
+	partial: boolean;
 }
 
 export function parseUsageRecords(result: unknown): UsageRecord[] {
@@ -738,7 +779,8 @@ export function parseUsageRecords(result: unknown): UsageRecord[] {
 						route,
 						harness,
 						jobs: num(record.jobs) ?? 0,
-						usage: parseUsageTotals(record.usage)
+						usage: parseUsageTotals(record.usage),
+						partial: record.partial === true
 					}
 				]
 			: [];

@@ -14,7 +14,8 @@ import {
 	groupLabel,
 	parseGrouping,
 	parsePeriod,
-	sinceFor
+	sinceFor,
+	untilFor
 } from './spend.ts';
 
 const NOW = Date.UTC(2026, 9, 17, 12);
@@ -369,9 +370,10 @@ describe('buildUsage', () => {
 					cacheWrite: 300_000,
 					totalTokens: 5_300_000
 				},
-				gaps: []
+				gaps: [],
+				partialJobs: 0
 			},
-			{ key: 'analytics', jobs: 2, usage: null, gaps: ['ferry'] },
+			{ key: 'analytics', jobs: 2, usage: null, gaps: ['ferry'], partialJobs: 0 },
 			{
 				key: 'docs-site',
 				jobs: 1,
@@ -382,13 +384,15 @@ describe('buildUsage', () => {
 					cacheWrite: null,
 					totalTokens: 60_000
 				},
-				gaps: []
+				gaps: [],
+				partialJobs: 0
 			}
-		]
+		],
+		machines: []
 	};
 
 	it('scales each bar to the largest group, with a visible minimum', () => {
-		const view = buildUsage(summary, 'ship');
+		const view = buildUsage(summary, 'ship', NOW);
 		expect(view.rows.map((r) => r.key)).toEqual(['billing', 'analytics', 'docs-site']);
 		expect(view.rows[0].share).toBe(100);
 		expect(view.rows[1].share).toBe(0);
@@ -397,7 +401,7 @@ describe('buildUsage', () => {
 	});
 
 	it('labels totals with input, output and cache apart, and names the gap', () => {
-		const view = buildUsage(summary, 'ship');
+		const view = buildUsage(summary, 'ship', NOW);
 		expect(view.rows[0]).toMatchObject({
 			totalLabel: '5.3M',
 			input: '800k',
@@ -419,8 +423,9 @@ describe('buildUsage', () => {
 
 	it('has no totals when nothing in the period reports usage', () => {
 		const none = buildUsage(
-			{ ...summary, groups: [{ key: 'x', jobs: 1, usage: null, gaps: ['ferry'] }] },
-			'route'
+			{ ...summary, groups: [{ key: 'x', jobs: 1, usage: null, gaps: ['ferry'], partialJobs: 0 }] },
+			'route',
+			NOW
 		);
 		expect(none.totals).toBeNull();
 		expect(none.rows[0].share).toBe(0);
@@ -432,10 +437,136 @@ describe('buildUsage', () => {
 				{
 					...summary,
 					group_by: 'day',
-					groups: [{ key: '2026-10-01', jobs: 1, usage: null, gaps: [] }]
+					groups: [{ key: '2026-10-01', jobs: 1, usage: null, gaps: [], partialJobs: 0 }]
 				},
-				'day'
+				'day',
+				NOW
 			).rows[0].label
 		).toBe('1 Oct');
+	});
+});
+
+describe('buildUsage with machines that are not in the totals', () => {
+	const summary: UsageSummary = {
+		since_ms: NOW - 7 * 24 * HOUR,
+		until_ms: null,
+		group_by: 'machine',
+		groups: [
+			{
+				key: 'atlas',
+				jobs: 2,
+				usage: {
+					input: 900_000,
+					output: 100_000,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 1_000_000
+				},
+				gaps: [],
+				partialJobs: 0
+			},
+			{
+				key: 'calypso',
+				jobs: 1,
+				usage: { input: 50_000, output: 5_000, cacheRead: 0, cacheWrite: 0, totalTokens: 55_000 },
+				gaps: [],
+				partialJobs: 1
+			}
+		],
+		machines: [
+			{ name: 'atlas', reached: true, via: null, asOf: null, unknown: [], error: null },
+			{
+				name: 'calypso',
+				reached: true,
+				via: 'collect',
+				asOf: NOW - 5 * 60_000,
+				unknown: [],
+				error: null
+			},
+			{
+				name: 'laptop',
+				reached: false,
+				via: 'collect',
+				asOf: NOW - 3 * HOUR,
+				unknown: [],
+				error: 'nothing carried from laptop lately'
+			}
+		]
+	};
+
+	it('says which machine is missing, and that the totals are not fleet-wide', () => {
+		const view = buildUsage(summary, 'machine', NOW);
+		expect(view.missing).toEqual([
+			{
+				name: 'laptop',
+				included: false,
+				asOf: 'as of 3h ago',
+				problem: 'nothing carried from laptop lately'
+			}
+		]);
+		expect(view.machines.find((m) => m.name === 'calypso')).toEqual({
+			name: 'calypso',
+			included: true,
+			asOf: 'as of 5m ago',
+			problem: null
+		});
+	});
+
+	it('lists an unreached machine by machine with no numbers, rather than dropping it', () => {
+		const view = buildUsage(summary, 'machine', NOW);
+		const laptop = view.rows.find((r) => r.key === 'laptop');
+		expect(laptop).toMatchObject({
+			jobs: null,
+			total: null,
+			totalLabel: 'not reached',
+			notReached: 'nothing carried from laptop lately'
+		});
+		expect(view.rows.map((r) => r.key)).toEqual(['atlas', 'calypso', 'laptop']);
+	});
+
+	it('does not add an unreached machine to the other groupings', () => {
+		const view = buildUsage(summary, 'ship', NOW);
+		expect(view.rows.map((r) => r.key)).toEqual(['atlas', 'calypso']);
+	});
+
+	it('names a reached machine whose homes were not read, as partly counted', () => {
+		const view = buildUsage(
+			{
+				...summary,
+				machines: [
+					{
+						name: 'atlas',
+						reached: true,
+						via: null,
+						asOf: null,
+						unknown: ['home:ledger'],
+						error: null
+					}
+				]
+			},
+			'machine',
+			NOW
+		);
+		expect(view.missing).toEqual([
+			{ name: 'atlas', included: true, asOf: null, problem: 'homes not read: home:ledger' }
+		]);
+	});
+
+	it('is complete, with nothing missing, when every machine is read', () => {
+		const view = buildUsage({ ...summary, machines: [summary.machines[0]] }, 'machine', NOW);
+		expect(view.missing).toEqual([]);
+	});
+
+	it('counts the trimmed jobs across groups', () => {
+		expect(buildUsage(summary, 'machine', NOW).trimmedJobs).toBe(1);
+	});
+});
+
+describe('untilFor', () => {
+	it('ends a whole-day period at the UTC midnight after today, and leaves the 24 h period open', () => {
+		const midday = Date.UTC(2026, 9, 17, 12);
+		expect(untilFor('7d', midday)).toBe(Date.UTC(2026, 9, 18));
+		expect(untilFor('30d', midday)).toBe(Date.UTC(2026, 9, 18));
+		expect(untilFor('24h', midday)).toBeUndefined();
 	});
 });

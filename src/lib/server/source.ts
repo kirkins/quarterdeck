@@ -15,6 +15,7 @@ import {
 	mergeSnapshot,
 	parseShipProfile,
 	parseSnapshot,
+	parseUsageMachines,
 	parseUsageRecords,
 	parseUsageSummary,
 	type FeedEntry,
@@ -560,11 +561,17 @@ export class FixtureSource implements Source {
 		return { status: 'ok', value: parseShipProfile(ships[ship], ship) };
 	}
 
-	/** Records are grouped here, the way usage.summary would group them live. */
+	/** Records are grouped here, the way usage.summary would group them live, with the fixture's machines. */
 	async usage(query: UsageQuery): Promise<Read<UsageSummary>> {
 		const raw = await this.#read(USAGE_FIXTURE, this.#now(), true);
 		if (raw === null) return { status: 'unsupported' };
-		return { status: 'ok', value: summarizeRecords(parseUsageRecords(raw), query) };
+		return {
+			status: 'ok',
+			value: {
+				...summarizeRecords(parseUsageRecords(raw), query),
+				machines: parseUsageMachines((raw as { machines?: unknown }).machines)
+			}
+		};
 	}
 }
 

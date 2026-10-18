@@ -846,7 +846,13 @@ describe('parseUsageSummary', () => {
 			cacheWrite: 1,
 			totalTokens: 126
 		});
-		expect(summary.groups[1]).toEqual({ key: 'analytics', jobs: 2, usage: null, gaps: ['ferry'] });
+		expect(summary.groups[1]).toEqual({
+			key: 'analytics',
+			jobs: 2,
+			usage: null,
+			gaps: ['ferry'],
+			partialJobs: 0
+		});
 		expect(summary.groups[2].usage?.totalTokens).toBe(4);
 		expect(summary.group_by).toBe('ship');
 	});
@@ -872,6 +878,48 @@ describe('parseUsageSummary', () => {
 	it('is empty and calm for a missing or malformed reply', () => {
 		expect(parseUsageSummary(undefined).groups).toEqual([]);
 		expect(parseUsageSummary({ groups: [{ jobs: 1 }, 7] }).groups).toEqual([]);
+		expect(parseUsageSummary(undefined).machines).toEqual([]);
+	});
+
+	it('reads the trimmed jobs of a group, as zero when none are sent', () => {
+		const summary = parseUsageSummary({
+			groups: [
+				{ key: 'billing', jobs: 2, usage: null, gaps: [], partial_jobs: 1 },
+				{ key: 'docs', jobs: 1, usage: null, gaps: [] }
+			]
+		});
+		expect(summary.groups.map((g) => g.partialJobs)).toEqual([1, 0]);
+	});
+
+	it('lists every machine, reached or not, with its collect date and unread homes', () => {
+		const summary = parseUsageSummary({
+			groups: [],
+			machines: [
+				{ name: 'atlas', reached: true, unknown: [] },
+				{ name: 'boreas', reached: true, unknown: ['home:ledger'] },
+				{ name: 'calypso', reached: true, via: 'collect', as_of_ms: 1_000 },
+				{ name: 'laptop', reached: false, via: 'collect', as_of_ms: null, error: 'quiet' },
+				{ reached: true },
+				'laptop'
+			]
+		});
+		expect(summary.machines).toEqual([
+			{ name: 'atlas', reached: true, via: null, asOf: null, unknown: [], error: null },
+			{
+				name: 'boreas',
+				reached: true,
+				via: null,
+				asOf: null,
+				unknown: ['home:ledger'],
+				error: null
+			},
+			{ name: 'calypso', reached: true, via: 'collect', asOf: 1_000, unknown: [], error: null },
+			{ name: 'laptop', reached: false, via: 'collect', asOf: null, unknown: [], error: 'quiet' }
+		]);
+	});
+
+	it('treats a machine with no reached field as reached', () => {
+		expect(parseUsageSummary({ machines: [{ name: 'atlas' }] }).machines[0].reached).toBe(true);
 	});
 });
 
@@ -893,6 +941,25 @@ describe('parseUsageRecords', () => {
 		});
 		expect(records).toHaveLength(1);
 		expect(records[0].usage).toBeNull();
+		expect(records[0].partial).toBe(false);
+	});
+
+	it('marks a job whose log was trimmed', () => {
+		const [record] = parseUsageRecords({
+			records: [
+				{
+					ts_ms: NOW,
+					machine: 'atlas',
+					ship: 'billing',
+					route: 'plan-main',
+					harness: 'tidewater',
+					jobs: 1,
+					usage: null,
+					partial: true
+				}
+			]
+		});
+		expect(record.partial).toBe(true);
 	});
 });
 

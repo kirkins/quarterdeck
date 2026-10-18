@@ -212,8 +212,8 @@ describe('commentRights', () => {
 		expect(commentRights('request', 'request')).toEqual({ comment: true, send: true });
 	});
 
-	it('takes comments on a notice, but does not send them until Privateer accepts them', () => {
-		expect(commentRights('notice', 'notice')).toEqual({ comment: true, send: false });
+	it('takes comments on a notice, and sends them as its annotations', () => {
+		expect(commentRights('notice', 'notice')).toEqual({ comment: true, send: true });
 	});
 
 	it('reads a report on its own, and takes no comments on it', () => {

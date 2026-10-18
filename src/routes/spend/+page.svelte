@@ -208,8 +208,26 @@
 		</EmptyState>
 	{:else if view}
 		<p class="period" aria-live="polite">
-			Tokens for {PERIODS[data.period].long}, {view.jobs} jobs
+			Tokens for {PERIODS[data.period].long}, {view.jobs} jobs{view.missing.length > 0
+				? ', from the machines reached'
+				: ''}
 		</p>
+
+		{#each view.missing as machine (machine.name)}
+			<p class="callout callout-warn partial" data-machine={machine.name} role="note">
+				<Icon name="alert" size={16} />
+				<span>
+					{#if machine.included}
+						Partial: {machine.name} only partly counted ({machine.problem}).
+					{:else}
+						Partial: {machine.name} not included ({machine.problem}{machine.asOf
+							? `; data ${machine.asOf}`
+							: ''}).
+					{/if}
+					The totals below are not fleet-wide.
+				</span>
+			</p>
+		{/each}
 
 		<dl class="totals">
 			<div class="total-main">
@@ -230,13 +248,30 @@
 			{view.labels.cacheWrite}.
 		</p>
 
+		{#if view.trimmedJobs > 0}
+			<p class="cache trimmed">Some logs were trimmed; totals may be low.</p>
+		{/if}
+
+		{#if view.machines.length > 0}
+			<ul class="machines" aria-label="Machines in these totals">
+				{#each view.machines as machine (machine.name)}
+					<li data-machine={machine.name} data-included={machine.included}>
+						<span class="machine-name">{machine.name}</span>
+						{#if machine.asOf}<span class="machine-asof">{machine.asOf}</span>{/if}
+						{#if !machine.included}<span class="gap-tag">not reached</span>{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+
 		{#if view.gaps.length > 0}
 			<p class="gap callout callout-warn" role="note">
 				<Icon name="alert" size={16} />
 				<span>
 					{view.gaps.join(', ')}
 					{view.gaps.length === 1 ? 'reports' : 'report'} no usage, so
-					{view.gaps.length === 1 ? 'its' : 'their'} tokens are missing from these numbers.
+					{view.gaps.length === 1 ? 'its' : 'their'} tokens are missing from these numbers. Jobs from
+					before usage was recorded count as gaps too.
 				</span>
 			</p>
 		{/if}
@@ -272,21 +307,28 @@
 		{:else}
 			<ol class="ranked">
 				{#each view.rows as row (row.key)}
-					<li class="rank" data-key={row.key}>
+					<li class="rank" data-key={row.key} data-not-reached={row.notReached !== null}>
 						<div class="rank-head">
 							<span class="rank-name">{row.label}</span>
 							<span class="rank-value">{row.totalLabel}</span>
 						</div>
 						<span class="bar" aria-hidden="true"><span style="width: {row.share}%"></span></span>
-						<p class="rank-meta">
-							{row.jobs ?? 0} jobs
-							{#if row.total !== null}
-								· in {row.input}, out {row.output}
-							{/if}
-							{#if row.gaps.length > 0}
-								· <span class="gap-tag">{row.gaps.join(', ')} reports no usage</span>
-							{/if}
-						</p>
+						{#if row.notReached !== null}
+							<p class="rank-meta gap-tag">Not included: {row.notReached}</p>
+						{:else}
+							<p class="rank-meta">
+								{row.jobs ?? 0} jobs
+								{#if row.total !== null}
+									· in {row.input}, out {row.output}
+								{/if}
+								{#if row.gaps.length > 0}
+									· <span class="gap-tag">{row.gaps.join(', ')} reports no usage</span>
+								{/if}
+								{#if row.partialJobs > 0}
+									· <span>some logs trimmed</span>
+								{/if}
+							</p>
+						{/if}
 					</li>
 				{/each}
 			</ol>
@@ -545,6 +587,25 @@
 	}
 	.gap-tag {
 		color: var(--warn);
+	}
+	.partial {
+		margin-bottom: var(--s-3);
+	}
+	.machines {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--s-1) var(--s-4);
+		margin-bottom: var(--s-4);
+		font-size: var(--text-xs);
+		color: var(--ink-3);
+	}
+	.machines li {
+		display: flex;
+		gap: var(--s-2);
+	}
+	.machine-name {
+		font-family: var(--font-mono);
+		color: var(--ink-2);
 	}
 
 	.ranked {
