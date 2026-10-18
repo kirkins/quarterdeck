@@ -12,14 +12,29 @@ import {
 	type MailItem
 } from '#lib/decision.ts';
 import { reportOf } from '#lib/report.ts';
+import { formatAge } from '#lib/time.ts';
 import type { FeedEntry } from '#lib/shapes.ts';
+
+// A page's two cursors, read in Privateer's own order; see parseFeed.
+export { firstCursorOf, forwardCursorOf } from '#lib/shapes.ts';
 
 /** The captain's own name on the wire. */
 export const CAPTAIN = 'captain';
 /** Entries per page, from the server, both for the first load and for older pages. */
 export const PAGE_LIMIT = 15;
+/** The most a page may ask for; Privateer caps a page at 200. */
+export const MAX_LIMIT = 200;
+/** `before` for the newest page. Every other cursor is one Privateer gave us. */
+export const NEWEST = 'now';
 /** How often a visible feed asks for new entries. */
 export const POLL_MS = 10_000;
+/**
+ * How often the open items are read afresh over the whole history. Forward
+ * polling follows cursors, so a desk copy collected late from another machine
+ * (older `created_ms` than the cursor that passed it) is not something a poll
+ * brings in; an `open_only` read does. See docs/DECISIONS.md section 16.
+ */
+export const OPEN_REFRESH_MS = 3 * 60_000;
 /** Within this many pixels of the end, the captain counts as being at the bottom. */
 export const BOTTOM_SLOP = 80;
 
@@ -36,29 +51,44 @@ export const FEED_KIND_LABELS: Record<FeedKind, string> = {
 	reply: 'Reply'
 };
 
-/** Query for `captain.feed`, as the feed route reads it from the URL. */
+/**
+ * A query for `captain.feed`. Both ends of the feed are cursors Privateer gave
+ * us, never a time: an entry's `created_ms` says when it was written, which for
+ * a desk copy collected late is older than its place in the feed.
+ */
 export interface FeedQuery {
-	/** Newer than this, in ms: how a poll asks for what is new. */
-	after?: number;
-	/** Older than this cursor: how a scroll-up asks for the page before. */
+	/** Read forward from this entry's cursor; the newest page's `next`. */
+	after?: string;
+	/** Read the page ending just before this cursor, or `NEWEST` for the newest page. */
 	before?: string;
 	limit: number;
 	ship?: string;
 	include_ship_mail: boolean;
+	/** Only the items still open, over the whole history rather than the pages loaded. */
+	open_only?: boolean;
+	/** Privateer's own state filter, as `states`. */
+	states?: string[];
 }
 
 /** Read the feed query from a URL's search params. Bad values fall back to the defaults. */
 export function feedQuery(params: URLSearchParams): FeedQuery {
-	const after = Number(params.get('after'));
-	const limit = Math.floor(Number(params.get('limit')));
+	const limit = params.get('limit') === null ? NaN : Math.floor(Number(params.get('limit')));
+	const after = params.get('after');
 	const before = params.get('before');
 	const ship = params.get('ship');
+	const states = params
+		.getAll('state')
+		.flatMap((value) => value.split(','))
+		.map((value) => value.trim())
+		.filter((value) => value !== '');
 	return {
-		...(params.get('after') !== null && Number.isFinite(after) && { after }),
+		...(after && { after }),
 		...(before && { before }),
-		limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 50) : PAGE_LIMIT,
+		limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), MAX_LIMIT) : PAGE_LIMIT,
 		...(ship && { ship }),
-		include_ship_mail: params.get('include_ship_mail') === '1'
+		include_ship_mail: params.get('include_ship_mail') === '1',
+		...(params.get('open_only') === '1' && { open_only: true }),
+		...(states.length > 0 && { states })
 	};
 }
 
@@ -96,6 +126,7 @@ export function toMailItem(entry: FeedEntry): MailItem {
 		payload: entry.payload,
 		task_id: entry.task_id,
 		correlation: entry.correlation,
+		request_kind: entry.request_kind,
 		urgency: entry.urgency,
 		deadline_ms: entry.deadline_ms,
 		created_ms: entry.created_ms ?? undefined,
@@ -139,25 +170,49 @@ function firstWords(text: string, count: number): string {
 }
 
 /**
- * What happened to a closed ask, in words, or null while it is open or for a plain
- * message. `reply` is the captain's reply to it, when the feed has one: its
- * payload.answer names the option chosen, and its body is what was written.
+ * Why an ask ended. Privateer sends `end_reason` beside the state; an older
+ * Privateer sent the reason as the state itself, so both are read here.
  */
-export function outcomeOf(entry: FeedEntry, reply: FeedEntry | null = null): string | null {
-	if (entry.state === 'dismissed') {
-		const kind = feedKindOf(entry);
+export function endReasonOf(entry: FeedEntry): string | null {
+	return entry.end_reason ?? entry.state;
+}
+
+/** When an ask was answered or otherwise closed, whichever Privateer reported first. */
+export function closedAtOf(entry: FeedEntry): number | null {
+	return entry.answered_ms ?? entry.ended_ms;
+}
+
+/**
+ * What happened to a closed ask, in words, or null while it is open or for a
+ * plain message. The captain's own reply, when the feed has it, says more than
+ * any reason can: its payload.answer names the option chosen, and its body is
+ * what was written. Without one, the end reason and the time it closed at do.
+ */
+export function outcomeOf(
+	entry: FeedEntry,
+	reply: FeedEntry | null = null,
+	now?: number
+): string | null {
+	const end = endReasonOf(entry);
+	const kind = feedKindOf(entry);
+	if (end === 'dismissed') {
 		return kind === 'notice' || kind === 'report' ? 'Marked read' : 'Dismissed';
 	}
-	if (entry.state !== 'answered') return null;
-	if (!reply) return 'Answered';
-	const option_id = chosenOption(reply);
-	const body = (reply.body ?? '').trim();
-	if (option_id !== null) {
-		const option = optionsOf(entry).find((o) => o.id === option_id);
-		const label = option?.label ?? body;
-		return label ? `You chose ${label}` : 'Answered';
+	if (end !== 'answered') return null;
+	if (reply) {
+		const option_id = chosenOption(reply);
+		const body = (reply.body ?? '').trim();
+		if (option_id !== null) {
+			const option = optionsOf(entry).find((o) => o.id === option_id);
+			const label = option?.label ?? body;
+			return label ? `You chose ${label}` : 'Answered';
+		}
+		return body ? `You answered: ${firstWords(body, 8)}` : 'Answered';
 	}
-	return body ? `You answered: ${firstWords(body, 8)}` : 'Answered';
+	// The reply is not in the loaded pages, so the end reason and its time stand in.
+	const at = closedAtOf(entry);
+	const ago = at !== null && now !== undefined ? formatAge(at, now) : null;
+	return ago ? `Answered ${ago}` : 'Answered';
 }
 
 /** The options an ask offers, read the same way the decision card reads them. */
@@ -166,14 +221,14 @@ export function optionsOf(entry: FeedEntry): CardOption[] {
 }
 
 /** The outcome of every closed ask in a list, keyed by entryKey. */
-export function outcomesOf(entries: readonly FeedEntry[]): Map<string, string> {
+export function outcomesOf(entries: readonly FeedEntry[], now?: number): Map<string, string> {
 	const replies = new Map<string, FeedEntry>();
 	for (const e of entries) {
 		if (e.from === CAPTAIN && e.correlation) replies.set(askKey(e.to, e.correlation), e);
 	}
 	const out = new Map<string, string>();
 	for (const e of entries) {
-		const outcome = outcomeOf(e, replies.get(entryKey(e)) ?? null);
+		const outcome = outcomeOf(e, replies.get(entryKey(e)) ?? null, now);
 		if (outcome) out.set(entryKey(e), outcome);
 	}
 	return out;
@@ -192,12 +247,6 @@ export function mergeEntries(
 
 function byTime(a: FeedEntry, b: FeedEntry): number {
 	return (a.created_ms ?? 0) - (b.created_ms ?? 0) || a.id.localeCompare(b.id);
-}
-
-/** Entries that are new since `after` (exclusive). */
-export function newerThan(entries: readonly FeedEntry[], after: number | null): FeedEntry[] {
-	if (after === null) return [];
-	return entries.filter((e) => (e.created_ms ?? 0) > after);
 }
 
 /** The newest creation time in a list, or null for an empty list. */
@@ -421,17 +470,25 @@ export function applyLocalAnswers(
 		const body = replyBody(answer);
 		added.push({
 			machine: null,
+			home: null,
 			ship: entry.ship,
 			id: `local-${entry.id}`,
+			cursor: null,
 			created_ms: answer.at_ms,
 			from: CAPTAIN,
 			to: entry.from,
 			kind: 'reply',
+			request_kind: null,
 			correlation: entry.id,
 			task_id: entry.task_id,
 			urgency: 'normal',
 			deadline_ms: null,
 			state: null,
+			end_reason: null,
+			answered_by: null,
+			answered_ms: null,
+			ended_by: null,
+			ended_ms: null,
 			body,
 			payload: answer.option_id ? { answer: { option_id: answer.option_id } } : {},
 			local: { sent: answer.sent }

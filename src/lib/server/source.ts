@@ -7,12 +7,15 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	assemble,
+	firstCursorOf,
+	forwardCursorOf,
 	parseFeed,
 	parseRoutesShow,
 	parseShipProfile,
 	parseSnapshot,
 	parseUsageRecords,
 	parseUsageSummary,
+	type FeedEntry,
 	type FeedPage,
 	type FleetSnapshot,
 	type RoutesConfig,
@@ -20,7 +23,7 @@ import {
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
-import { isShipToShip, type FeedQuery } from '#lib/feed.ts';
+import { isShipToShip, NEWEST, type FeedQuery } from '#lib/feed.ts';
 import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
 import { REPORT_FORMATS, checkContent, type ReportFormat } from '#lib/report.ts';
 import type { ReplyArgs } from './answer.ts';
@@ -86,6 +89,11 @@ function rec(value: unknown): Record<string, unknown> | null {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: null;
+}
+
+/** The feed's own order: by cursor, which is arrival order, not creation time. */
+function byCursor(a: FeedEntry, b: FeedEntry): number {
+	return Number(a.cursor ?? 0) - Number(b.cursor ?? 0);
 }
 
 /**
@@ -252,10 +260,26 @@ export class FixtureSource implements Source {
 	#feedBase: number | undefined;
 	/** When each held feed message first arrived; see feed(). */
 	readonly #arrivals = new Map<string, number>();
+	/** The cursor Privateer would have given each message, in the order they arrived. */
+	readonly #cursors = new Map<string, string>();
 
 	constructor(dir: string, now: () => number = Date.now) {
 		this.#dir = dir;
 		this.#now = now;
+	}
+
+	/**
+	 * One message's place in the feed, given when it arrives, so a cursor never
+	 * moves once it has been handed out. A message collected late from another
+	 * machine gets a cursor at the newest end while keeping its own older
+	 * `created_ms`, which is exactly why paging is done on cursors and not times.
+	 */
+	#cursorFor(key: string): string {
+		const held = this.#cursors.get(key);
+		if (held !== undefined) return held;
+		const cursor = String(this.#cursors.size + 1);
+		this.#cursors.set(key, cursor);
+		return cursor;
 	}
 
 	/** One fixture file as parsed JSON, or null when it is absent. */
@@ -302,35 +326,48 @@ export class FixtureSource implements Source {
 	}
 
 	/**
-	 * The feed as captain.feed would answer it. `after` lists what is newer; otherwise
-	 * the newest `limit` entries, or the page before `before`, whose cursor is the
-	 * index of its first entry.
+	 * The feed as captain.feed answers it: oldest first, one page at a time, by
+	 * cursor. `before: "now"` (or no `before`) is the newest page, `before` is a
+	 * cursor to read the page ending before it, and `after` reads forward from
+	 * one. `next` is the cursor to continue forward with, and null once a page
+	 * reaches the end of the feed.
 	 *
 	 * The fixture's times are pinned to the moment this process first reads the
 	 * feed, so a poll sees only what is really new. An entry with `arrives_in_s`
 	 * is held back until that many seconds after then, so the live feed can be
-	 * seen to bring a message in.
+	 * seen to bring a message in. An entry marked `desk_copy` is a copy collected
+	 * late from another machine: it keeps its own older `created_ms` and takes a
+	 * cursor at the newest end, so forward polling on created_ms alone would
+	 * never have shown it.
 	 */
 	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
 		this.#feedBase ??= this.#now();
 		const elapsed = this.#now() - this.#feedBase;
 		const raw = await this.#read(FEED_FIXTURE, this.#feedBase);
 		if (raw === null) return { status: 'unsupported' };
-		const sent = rec(raw)?.entries;
-		const arrived: unknown[] = [];
-		for (const e of Array.isArray(sent) ? sent : []) {
-			const delay = rec(e)?.arrives_in_s;
-			if (typeof delay !== 'number') {
-				arrived.push(e);
-			} else if (delay * 1000 <= elapsed) {
+		const held = rec(raw)?.entries;
+		const arrived: FeedEntry[] = [];
+		for (const e of Array.isArray(held) ? held : []) {
+			const entry = rec(e);
+			if (!entry) continue;
+			const delay = entry.arrives_in_s;
+			if (typeof delay === 'number' && delay * 1000 > elapsed) continue;
+			const id = String(entry.id);
+			const key = `${entry.from}\u0000${id}`;
+			const deskCopy = entry.desk_copy === true;
+			let created = entry.created_ms;
+			if (typeof delay === 'number' && !deskCopy) {
 				// A held message is stamped when it first arrives, so it is newer than anything before it.
-				const id = String(rec(e)?.id);
 				if (!this.#arrivals.has(id)) this.#arrivals.set(id, this.#now());
-				arrived.push({ ...(rec(e) ?? {}), created_ms: this.#arrivals.get(id) });
+				created = this.#arrivals.get(id);
 			}
+			arrived.push(
+				...parseFeed({ entries: [{ ...entry, created_ms: created, cursor: this.#cursorFor(key) }] })
+					.entries
+			);
 		}
-		const visible = parseFeed({ entries: arrived })
-			.entries.filter((e) => query.include_ship_mail || !isShipToShip(e))
+		const visible = arrived
+			.filter((e) => query.include_ship_mail || !isShipToShip(e))
 			.filter(
 				(e) =>
 					query.ship === undefined ||
@@ -338,27 +375,40 @@ export class FixtureSource implements Source {
 					e.from === query.ship ||
 					e.to === query.ship
 			)
-			.sort((a, b) => (a.created_ms ?? 0) - (b.created_ms ?? 0));
+			.filter((e) => !query.open_only || e.state === 'open')
+			.filter((e) => !query.states || (e.state !== null && query.states.includes(e.state)))
+			.sort(byCursor);
+		const indexOf = (cursor: string): number => visible.findIndex((e) => e.cursor === cursor);
+
 		if (query.after !== undefined) {
-			const after = query.after;
+			const from = indexOf(query.after);
+			const rest = from < 0 ? visible : visible.slice(from + 1);
 			return {
 				status: 'ok',
 				value: {
-					entries: visible.filter((e) => (e.created_ms ?? 0) > after),
-					more: false,
-					next: null
+					entries: rest,
+					more: rest.length < visible.length,
+					next: forwardCursorOf(rest),
+					first: firstCursorOf(rest)
 				}
 			};
 		}
+
 		const end =
-			query.before === undefined ? visible.length : Math.min(Number(query.before), visible.length);
+			query.before === undefined || query.before === NEWEST
+				? visible.length
+				: Math.max(0, indexOf(query.before));
 		const start = Math.max(0, end - query.limit);
+		const page = visible.slice(start, end);
 		return {
 			status: 'ok',
 			value: {
-				entries: visible.slice(start, end),
+				entries: page,
 				more: start > 0,
-				next: start > 0 ? String(start) : null
+				// Privateer sends a null once a page reaches the end of the feed; parseFeed fills
+				// that with the last entry's own cursor, and this stands for the filled value.
+				next: forwardCursorOf(page),
+				first: firstCursorOf(page)
 			}
 		};
 	}
