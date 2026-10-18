@@ -11,17 +11,17 @@ use data::captain::Item;
 use data::decision::{self, Answer, Card, Choice};
 use data::privateer::{Error, Sent};
 use data::triage::{self, Section};
-use iced::Length;
 use iced::widget::{
     button, column, container, row, scrollable, space, text_input,
 };
+use iced::{Border, Length};
 use serde_json::Value;
 
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Details};
-use crate::font;
 use crate::widget::{Column, Element, markdown, text};
+use crate::{font, icon};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -301,9 +301,22 @@ impl Triage {
                 || preview(&item.mail.body, 180),
                 |d| preview(&d.card.question, 180),
             );
+            let mut lines = column![text(summary)].spacing(2);
+            if let Some(choice) = details
+                .and_then(|d| d.card.options.iter().find(|c| c.recommended))
+            {
+                lines = lines.push(
+                    row![
+                        icon::star().style(theme::text::success),
+                        text(format!("Recommended: {}", choice.label))
+                            .style(theme::text::secondary),
+                    ]
+                    .spacing(4),
+                );
+            }
             return column![
                 header,
-                button(text(summary))
+                button(lines)
                     .padding(0)
                     .style(theme::button::bare)
                     .on_press(Message::Expand(key)),
@@ -543,19 +556,23 @@ fn option_view<'a>(
     choice: &'a Choice,
     selected: bool,
 ) -> Element<'a, Message> {
-    let mut content =
-        column![text(choice.label.as_str()).font(font::MONO_BOLD.clone())]
-            .spacing(4);
-
-    let mut badges = row![].spacing(10);
+    // The ship's recommendation is marked, never preselected.
+    let mut title =
+        row![text(choice.label.as_str()).font(font::MONO_BOLD.clone())]
+            .spacing(10);
     if choice.recommended {
-        badges = badges.push(text("recommended").style(theme::text::success));
+        title = title.push(
+            row![
+                icon::star().style(theme::text::success),
+                text("Recommended").style(theme::text::success),
+            ]
+            .spacing(4),
+        );
     }
+    let mut content = column![title].spacing(4);
     if let Some(cost) = &choice.cost {
-        badges = badges.push(text(cost.as_str()).style(theme::text::secondary));
-    }
-    if choice.recommended || choice.cost.is_some() {
-        content = content.push(badges);
+        content =
+            content.push(text(cost.as_str()).style(theme::text::secondary));
     }
     if let Some(what) = &choice.what_happens {
         content =
@@ -565,8 +582,16 @@ fn option_view<'a>(
     button(content)
         .width(Length::Fill)
         .padding([8, 10])
-        .style(move |theme, status| {
-            theme::button::secondary(theme, status, selected)
+        .style(move |theme: &Theme, status| {
+            let mut style = theme::button::secondary(theme, status, selected);
+            if choice.recommended {
+                style.border = Border {
+                    color: theme.styles().text.success.color.scale_alpha(0.6),
+                    width: 1.0,
+                    radius: 4.0.into(),
+                };
+            }
+            style
         })
         .on_press(Message::Choose(key.to_owned(), choice.id.clone()))
         .into()
