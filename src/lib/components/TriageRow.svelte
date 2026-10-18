@@ -4,6 +4,7 @@
 	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, isoTime, urgencyOf } from '#lib/time.ts';
 	import { KIND_LABELS, type TriageKind, type TriageRow } from '#lib/triage.ts';
+	import CopyStep from './CopyStep.svelte';
 	import DecisionCard from './DecisionCard.svelte';
 	import Dismiss from './Dismiss.svelte';
 	import { resolve } from '$app/paths';
@@ -55,17 +56,6 @@
 			['Environment', payload.environment]
 		].filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== '');
 	});
-
-	let copied = $state(false);
-	async function copyStep(text: string) {
-		try {
-			await navigator.clipboard.writeText(text);
-			copied = true;
-			setTimeout(() => (copied = false), 1600);
-		} catch {
-			// No clipboard here (or permission refused): the step stays on screen to copy by hand.
-		}
-	}
 </script>
 
 <li class="row kind-{row.kind}" class:open data-row={item.id} data-kind={row.kind}>
@@ -120,10 +110,7 @@
 						<p class="label"><Icon name="hand" size={14} /> The step only you can do</p>
 						<pre class="command"><code>{step}</code></pre>
 						<div class="step-actions">
-							<button type="button" class="btn btn-quiet" onclick={() => copyStep(step)}>
-								<Icon name="link" size={14} />
-								{copied ? 'Copied' : 'Copy step'}
-							</button>
+							<CopyStep text={step} />
 							<form method="POST" action="?/reply">
 								<input type="hidden" name="from" value={item.from} />
 								<input type="hidden" name="id" value={item.id} />

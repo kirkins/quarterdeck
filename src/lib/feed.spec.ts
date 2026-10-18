@@ -15,6 +15,7 @@ import {
 	newerThan,
 	newestOf,
 	outcomeOf,
+	outcomesOf,
 	readFeedFilter,
 	readLastRead,
 	readUpTo,
@@ -143,6 +144,14 @@ describe('one message per key', () => {
 		expect(merged[0].body).toBe('copy');
 	});
 
+	it('keeps one message per key within a first page that repeats one', () => {
+		const first = entry({ id: 'b-1', body: 'first' });
+		const copy = entry({ id: 'b-1', body: 'copy', machine: 'lab-box' });
+		const page = mergeEntries([], [first, copy, entry({ id: 'b-2' })]);
+		expect(page.map((e) => e.id)).toEqual(['b-1', 'b-2']);
+		expect(page[0].body).toBe('copy');
+	});
+
 	it('keys by sender and id, so two ships can both say b-1', () => {
 		const merged = mergeEntries(
 			[entry({ from: 'billing' })],
@@ -196,6 +205,57 @@ describe('kinds, open and outcomes', () => {
 		expect(outcomeOf(entry({ state: 'dismissed' }))).toBe('Dismissed');
 		expect(outcomeOf(entry({ state: 'answered' }))).toBe('Answered');
 		expect(outcomeOf(entry())).toBeNull();
+	});
+});
+
+describe('outcomes in words', () => {
+	const decision = entry({
+		id: 'd-1',
+		state: 'answered',
+		payload: {
+			decision: {
+				question: 'Which platform first?',
+				options: [
+					{ id: 'android', label: 'Android first' },
+					{ id: 'ios', label: 'iOS first' }
+				]
+			}
+		}
+	});
+	const reply = (over: Partial<FeedEntry>) =>
+		entry({
+			id: 'r-1',
+			from: CAPTAIN,
+			to: 'billing',
+			kind: 'reply',
+			correlation: 'd-1',
+			state: null,
+			body: '',
+			payload: {},
+			...over
+		});
+
+	it('says which option the captain chose, from the reply', () => {
+		const chose = reply({ body: 'Android first', payload: { answer: { option_id: 'android' } } });
+		expect(outcomeOf(decision, chose)).toBe('You chose Android first');
+		expect(outcomesOf([decision, chose]).get('billing\u0000d-1')).toBe('You chose Android first');
+	});
+
+	it('quotes the first words of a written answer', () => {
+		const wrote = reply({
+			body: 'Yes, go ahead with the rollout on the staging ring first please'
+		});
+		expect(outcomeOf(entry({ id: 'd-1', state: 'answered' }), wrote)).toBe(
+			'You answered: Yes, go ahead with the rollout on the…'
+		);
+	});
+
+	it('says Dismissed, or Marked read for a notice, and Answered when nothing is known', () => {
+		expect(outcomeOf(entry({ state: 'dismissed' }))).toBe('Dismissed');
+		expect(outcomeOf(entry({ kind: 'notice', state: 'dismissed' }))).toBe('Marked read');
+		expect(outcomeOf(decision)).toBe('Answered');
+		expect(outcomesOf([decision]).has('billing\u0000d-1')).toBe(true);
+		expect(outcomesOf([entry()]).size).toBe(0);
 	});
 });
 

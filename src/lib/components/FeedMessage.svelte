@@ -1,8 +1,9 @@
 <!--
-	One message in the Feed, drawn as a chat bubble. An open ask is answered in
-	place: a decision or request with the same form as Decisions, a needs_hands
-	step with Done, a notice or report with Mark read or Open report. Closed
-	asks keep their words and show what happened to them.
+	One message in the Feed, drawn as a chat bubble. An open ask is a short
+	message with an Answer button; Answer opens the same form as Decisions inline
+	(a needs_hands step with its copy and Done). A notice or report is closed
+	with Mark read or Open report. Closed asks keep their words and show what
+	happened to them.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -16,7 +17,6 @@
 		feedKindOf,
 		handsTextOf,
 		isOpen,
-		outcomeOf,
 		reportTitleOf,
 		segmentsOf,
 		shipMark,
@@ -25,6 +25,7 @@
 	import type { FeedEntry } from '#lib/shapes.ts';
 	import { isoTime } from '#lib/time.ts';
 	import { resolve } from '$app/paths';
+	import CopyStep from './CopyStep.svelte';
 	import Dismiss from './Dismiss.svelte';
 	import Icon from './Icon.svelte';
 	import QuestionForm from './QuestionForm.svelte';
@@ -47,6 +48,12 @@
 		dismissFailure: Failure | null;
 		/** A message the poll just brought in, for a moment's highlight. */
 		fresh?: boolean;
+		/** What happened to a closed ask, in words (outcomesOf); null while open or for a plain message. */
+		outcome: string | null;
+		/** An open ask whose form is showing. A failed answer opens it too. */
+		expanded: boolean;
+		/** Opens or closes an open ask's form. */
+		ontoggle: () => void;
 	}
 
 	let {
@@ -60,7 +67,10 @@
 		now,
 		failure,
 		dismissFailure,
-		fresh = false
+		fresh = false,
+		outcome,
+		expanded,
+		ontoggle
 	}: Props = $props();
 
 	// Clock times depend on the viewer's zone, so they are drawn only once the page runs.
@@ -72,7 +82,6 @@
 	const key = $derived(askKey(entry.from, entry.id));
 	const kind = $derived(feedKindOf(entry));
 	const open = $derived(isOpen(entry));
-	const outcome = $derived(outcomeOf(entry));
 	const question = $derived(toQuestion(toMailItem(entry), now));
 	const title = $derived(reportTitleOf(entry));
 	const mark = $derived(shipMark(entry.ship));
@@ -87,6 +96,9 @@
 			? dismissFailure
 			: null
 	);
+	const recommended = $derived(question.options.find((o) => o.recommended) ?? null);
+	const panel = $derived(`ask-${anchorOf(key)}`);
+	const handsText = $derived(handsTextOf(entry.payload) ?? 'Take the step, then mark it done.');
 	const askLabel = $derived(
 		kind === 'notice' || kind === 'report'
 			? dismissLabel('notice', false)
@@ -157,25 +169,57 @@
 				</p>
 			{/if}
 
-			{#if asks && (kind === 'decision' || kind === 'request')}
-				<QuestionForm
-					{question}
-					{now}
-					failure={formFailure}
-					dismissFailure={closeFailure}
-					formatNote={false}
-				/>
-			{:else}
-				{#if kind === 'needs_hands' && open}
-					<p class="body">{question.question}</p>
-					<div class="hands" role="note">
-						<Icon name="hand" size={20} />
-						<div>
-							<strong>Needs your hands</strong>
-							<p>{handsTextOf(entry.payload) ?? 'Take the step, then mark it done.'}</p>
+			{#if asks}
+				{#if !expanded}
+					<p class="summary">{question.question}</p>
+					{#if recommended}
+						<p class="recommended">Recommended: <strong>{recommended.label}</strong></p>
+					{/if}
+					<button
+						type="button"
+						class="btn btn-primary answer-btn"
+						aria-expanded="false"
+						aria-controls={panel}
+						onclick={ontoggle}>Answer</button
+					>
+				{/if}
+
+				<!-- Kept in the page while collapsed, so a half-written answer survives. -->
+				<div id={panel} class="ask-panel" hidden={!expanded}>
+					{#if expanded}
+						<button
+							type="button"
+							class="btn btn-quiet collapse"
+							aria-expanded="true"
+							aria-controls={panel}
+							onclick={ontoggle}>Collapse</button
+						>
+					{/if}
+					{#if kind === 'decision' || kind === 'request'}
+						<QuestionForm
+							{question}
+							{now}
+							failure={formFailure}
+							dismissFailure={closeFailure}
+							formatNote={false}
+						/>
+					{:else}
+						<p class="body">{question.question}</p>
+						<div class="hands" role="note">
+							<Icon name="hand" size={20} />
+							<div>
+								<strong>Needs your hands</strong>
+								<p>{handsText}</p>
+								<div class="hands-actions">
+									<CopyStep text={handsText} />
+								</div>
+							</div>
 						</div>
-					</div>
-				{:else if entry.body}
+						<Dismiss from={entry.from} id={entry.id} label={askLabel} failure={closeFailure} />
+					{/if}
+				</div>
+			{:else}
+				{#if entry.body}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- a link written in a ship's message, not app navigation -->
 					<p class="body">
 						{#each segmentsOf(entry.body) as seg, i (i)}{#if seg.href}<a
@@ -420,6 +464,34 @@
 	}
 	.hands p {
 		margin: var(--s-1) 0 0;
+	}
+	.hands-actions {
+		margin-top: var(--s-2);
+	}
+
+	.summary {
+		display: -webkit-box;
+		line-clamp: 3;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		margin: 0;
+		line-height: 1.5;
+		white-space: pre-wrap;
+	}
+	.recommended {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--ink-2);
+	}
+	.answer-btn {
+		justify-self: start;
+	}
+	.ask-panel[hidden] {
+		display: none;
+	}
+	.collapse {
+		justify-self: end;
 	}
 
 	.report {

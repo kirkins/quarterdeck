@@ -348,6 +348,7 @@ test.describe('feed phone', () => {
 	test('a decision answered in place', async ({ page }) => {
 		await openFeed(page, 'light');
 		const ask = page.locator('li.msg[data-entry="f0007-onboarding-android"]');
+		await ask.getByRole('button', { name: 'Answer', exact: true }).click();
 		await ask.getByRole('radio', { name: /Android first/ }).check();
 		await ask.evaluate((el) =>
 			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 120)

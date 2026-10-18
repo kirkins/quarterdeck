@@ -12,6 +12,7 @@
 		applyLocalAnswers,
 		mergeEntries,
 		newestOf,
+		outcomesOf,
 		readFeedFilter,
 		readLastRead,
 		readUpTo,
@@ -40,7 +41,7 @@
 	const now = $derived(Math.max(data.now, clock));
 
 	// svelte-ignore state_referenced_locally
-	let entries = $state<FeedEntry[]>(data.page?.entries ?? []);
+	let entries = $state<FeedEntry[]>(mergeEntries([], data.page?.entries ?? []));
 	// svelte-ignore state_referenced_locally
 	let olderCursor = $state<string | null>(data.page?.next ?? null);
 	// svelte-ignore state_referenced_locally
@@ -58,6 +59,8 @@
 	let polling = false;
 	let loadedOlder = false;
 	let initialised = false;
+	/** The one open ask whose form is showing, by entryKey. */
+	let expandedKey = $state<string | null>(null);
 
 	// A server page (after an action, or a fresh load) joins what is already on screen.
 	$effect(() => {
@@ -97,6 +100,14 @@
 	const multiMachine = $derived(new Set(entries.map((e) => e.machine).filter(Boolean)).size > 1);
 	const failure = $derived(failureFrom(form, ['answer']));
 	const dismissFailure = $derived(failureFrom(form, ['dismiss']));
+	const outcomes = $derived(outcomesOf(entries));
+	/** An ask whose answer or dismiss failed opens, so the error is seen where it was made. */
+	const failedKeys = $derived(
+		[failure, dismissFailure].flatMap((f) => (f ? [askKey(f.from, f.id)] : []))
+	);
+	function toggleAsk(key: string) {
+		expandedKey = expandedKey === key ? null : key;
+	}
 	const next = $derived(
 		entries
 			.filter(isOpen)
@@ -396,6 +407,9 @@
 						{failure}
 						{dismissFailure}
 						fresh={freshKeys.includes(row.key)}
+						outcome={outcomes.get(row.key) ?? null}
+						expanded={expandedKey === row.key || failedKeys.includes(row.key)}
+						ontoggle={() => toggleAsk(row.key)}
 					/>
 				{/if}
 			{/each}

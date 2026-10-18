@@ -61,11 +61,30 @@ test('scrolling up loads older messages and keeps the place', async ({ page }) =
 	expect(y).toBeGreaterThan(0);
 });
 
+test('an open ask is a short message until Answer opens its form, and a half-written answer survives', async ({
+	page
+}) => {
+	await openFeed(page);
+	const ask = page.locator('li.msg[data-entry="f0008-listing-offline"]');
+	const answer = ask.getByRole('button', { name: 'Answer', exact: true });
+	await expect(ask.getByText('Waiting on you')).toBeVisible();
+	await expect(ask.getByLabel('Your answer')).toBeHidden();
+
+	await answer.click();
+	await ask.getByLabel('Your answer').fill('Half a thought');
+	await ask.getByRole('button', { name: 'Collapse' }).click();
+	await expect(ask.getByLabel('Your answer')).toBeHidden();
+
+	await answer.click();
+	await expect(ask.getByLabel('Your answer')).toHaveValue('Half a thought');
+});
+
 test('a decision is answered in place, with a confirm step, and the reply appears', async ({
 	page
 }) => {
 	await openFeed(page);
 	const ask = page.locator('li.msg[data-entry="f0007-onboarding-android"]');
+	await ask.getByRole('button', { name: 'Answer', exact: true }).click();
 	const send = ask.getByRole('button', { name: 'Send answer' });
 	await expect(send).toBeHidden();
 
@@ -74,6 +93,7 @@ test('a decision is answered in place, with a confirm step, and the reply appear
 	await send.click();
 
 	await expect(ask).toHaveAttribute('data-open', 'false');
+	await expect(ask.locator('.outcome')).toHaveText('You chose Android first');
 	const reply = page.locator('li.msg.mine').filter({ hasText: 'Android first' });
 	await expect(reply).toBeVisible();
 	await expect(reply).toContainText('Logged, not sent');
@@ -82,23 +102,35 @@ test('a decision is answered in place, with a confirm step, and the reply appear
 test('a request takes a written reply in place', async ({ page }) => {
 	await openFeed(page);
 	const ask = page.locator('li.msg[data-entry="f0008-listing-offline"]');
+	await ask.getByRole('button', { name: 'Answer', exact: true }).click();
 	await ask.getByLabel('Your answer').fill('Yes, before review.');
 	await ask.getByRole('button', { name: 'Send answer' }).click();
 
 	await expect(ask).toHaveAttribute('data-open', 'false');
+	await expect(ask.locator('.outcome')).toHaveText('You answered: Yes, before review.');
 	await expect(
 		page.locator('li.msg.mine').filter({ hasText: 'Yes, before review.' })
 	).toBeVisible();
 });
 
-test('a needs-hands step is closed with Done, nothing to add', async ({ page }) => {
+test('a needs-hands step is copied, then closed with Done, nothing to add', async ({
+	page,
+	context
+}) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await openFeed(page);
 	const step = page.locator('li.msg[data-entry="f0002-status-move"]');
 	await reveal(page, step);
+	await step.getByRole('button', { name: 'Answer', exact: true }).click();
 	await expect(step.getByText('Needs your hands')).toBeVisible();
+
+	const text = (await step.locator('.hands p').first().innerText()).trim();
+	await step.getByRole('button', { name: 'Copy step' }).click();
+	await expect(step.getByRole('button', { name: 'Copied' })).toBeVisible();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+
 	await step.getByText('Done, nothing to add').first().click();
 	await step.getByRole('button', { name: 'Done, nothing to add' }).click();
-
 	await expect(step).toHaveAttribute('data-open', 'false');
 	await expect(step.getByText('Dismissed')).toBeVisible();
 });

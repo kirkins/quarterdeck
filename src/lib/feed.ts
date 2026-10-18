@@ -3,7 +3,14 @@
  * over FeedEntry so the server and the browser agree on what is shown, in what
  * order, and what counts as waiting. No Node APIs here.
  */
-import { askKey, isDecisionMail, type Answered, type MailItem } from '#lib/decision.ts';
+import {
+	askKey,
+	isDecisionMail,
+	toQuestion,
+	type Answered,
+	type CardOption,
+	type MailItem
+} from '#lib/decision.ts';
 import { reportOf } from '#lib/report.ts';
 import type { FeedEntry } from '#lib/shapes.ts';
 
@@ -106,11 +113,61 @@ export function isShipToShip(entry: FeedEntry): boolean {
 	return entry.from !== CAPTAIN && entry.to !== CAPTAIN;
 }
 
-/** The short words for what happened to an ask, or null while it is open or for a plain message. */
-export function outcomeOf(entry: FeedEntry): string | null {
-	if (entry.state === 'dismissed') return 'Dismissed';
-	if (entry.state === 'answered') return 'Answered';
-	return null;
+/** The option a captain's reply chose, from its payload.answer, or null for a written answer. */
+function chosenOption(reply: FeedEntry): string | null {
+	const answer = reply.payload.answer;
+	const option =
+		typeof answer === 'object' && answer !== null
+			? (answer as { option_id?: unknown }).option_id
+			: null;
+	return typeof option === 'string' && option !== '' ? option : null;
+}
+
+/** The first few words of a text, with an ellipsis when some were left out. */
+function firstWords(text: string, count: number): string {
+	const words = text.trim().split(/\s+/);
+	return words.length > count ? `${words.slice(0, count).join(' ')}…` : words.join(' ');
+}
+
+/**
+ * What happened to a closed ask, in words, or null while it is open or for a plain
+ * message. `reply` is the captain's reply to it, when the feed has one: its
+ * payload.answer names the option chosen, and its body is what was written.
+ */
+export function outcomeOf(entry: FeedEntry, reply: FeedEntry | null = null): string | null {
+	if (entry.state === 'dismissed') {
+		const kind = feedKindOf(entry);
+		return kind === 'notice' || kind === 'report' ? 'Marked read' : 'Dismissed';
+	}
+	if (entry.state !== 'answered') return null;
+	if (!reply) return 'Answered';
+	const option_id = chosenOption(reply);
+	const body = (reply.body ?? '').trim();
+	if (option_id !== null) {
+		const option = optionsOf(entry).find((o) => o.id === option_id);
+		const label = option?.label ?? body;
+		return label ? `You chose ${label}` : 'Answered';
+	}
+	return body ? `You answered: ${firstWords(body, 8)}` : 'Answered';
+}
+
+/** The options an ask offers, read the same way the decision card reads them. */
+export function optionsOf(entry: FeedEntry): CardOption[] {
+	return toQuestion(toMailItem(entry), entry.created_ms ?? 0).options;
+}
+
+/** The outcome of every closed ask in a list, keyed by entryKey. */
+export function outcomesOf(entries: readonly FeedEntry[]): Map<string, string> {
+	const replies = new Map<string, FeedEntry>();
+	for (const e of entries) {
+		if (e.from === CAPTAIN && e.correlation) replies.set(askKey(e.to, e.correlation), e);
+	}
+	const out = new Map<string, string>();
+	for (const e of entries) {
+		const outcome = outcomeOf(e, replies.get(entryKey(e)) ?? null);
+		if (outcome) out.set(entryKey(e), outcome);
+	}
+	return out;
 }
 
 /** Entries oldest first, one per message: a desk copy and its original share a key and keep the later one. */
@@ -367,7 +424,7 @@ export function applyLocalAnswers(
 			deadline_ms: null,
 			state: null,
 			body,
-			payload: {},
+			payload: answer.option_id ? { answer: { option_id: answer.option_id } } : {},
 			local: { sent: answer.sent }
 		});
 	}
