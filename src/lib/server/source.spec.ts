@@ -531,6 +531,19 @@ describe('ship.profile', () => {
 		await expect(broken.shipProfile('billing')).rejects.toThrow('database locked');
 	});
 
+	it("reads Privateer's refusal for a ship on another machine as elsewhere, with that machine", async () => {
+		const elsewhere = new CliSource(async () => {
+			throw new PrivateerCommandError(
+				'ship.profile',
+				'ship search-index is on machine boreas; ask there'
+			);
+		});
+		expect(await elsewhere.shipProfile('search-index')).toEqual({
+			status: 'elsewhere',
+			machine: 'boreas'
+		});
+	});
+
 	it('reads the fixture profiles by name, and says not_found for a ship it lacks', async () => {
 		const source = new FixtureSource('fixtures', () => NOW);
 		const billing = await source.shipProfile('billing');
@@ -538,6 +551,14 @@ describe('ship.profile', () => {
 		if (billing.status === 'ok') expect(billing.value.mcpServers.length).toBeGreaterThan(2);
 		expect(await source.shipProfile('ghost')).toEqual({ status: 'not_found' });
 		expect(await source.shipProfile('constructor')).toEqual({ status: 'not_found' });
+	});
+
+	it('reads a fixture ship on another machine as elsewhere, as Privateer refuses it', async () => {
+		const source = new FixtureSource('fixtures', () => NOW);
+		expect(await source.shipProfile('search-index')).toEqual({
+			status: 'elsewhere',
+			machine: 'boreas'
+		});
 	});
 
 	it('reports an absent profile fixture as unsupported', async () => {

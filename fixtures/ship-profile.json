@@ -1,6 +1,7 @@
 {
 	"ships": {
 		"billing": {
+			"ship": "billing",
 			"machine": "atlas",
 			"hosted": true,
 			"sleep": {
@@ -8,12 +9,12 @@
 				"idle_minutes": 30
 			},
 			"first_mate": {
-				"harness": "tidewater",
+				"harness": "pi",
 				"options": {
 					"model": "large",
 					"effort": "high",
 					"max_turns": 40,
-					"api_key": "fixture-secret-do-not-show"
+					"api_key": "<set>"
 				}
 			},
 			"routes": {
@@ -38,12 +39,32 @@
 					"run the billing tests",
 					"open pull requests",
 					"send dunning mail after approval"
-				]
+				],
+				"active": true
 			},
 			"permissions": {
 				"fleet_mode": "ask",
 				"fleet_rules": ["Never charge a card", "Ask before a live policy changes"],
-				"ship_rules": ["Keep retries under three attempts", "No direct edits to the ledger"]
+				"ship_rules": []
+			},
+			"tool_bundles": {
+				"bounded": true,
+				"selected": {
+					"skills": [
+						"retry-policy",
+						"dunning-letters",
+						"invoice-pdf",
+						"refund-check",
+						"tax-lines",
+						"currency-round",
+						"chargeback-notes",
+						"ledger-recon",
+						"webhook-replay",
+						"statement-csv",
+						"fraud-flags"
+					],
+					"mcp_servers": ["stripe-sandbox", "postgres-ledger", "mail-drafts", "calendar"]
+				}
 			},
 			"skills": [
 				{
@@ -94,51 +115,54 @@
 			"mcp_servers": [
 				{
 					"name": "stripe-sandbox",
-					"url": "https://mcp.example.test/stripe?token=fixture-secret-do-not-show",
+					"url": "https://mcp.example.test",
+					"description": "Test-mode card and charge tools",
 					"credentials": ["STRIPE_API_KEY"]
 				},
 				{
 					"name": "postgres-ledger",
-					"url": "https://user:fixture-secret-do-not-show@db.example.test/mcp",
-					"credentials": {
-						"DB_PASSWORD": "fixture-secret-do-not-show"
-					}
+					"url": "https://db.example.test:5432",
+					"description": "Read-only ledger queries",
+					"credentials": ["DB_PASSWORD"]
 				},
 				{
 					"name": "mail-drafts",
-					"url": "https://mail.example.test/mcp",
+					"url": "https://mail.example.test",
+					"description": "Draft dunning mail for the captain's review",
 					"credentials": ["MAIL_TOKEN"]
 				},
 				{
 					"name": "calendar",
-					"url": "https://cal.example.test/mcp",
+					"url": "https://cal.example.test",
+					"description": null,
 					"credentials": []
 				}
 			],
 			"plugins": [
 				{
-					"name": "ledger-tools",
-					"description": "Read-only views of the ledger"
+					"name": "attended/mail.ts",
+					"description": "Privateer's attended mail adapter: the ship's mail in the live session."
 				},
 				{
-					"name": "pdf-render",
-					"description": "Invoice rendering"
+					"name": "attended/captain.ts",
+					"description": "The captain's fleet commands, such as /stow, in the live session."
 				},
 				{
-					"name": "metrics",
-					"description": "Retry success rates"
+					"name": "attended/calm.ts",
+					"description": "The /calm conversation view for Pi sessions."
 				}
 			]
 		},
 		"chandlery": {
+			"ship": "chandlery",
 			"machine": "atlas",
 			"hosted": true,
 			"sleep": {
 				"policy": "after_idle",
-				"idle_minutes": 60
+				"idle_minutes": 7.5
 			},
 			"first_mate": {
-				"harness": "tidewater",
+				"harness": "claude",
 				"options": {
 					"model": "large",
 					"effort": "medium"
@@ -159,33 +183,39 @@
 				}
 			},
 			"charter": {
-				"actions": ["build the catalogue", "reply to the captain", "run the visual tests"]
+				"actions": ["build the catalogue", "reply to the captain", "run the visual tests"],
+				"active": false
 			},
 			"permissions": {
 				"fleet_mode": "ask",
 				"fleet_rules": ["Release only with the captain's approval"],
 				"ship_rules": []
 			},
-			"skills": [
-				{
-					"name": "catalogue-pages",
-					"description": "Build and tidy product pages"
+			"tool_bundles": {
+				"bounded": true,
+				"selected": {
+					"skills": ["catalogue-pages", "visual-check"]
 				},
-				{
-					"name": "visual-check",
-					"description": "Compare screenshots at phone and desktop sizes"
-				}
-			],
+				"error": "bundle catalogue-pages: SKILL.md is missing its description"
+			},
+			"skills": [],
 			"mcp_servers": [
 				{
 					"name": "shop-preview",
-					"url": "https://preview.example.test/mcp",
+					"url": "https://preview.example.test",
+					"description": "Preview deploys for the catalogue",
 					"credentials": []
 				}
 			],
-			"plugins": []
+			"plugins": [
+				{
+					"name": "privateer-mail",
+					"description": "Bounded attended mailbox delivery for a Privateer ship."
+				}
+			]
 		},
 		"docs-site": {
+			"ship": "docs-site",
 			"machine": "atlas",
 			"hosted": true,
 			"sleep": {
@@ -193,7 +223,7 @@
 				"idle_minutes": 15
 			},
 			"first_mate": {
-				"harness": "tidewater",
+				"harness": null,
 				"options": {
 					"model": "small-free"
 				}
@@ -208,80 +238,29 @@
 					"names": ["free-pool"]
 				},
 				"errand": {
-					"list": "ship",
+					"list": "none",
 					"names": []
 				}
 			},
 			"charter": {
-				"actions": ["write the changelog", "reply to the captain"]
+				"actions": ["write the changelog", "reply to the captain"],
+				"active": true
 			},
 			"permissions": {
 				"fleet_mode": "ask",
 				"fleet_rules": [],
 				"ship_rules": []
 			},
-			"skills": [
-				{
-					"name": "changelog",
-					"description": "Write release notes from merged changes"
-				}
-			],
+			"tool_bundles": {
+				"bounded": false,
+				"selected": null
+			},
+			"skills": [],
 			"mcp_servers": [],
 			"plugins": []
 		},
 		"search-index": {
-			"machine": "boreas",
-			"hosted": true,
-			"sleep": {
-				"policy": "never",
-				"idle_minutes": null
-			},
-			"first_mate": {
-				"harness": "ferry",
-				"options": {
-					"model": "large"
-				}
-			},
-			"routes": {
-				"first_mate": {
-					"list": "ship",
-					"names": ["credits-reserve"]
-				},
-				"crew": {
-					"list": "fleet",
-					"names": ["credits-reserve", "plan-main"]
-				},
-				"errand": {
-					"list": "fleet",
-					"names": ["credits-reserve"]
-				}
-			},
-			"charter": {
-				"actions": ["rebuild the search index", "reply to the captain"]
-			},
-			"permissions": {
-				"fleet_mode": "ask",
-				"fleet_rules": ["Rebuilds run at night only"],
-				"ship_rules": []
-			},
-			"skills": [
-				{
-					"name": "reindex",
-					"description": "Rebuild the index from the document store"
-				}
-			],
-			"mcp_servers": [
-				{
-					"name": "docs-store",
-					"url": "https://docs.example.test/mcp",
-					"credentials": ["DOCS_TOKEN"]
-				}
-			],
-			"plugins": [
-				{
-					"name": "search-metrics"
-				}
-			]
+			"refused": "ship search-index is on machine boreas; ask there"
 		}
 	}
 }

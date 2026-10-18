@@ -646,19 +646,22 @@ export function parseFeed(result: unknown): FeedPage {
 }
 
 /*
- * The ship profile (PROVISIONAL). Privateer's `ship.profile {ship}` is not built
- * yet, and this page is the only reader. The field names are our guess at what
- * a captain needs to see about one ship: its machine and hosting, its first
- * mate, the model routes it may use, its charter and permissions, and the tools
- * it carries. Every field is optional and extras are ignored. Nothing secret is
- * kept: an option whose name looks like a credential keeps only whether it is
- * set, MCP servers keep credential names and never values, and a URL keeps no
- * user name, password or secret query value. Adjust these parsers alone; see
- * docs/DECISIONS.md section 17.
+ * The ship profile, as Privateer's `ship.profile {ship}` sends it (src/profile.rs
+ * in Privateer, PR 234). Every part is optional and extras are ignored. Nothing
+ * secret is kept: Privateer masks secret-looking options to "<set>", and we keep
+ * only whether one is set; MCP servers keep credential names and never values,
+ * and a URL keeps no user name, password or secret query value. Adjust these
+ * parsers alone; see docs/DECISIONS.md section 17.
  */
 
-/** Names that mark a value as a secret. Matched case-insensitively against a field's name. */
-const SECRET_NAME = /token|secret|key|password|passwd|credential|auth/i;
+/** What Privateer writes in place of a secret-looking option's value. */
+const SET = '<set>';
+
+/**
+ * Names that mark a value as a secret, matched case-insensitively. This is
+ * Privateer's own list, so a name it hides is hidden here too.
+ */
+const SECRET_NAME = /key|token|secret|pass|auth|cred|cookie|session/i;
 
 /** One first-mate option. A secret-looking option has no value, only whether one is set. */
 export interface ProfileOption {
@@ -668,10 +671,10 @@ export interface ProfileOption {
 	set: boolean;
 }
 
-/** Which list a route kind uses on this ship: the ship's own, or the fleet's default. */
+/** Which list a route kind uses on this ship: the ship's own, the fleet's default, or none at all. */
 export interface ProfileRoutes {
 	kind: string;
-	list: 'ship' | 'fleet' | null;
+	list: 'ship' | 'fleet' | 'none' | null;
 	names: string[];
 }
 
@@ -683,6 +686,7 @@ export interface ProfileTool {
 export interface ProfileMcpServer {
 	name: string;
 	url: string | null;
+	description: string | null;
 	/** Credential names the server reads. Values are never kept. */
 	credentials: string[];
 }
@@ -694,8 +698,10 @@ export interface ShipProfile {
 	sleep: { policy: string | null; idle_minutes: number | null };
 	firstMate: { harness: string | null; options: ProfileOption[] };
 	routes: ProfileRoutes[];
-	charter: { actions: string[] };
-	permissions: { fleetMode: string | null; fleetRules: string[]; shipRules: string[] };
+	charter: { actions: string[]; active: boolean | null };
+	permissions: { fleetMode: string | null; fleetRules: string[] };
+	/** Whether the first mate's skills and servers are a bounded plan, and why the plan failed if it did. */
+	toolBundles: { bounded: boolean | null; error: string | null };
 	skills: ProfileTool[];
 	mcpServers: ProfileMcpServer[];
 	plugins: ProfileTool[];
@@ -718,12 +724,25 @@ export function displayUrl(raw: unknown): string | null {
 	}
 }
 
+/** An option's value as text. Nested maps and lists are written out as JSON; nothing else is shown. */
+function scalarText(raw: unknown): string | null {
+	if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
+	if (Array.isArray(raw) || rec(raw)) return JSON.stringify(raw);
+	return str(raw);
+}
+
 function option(name: string, raw: unknown): ProfileOption {
-	const value = typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : str(raw);
-	const secret = SECRET_NAME.test(name);
+	const value = scalarText(raw);
+	// A value Privateer masked is a secret even under a name this list does not know.
+	const secret = SECRET_NAME.test(name) || value === SET;
+	if (secret) return { name, value: null, secret, set: value !== null };
 	// A non-secret option can still hold a URL with credentials in it: scrub it.
-	const shown = secret || value === null ? null : (displayUrl(value) ?? value);
-	return { name, value: shown, secret, set: value !== null };
+	return {
+		name,
+		value: value === null ? null : (displayUrl(value) ?? value),
+		secret,
+		set: value !== null
+	};
 }
 
 /** A keyed object (`{ name: value }`) read in its key order. */
@@ -759,6 +778,7 @@ export function parseShipProfile(result: unknown, ship: string): ShipProfile {
 	const firstMate = rec(root.first_mate);
 	const permissions = rec(root.permissions);
 	const charter = rec(root.charter);
+	const bundles = rec(root.tool_bundles);
 	return {
 		ship,
 		machine: str(root.machine),
@@ -776,15 +796,21 @@ export function parseShipProfile(result: unknown, ship: string): ShipProfile {
 			const scope = str(route?.list);
 			return {
 				kind,
-				list: scope === 'ship' || scope === 'fleet' ? scope : null,
+				list: scope === 'ship' || scope === 'fleet' || scope === 'none' ? scope : null,
 				names: strings(route?.names)
 			};
 		}),
-		charter: { actions: strings(charter?.actions) },
+		charter: {
+			actions: strings(charter?.actions),
+			active: typeof charter?.active === 'boolean' ? charter.active : null
+		},
 		permissions: {
 			fleetMode: str(permissions?.fleet_mode),
-			fleetRules: strings(permissions?.fleet_rules),
-			shipRules: strings(permissions?.ship_rules)
+			fleetRules: strings(permissions?.fleet_rules)
+		},
+		toolBundles: {
+			bounded: typeof bundles?.bounded === 'boolean' ? bundles.bounded : null,
+			error: str(bundles?.error)
 		},
 		skills: tools(root.skills),
 		mcpServers: list(root.mcp_servers).flatMap((raw) => {
@@ -795,6 +821,7 @@ export function parseShipProfile(result: unknown, ship: string): ShipProfile {
 						{
 							name,
 							url: displayUrl(server.url),
+							description: str(server.description),
 							credentials: credentialNames(server.credentials)
 						}
 					]

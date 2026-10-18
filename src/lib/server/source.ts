@@ -117,11 +117,23 @@ export type FleetRead = { status: 'ok'; snapshot: FleetSnapshot } | { status: 'u
 /** A read that an older Privateer may not offer, the same way as FleetRead. */
 export type Read<T> = { status: 'ok'; value: T } | { status: 'unsupported' };
 
-/** A ship's profile: as Read, and not_found when no ship has that name. */
-export type ShipRead = Read<ShipProfile> | { status: 'not_found' };
+/**
+ * A ship's profile: as Read, not_found when no ship has that name, and elsewhere
+ * when the ship runs on another machine, whose Privateer is the one to ask.
+ */
+export type ShipRead =
+	Read<ShipProfile> | { status: 'not_found' } | { status: 'elsewhere'; machine: string };
 
 /** Privateer's words for a ship it does not know, on stderr or in its JSON error. */
 const UNKNOWN_SHIP = /not found|unknown ship|no such ship|no ship named/i;
+
+/** Privateer's refusal for a ship on another machine: "ship X is on machine M; ask there". */
+const OTHER_MACHINE = /ship \S+ is on machine ([^;"\s]+); ask there/;
+
+/** The machine a refusal names, or null when the message is not that refusal. */
+export function machineOf(message: string): string | null {
+	return OTHER_MACHINE.exec(message)?.[1] ?? null;
+}
 
 /**
  * An older Privateer refuses a command it does not know. Its CLI says so on
@@ -218,8 +230,10 @@ export class CliSource implements Source {
 			return { status: 'ok', value: parseShipProfile(result, ship) };
 		} catch (error) {
 			if (isUnknownCommand(error)) return { status: 'unsupported' };
-			if (error instanceof PrivateerCommandError && UNKNOWN_SHIP.test(error.message)) {
-				return { status: 'not_found' };
+			if (error instanceof PrivateerCommandError) {
+				const machine = machineOf(error.message);
+				if (machine !== null) return { status: 'elsewhere', machine };
+				if (UNKNOWN_SHIP.test(error.message)) return { status: 'not_found' };
 			}
 			throw error;
 		}
@@ -459,6 +473,12 @@ export class FixtureSource implements Source {
 		if (raw === null) return { status: 'unsupported' };
 		const ships = rec(rec(raw)?.ships) ?? {};
 		if (!Object.hasOwn(ships, ship)) return { status: 'not_found' };
+		// A ship on another machine is refused, as Privateer refuses it: its message stands for the answer.
+		const refusal = rec(ships[ship])?.refused;
+		if (typeof refusal === 'string') {
+			const machine = machineOf(refusal);
+			if (machine !== null) return { status: 'elsewhere', machine };
+		}
 		return { status: 'ok', value: parseShipProfile(ships[ship], ship) };
 	}
 
