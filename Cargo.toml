@@ -1,0 +1,84 @@
+[package]
+name = "quarterdeck"
+description = "The captain's desktop app for a Privateer fleet"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[workspace]
+members = ["data"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Quarterdeck contributors"]
+license = "GPL-3.0-or-later"
+edition = "2024"
+
+[workspace.dependencies]
+base64 = "0.22.1"
+futures = "0.3.32"
+log = { version = "0.4.26", features = ["std"] }
+palette = "0.7.4"
+rand = "0.9.0"
+rand_chacha = "0.9.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.12"
+tokio = { version = "1.44.0" }
+toml = "0.8.20"
+toml_edit = "0.22.27"
+
+[dependencies]
+data = { path = "data" }
+emojis = "0.8.0"
+fern = "0.7.1"
+futures = { workspace = true }
+log = { workspace = true }
+nucleo-matcher = "0.3.1"
+mundy = { version = "0.1.9", default-features = false, features = [
+    "color-scheme",
+    "tokio",
+    "log",
+] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "fs", "macros"] }
+unicode-segmentation = "1.10.1"
+iced = { version = "0.15.0-dev", default-features = false, features = [
+    "wgpu",
+    "tiny-skia",
+    "fira-sans",
+    "tokio",
+    "lazy",
+    "advanced",
+    "image",
+    "svg",
+    "wayland",
+    "x11",
+    "crisp",
+    "web-colors",
+] }
+
+# Halloy tracks a fork of iced; Quarterdeck pins the same revision as
+# halloy-extend so its widgets carry over unchanged.
+[patch.crates-io]
+iced = { git = "https://github.com/squidowl/iced", rev = "af28bbe8de1dfafa2ebe7a3ac96ebcc87ae05538" }
+iced_core = { git = "https://github.com/squidowl/iced", rev = "af28bbe8de1dfafa2ebe7a3ac96ebcc87ae05538" }
+iced_wgpu = { git = "https://github.com/squidowl/iced", rev = "af28bbe8de1dfafa2ebe7a3ac96ebcc87ae05538" }
+
+# A little optimization for our code, a lot for dependencies: iced is slow
+# unoptimized.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# Halloy's widgets implement iced traits with many arguments, and its message
+# enums carry whole themes; both are fine here.
+[workspace.lints.clippy]
+large_enum_variant = "allow"
+too_many_arguments = "allow"
+
+[lints]
+workspace = true
