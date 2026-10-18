@@ -1,0 +1,28 @@
+# systemd --user unit for Quarterdeck. A template: replace every <placeholder>
+# (or the path after an '=' that names one) before installing. Copy it to
+# ~/.config/systemd/user/quarterdeck.service. See docs/DEPLOY.md.
+#
+# Run it as your own user, with your own Privateer identity. Do not add
+# PRIVATEER_ACTOR or PRIVATEER_ROLE here: Quarterdeck answers as the captain.
+
+[Unit]
+Description=Quarterdeck, the captain's web portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=<install-dir>
+# The env file holds the settings from .env.example. Keep it readable by you only.
+EnvironmentFile=<install-dir>/.env
+# The absolute path to node 26 (run `command -v node`); the user manager's PATH is short.
+# This runs what `npm start` runs: node server.js, after `npm run build`.
+ExecStart=<node-bin> server.js
+Restart=on-failure
+RestartSec=5
+# Exit 78 means the startup guard refused (a configuration error): do not restart in a loop.
+RestartPreventExitStatus=78
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
