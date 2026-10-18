@@ -279,8 +279,8 @@ impl Triage {
             text(item.mail.kind.as_str()).style(theme::text::tertiary)
         };
         let mut header = row![
-            text(item.ship.as_str())
-                .style(move |theme| theme::text::seeded(theme, &item.ship)),
+            text(item.asker())
+                .style(move |theme| theme::text::seeded(theme, item.asker())),
             kind,
         ]
         .spacing(8);

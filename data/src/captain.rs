@@ -44,6 +44,18 @@ pub struct Mail {
     pub payload: Value,
 }
 
+impl Item {
+    /// The ship that asked. `ship` is the home holding the ask, which is the
+    /// captain's desk for asks copied there from other ships.
+    pub fn asker(&self) -> &str {
+        if self.mail.from.is_empty() {
+            &self.ship
+        } else {
+            &self.mail.from
+        }
+    }
+}
+
 impl Waiting {
     pub fn parse(value: Value) -> Result<Self, String> {
         serde_json::from_value(value).map_err(|error| error.to_string())
