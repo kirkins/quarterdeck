@@ -136,7 +136,7 @@
 						<textarea
 							name="text"
 							rows="3"
-							maxlength="2000"
+							maxlength="4096"
 							placeholder="Write your reply in your own words">{failed?.text ?? ''}</textarea
 						>
 					</label>

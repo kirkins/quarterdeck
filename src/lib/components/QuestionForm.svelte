@@ -281,7 +281,7 @@
 						id="{uid}-text"
 						name="text"
 						rows="2"
-						maxlength="2000"
+						maxlength="4096"
 						placeholder={chosen ? 'e.g. only after Friday' : 'Write your answer…'}
 						bind:value={text}
 						bind:this={field}

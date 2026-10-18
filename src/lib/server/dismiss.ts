@@ -4,7 +4,9 @@
  * notice or report is marked acknowledged, a needs_hands ask closes.
  */
 import type { MailItem } from '#lib/decision.ts';
-import { MAX_TEXT } from './answer.ts';
+
+/** Privateer has not stated a limit for dismiss notes; keep them short. */
+export const MAX_NOTE = 2000;
 
 /** Arguments for `privateer captain.dismiss`. */
 export interface DismissArgs {
@@ -18,8 +20,8 @@ export type DismissBuild =
 /** Validate an optional note and build the dismiss for `item`. */
 export function buildDismiss(item: MailItem, rawNote: string | null | undefined): DismissBuild {
 	const note = rawNote?.trim() || null;
-	if (note && [...note].length > MAX_TEXT) {
-		return { ok: false, error: `Keep the note under ${MAX_TEXT} characters.` };
+	if (note && [...note].length > MAX_NOTE) {
+		return { ok: false, error: `Keep the note under ${MAX_NOTE} characters.` };
 	}
 	const args: DismissArgs = { id: item.id, ...(note && { note }) };
 	return { ok: true, args, note };
