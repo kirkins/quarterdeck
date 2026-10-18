@@ -126,7 +126,7 @@ test.describe('triage phone', () => {
 	test('a needs-hands step, expanded', async ({ page }) => {
 		await openTriage(page, 'light');
 		const row = page.locator('[data-row="f0002-status-move"]');
-		await row.locator('button.head').click();
+		await row.locator('button.toggle').click();
 		await row.evaluate((el) =>
 			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 120)
 		);
@@ -137,7 +137,7 @@ test.describe('triage phone', () => {
 	test('dismiss confirm step', async ({ page }) => {
 		await openTriage(page, 'light');
 		const row = page.locator('[data-row="f0022-backup-verified"]');
-		await row.locator('button.head').click();
+		await row.locator('button.toggle').click();
 		await row.locator('details.dismiss > summary').click();
 		await row.locator('details.dismiss textarea[name="note"]').fill('Checked on the dashboard.');
 		await row.evaluate((el) =>
@@ -364,5 +364,52 @@ test.describe('feed desktop', () => {
 	test('feed, light', async ({ page }) => {
 		await openFeed(page, 'light');
 		await page.screenshot({ path: `${dir}/feed-desktop-light.png` });
+	});
+});
+
+async function openShip(page: Page, name: string, theme: 'light' | 'dark', query = '') {
+	await page.context().addCookies([
+		{
+			name: 'qd_theme',
+			value: theme,
+			url: test.info().project.use.baseURL ?? 'http://127.0.0.1:4173'
+		}
+	]);
+	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+	await page.goto(`/ship/${name}${query}`);
+	await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+	await page.evaluate(() => document.fonts.ready);
+}
+
+test.describe('ship phone', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true
+	});
+
+	for (const theme of ['light', 'dark'] as const) {
+		test(`ship conversation, ${theme}`, async ({ page }) => {
+			await openShip(page, 'billing', theme);
+			await page.screenshot({ path: `${dir}/ship-phone-${theme}.png` });
+		});
+
+		test(`ship tools, ${theme}`, async ({ page }) => {
+			await openShip(page, 'billing', theme, '?tab=tools');
+			await page.screenshot({ path: `${dir}/ship-tools-phone-${theme}.png` });
+		});
+	}
+});
+
+test.describe('ship desktop', () => {
+	test.use({ viewport: { width: 1280, height: 900 } });
+
+	test('ship conversation and tools, light', async ({ page }) => {
+		await openShip(page, 'billing', 'light');
+		await page.screenshot({ path: `${dir}/ship-desktop-light.png` });
+		await page.goto('/ship/billing?tab=tools');
+		await expect(page.getByRole('tab', { name: 'Tools' })).toHaveAttribute('aria-selected', 'true');
+		await page.screenshot({ path: `${dir}/ship-tools-desktop-light.png` });
 	});
 });

@@ -1106,6 +1106,66 @@
 				}
 			},
 			"arrives_in_s": 9
+		},
+		{
+			"machine": "atlas",
+			"ship": "billing",
+			"id": "f0001-billing-retry",
+			"created_ms": 1792289200000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": "billing-retries",
+			"urgency": "high",
+			"deadline_ms": 1792297600000,
+			"state": "open",
+			"body": "Which retry policy should billing ship for failed renewals?",
+			"payload": {
+				"decision": {
+					"question": "Which retry policy should billing ship for failed renewals?",
+					"why": "About 1 in 30 renewals fail on the first try. Today they are cancelled silently, and the pricing launch is waiting on this choice.",
+					"blocked": ["billing", "chandlery", "pricing-launch"],
+					"options": [
+						{
+							"id": "smart",
+							"label": "Smart retries over 7 days",
+							"what_happens": "Retry a failed card up to 4 times over a week, timed around likely paydays. Customers get one friendly reminder email.",
+							"cost": "~$40/mo in processor fees",
+							"recommended": true
+						},
+						{
+							"id": "fixed",
+							"label": "Retry 3 times, a day apart",
+							"what_happens": "Simple and predictable. Recovers less revenue, but there is nothing new to monitor.",
+							"cost": "No extra cost"
+						},
+						{
+							"id": "none",
+							"label": "No automatic retries",
+							"what_happens": "Failed payments go straight to a reminder email and a manual review queue.",
+							"cost": "~2h a week of support time"
+						}
+					],
+					"free_text_ok": false
+				}
+			}
+		},
+		{
+			"machine": "atlas",
+			"ship": "billing",
+			"id": "f0011-invoice-template",
+			"created_ms": 1792127200000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": "invoice-template",
+			"urgency": "low",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Is the old invoice template still needed for the audit?",
+			"payload": {}
 		}
 	]
 }

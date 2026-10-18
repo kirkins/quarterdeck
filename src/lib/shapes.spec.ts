@@ -6,7 +6,9 @@ import {
 	parseRuntimeNeeds,
 	parseSnapshot,
 	parseUsageRecords,
-	parseUsageSummary
+	parseShipProfile,
+	parseUsageSummary,
+	displayUrl
 } from './shapes.ts';
 
 const NOW = 1_800_000_000_000;
@@ -636,5 +638,142 @@ describe('parseUsageRecords', () => {
 		});
 		expect(records).toHaveLength(1);
 		expect(records[0].usage).toBeNull();
+	});
+});
+
+describe('parseShipProfile (provisional)', () => {
+	const full = {
+		machine: 'atlas',
+		hosted: true,
+		sleep: { policy: 'after_idle', idle_minutes: 30 },
+		first_mate: {
+			harness: 'tidewater',
+			options: { model: 'large', max_turns: 40, api_key: 'do-not-show-this' }
+		},
+		routes: {
+			first_mate: { list: 'ship', names: ['plan-main'] },
+			crew: { list: 'fleet', names: ['plan-main', 'free-pool'] },
+			errand: { list: 'sideways', names: ['free-pool'] }
+		},
+		charter: { actions: ['read the ledger', 'reply to the captain'] },
+		permissions: {
+			fleet_mode: 'ask',
+			fleet_rules: ['Never charge a card'],
+			ship_rules: ['Keep retries under three']
+		},
+		skills: [{ name: 'retry-policy', description: 'Draft a policy' }, { name: 'bare' }],
+		mcp_servers: [
+			{
+				name: 'stripe',
+				url: 'https://mcp.example.test/stripe?token=do-not-show-this',
+				credentials: ['STRIPE_API_KEY']
+			},
+			{
+				name: 'ledger-db',
+				url: 'https://user:do-not-show-this@db.example.test/mcp',
+				credentials: { DB_PASSWORD: 'do-not-show-this' }
+			}
+		],
+		plugins: [{ name: 'ledger-tools', description: 'Read-only views' }]
+	};
+
+	it('reads a full profile into one shape', () => {
+		const profile = parseShipProfile(full, 'billing');
+		expect(profile).toMatchObject({
+			ship: 'billing',
+			machine: 'atlas',
+			hosted: true,
+			sleep: { policy: 'after_idle', idle_minutes: 30 },
+			firstMate: { harness: 'tidewater' },
+			charter: { actions: ['read the ledger', 'reply to the captain'] },
+			permissions: { fleetMode: 'ask', fleetRules: ['Never charge a card'] },
+			skills: [
+				{ name: 'retry-policy', description: 'Draft a policy' },
+				{ name: 'bare', description: null }
+			],
+			plugins: [{ name: 'ledger-tools', description: 'Read-only views' }]
+		});
+		expect(profile.routes).toEqual([
+			{ kind: 'first_mate', list: 'ship', names: ['plan-main'] },
+			{ kind: 'crew', list: 'fleet', names: ['plan-main', 'free-pool'] },
+			{ kind: 'errand', list: null, names: ['free-pool'] }
+		]);
+	});
+
+	it('masks a secret-looking option to set or not set, and never keeps its value', () => {
+		const { firstMate } = parseShipProfile(full, 'billing');
+		expect(firstMate.options).toEqual([
+			{ name: 'model', value: 'large', secret: false, set: true },
+			{ name: 'max_turns', value: '40', secret: false, set: true },
+			{ name: 'api_key', value: null, secret: true, set: true }
+		]);
+		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
+	});
+
+	it('scrubs credentials from a URL held in a non-secret option', () => {
+		const profile = {
+			first_mate: {
+				harness: 'claude',
+				options: {
+					base_url: 'https://user:do-not-show-this@api.example.test/v1?token=do-not-show-this'
+				}
+			}
+		};
+		const { firstMate } = parseShipProfile(profile, 'billing');
+		expect(firstMate.options).toEqual([
+			{
+				name: 'base_url',
+				value: 'https://api.example.test/v1?token=hidden',
+				secret: false,
+				set: true
+			}
+		]);
+		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
+	});
+
+	it('keeps credential names only, and hides secret query values and user names in URLs', () => {
+		const { mcpServers } = parseShipProfile(full, 'billing');
+		expect(mcpServers).toEqual([
+			{
+				name: 'stripe',
+				url: 'https://mcp.example.test/stripe?token=hidden',
+				credentials: ['STRIPE_API_KEY']
+			},
+			{ name: 'ledger-db', url: 'https://db.example.test/mcp', credentials: ['DB_PASSWORD'] }
+		]);
+		expect(JSON.stringify(mcpServers)).not.toContain('do-not-show-this');
+	});
+
+	it('reads a partial or empty profile without failing, with gaps as null, empty or false', () => {
+		expect(parseShipProfile({ machine: 'atlas' }, 'docs')).toEqual({
+			ship: 'docs',
+			machine: 'atlas',
+			hosted: null,
+			sleep: { policy: null, idle_minutes: null },
+			firstMate: { harness: null, options: [] },
+			routes: [],
+			charter: { actions: [] },
+			permissions: { fleetMode: null, fleetRules: [], shipRules: [] },
+			skills: [],
+			mcpServers: [],
+			plugins: []
+		});
+		expect(parseShipProfile(null, 'docs').skills).toEqual([]);
+		expect(parseShipProfile({ skills: [{ description: 'no name' }, 'text'] }, 'x').skills).toEqual(
+			[]
+		);
+	});
+});
+
+describe('displayUrl', () => {
+	it('drops a user name and password, and hides secret-looking query values', () => {
+		expect(displayUrl('https://a:b@host.test/x?api_key=1&page=2')).toBe(
+			'https://host.test/x?api_key=hidden&page=2'
+		);
+	});
+
+	it('returns null for what is not a URL', () => {
+		expect(displayUrl('not a url')).toBeNull();
+		expect(displayUrl(42)).toBeNull();
 	});
 });

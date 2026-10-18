@@ -9,12 +9,14 @@ import {
 	assemble,
 	parseFeed,
 	parseRoutesShow,
+	parseShipProfile,
 	parseSnapshot,
 	parseUsageRecords,
 	parseUsageSummary,
 	type FeedPage,
 	type FleetSnapshot,
 	type RoutesConfig,
+	type ShipProfile,
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
@@ -55,6 +57,8 @@ export interface Source {
 	report(id: string): Promise<FetchedReport>;
 	/** The captain's feed, merged across homes and machines (`captain.feed`), read-only. */
 	feed(query: FeedQuery): Promise<Read<FeedPage>>;
+	/** One ship's profile (`ship.profile`), read-only: its tools, routes, permissions and hosting. */
+	shipProfile(ship: string): Promise<ShipRead>;
 }
 
 export interface FetchedReport {
@@ -92,6 +96,12 @@ export type FleetRead = { status: 'ok'; snapshot: FleetSnapshot } | { status: 'u
 
 /** A read that an older Privateer may not offer, the same way as FleetRead. */
 export type Read<T> = { status: 'ok'; value: T } | { status: 'unsupported' };
+
+/** A ship's profile: as Read, and not_found when no ship has that name. */
+export type ShipRead = Read<ShipProfile> | { status: 'not_found' };
+
+/** Privateer's words for a ship it does not know, on stderr or in its JSON error. */
+const UNKNOWN_SHIP = /not found|unknown ship|no such ship|no ship named/i;
 
 /**
  * An older Privateer refuses a command it does not know. Its CLI says so on
@@ -181,6 +191,19 @@ export class CliSource implements Source {
 			throw error;
 		}
 	}
+
+	async shipProfile(ship: string): Promise<ShipRead> {
+		try {
+			const result = await this.#run('ship.profile', { ship });
+			return { status: 'ok', value: parseShipProfile(result, ship) };
+		} catch (error) {
+			if (isUnknownCommand(error)) return { status: 'unsupported' };
+			if (error instanceof PrivateerCommandError && UNKNOWN_SHIP.test(error.message)) {
+				return { status: 'not_found' };
+			}
+			throw error;
+		}
+	}
 }
 
 /** Fixture files, named after the command whose output they stand in for. */
@@ -191,6 +214,8 @@ export const FLEET_FIXTURE = 'fleet-snapshot.json';
 export const ROUTES_FIXTURE = 'routes-show.json';
 export const USAGE_FIXTURE = 'usage-records.json';
 export const FEED_FIXTURE = 'captain.feed.json';
+/** Ship profiles by name: `{ "ships": { "<name>": { ...profile } } }`. */
+export const SHIP_PROFILE_FIXTURE = 'ship-profile.json';
 
 /** Keys that are derived when read, never shifted with the fixture clock. */
 const DERIVED_KEYS = new Set(['age_ms', 'waited_ms']);
@@ -336,6 +361,14 @@ export class FixtureSource implements Source {
 				next: start > 0 ? String(start) : null
 			}
 		};
+	}
+
+	async shipProfile(ship: string): Promise<ShipRead> {
+		const raw = await this.#read(SHIP_PROFILE_FIXTURE);
+		if (raw === null) return { status: 'unsupported' };
+		const ships = rec(rec(raw)?.ships) ?? {};
+		if (!Object.hasOwn(ships, ship)) return { status: 'not_found' };
+		return { status: 'ok', value: parseShipProfile(ships[ship], ship) };
 	}
 
 	/** Records are grouped here, the way usage.summary would group them live. */

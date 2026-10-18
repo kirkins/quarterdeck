@@ -60,11 +60,15 @@
 </script>
 
 <li class="row kind-{row.kind}" class:open data-row={item.id} data-kind={row.kind}>
-	<button type="button" class="head" aria-expanded={open} aria-controls={panel} onclick={ontoggle}>
+	<div class="head">
 		<span class="glyph" aria-hidden="true"><Icon name={ICON[row.kind]} size={18} /></span>
 		<span class="main">
 			<span class="line top">
-				<span class="ship-name">{item.from || 'Unknown ship'}</span>
+				{#if item.from}
+					<a class="ship-name" href={resolve('/ship/[name]', { name: item.from })}>{item.from}</a>
+				{:else}
+					<span class="ship-name">Unknown ship</span>
+				{/if}
 				<span
 					class="deadline deadline-{urgency} tag"
 					class:tag-danger={urgency === 'overdue'}
@@ -77,29 +81,40 @@
 					{formatDeadline(row.deadline_ms, now)}
 				</span>
 			</span>
-			<span class="summary">{question.question}</span>
-			<span class="line facts">
-				<span class="kind">{KIND_LABELS[row.kind]}</span>
-				<span class="age">
-					<time datetime={isoTime(row.asked_ms)} title={isoTime(row.asked_ms)}
-						>{formatAge(row.asked_ms, now)}</time
-					>
+			<button
+				type="button"
+				class="toggle"
+				aria-expanded={open}
+				aria-controls={panel}
+				onclick={ontoggle}
+			>
+				<span class="text">
+					<span class="summary">{question.question}</span>
+					<span class="line facts">
+						<span class="kind">{KIND_LABELS[row.kind]}</span>
+						<span class="age">
+							<time datetime={isoTime(row.asked_ms)} title={isoTime(row.asked_ms)}
+								>{formatAge(row.asked_ms, now)}</time
+							>
+						</span>
+						{#if row.urgency === 'high'}
+							<span class="flag high tag tag-danger"
+								><span class="visually-hidden">Urgency: </span>High</span
+							>
+						{/if}
+						{#if row.needsHands}
+							<span class="flag hands tag tag-brass"><Icon name="hand" size={12} /> Your hands</span
+							>
+						{/if}
+						{#if report}
+							<span class="flag report tag tag-sea"><Icon name="doc" size={12} /> Report</span>
+						{/if}
+					</span>
 				</span>
-				{#if row.urgency === 'high'}
-					<span class="flag high tag tag-danger"
-						><span class="visually-hidden">Urgency: </span>High</span
-					>
-				{/if}
-				{#if row.needsHands}
-					<span class="flag hands tag tag-brass"><Icon name="hand" size={12} /> Your hands</span>
-				{/if}
-				{#if report}
-					<span class="flag report tag tag-sea"><Icon name="doc" size={12} /> Report</span>
-				{/if}
-			</span>
+				<span class="chev" aria-hidden="true"><Icon name="chevron" size={18} /></span>
+			</button>
 		</span>
-		<span class="chev" aria-hidden="true"><Icon name="chevron" size={18} /></span>
-	</button>
+	</div>
 
 	{#if open}
 		<div class="panel" id={panel}>
@@ -232,23 +247,52 @@
 		box-shadow: var(--elev-2);
 	}
 
+	/* The head is not a button: the ship's name is a link, so only the toggle inside is one. */
 	.head {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-columns: auto minmax(0, 1fr);
 		gap: var(--s-3);
 		align-items: start;
 		width: 100%;
 		padding: var(--s-4);
+		border-radius: var(--radius-lg);
+	}
+	.toggle {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--s-3);
+		align-items: start;
+		width: 100%;
+		margin: 0;
+		padding: 0;
 		text-align: start;
 		background: none;
 		border: 0;
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius);
 		color: inherit;
+		font: inherit;
 		cursor: pointer;
 	}
-	.head:focus-visible {
+	.text {
+		display: grid;
+		gap: 5px;
+		min-width: 0;
+	}
+	.ship-name:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.ship-name:focus-visible {
 		outline: 2px solid var(--focus);
-		outline-offset: -2px;
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+	a.ship-name {
+		text-decoration: none;
+	}
+	.toggle:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 4px;
 	}
 	.glyph {
 		display: grid;

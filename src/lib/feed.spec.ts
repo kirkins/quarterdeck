@@ -22,6 +22,7 @@ import {
 	segmentsOf,
 	shipMark,
 	unseenAfter,
+	isWaiting,
 	visibleEntries,
 	waitingCount
 } from './feed.ts';
@@ -459,5 +460,29 @@ describe('segments, anchors and ship marks', () => {
 		expect(shipMark('billing')).toEqual(shipMark('billing'));
 		expect(shipMark('billing').initial).toBe('B');
 		expect(shipMark('ops').hue).toBeGreaterThanOrEqual(0);
+	});
+});
+
+describe('waiting versus unread', () => {
+	it('counts decisions, requests and approvals as waiting, but not open notices or reports', () => {
+		const decision = entry({ id: 'd', kind: 'decision', payload: { choices: ['a', 'b'] } });
+		const request = entry({ id: 'r', kind: 'request' });
+		const approval = entry({ id: 'a', kind: 'approval', payload: { artifact: 'x' } });
+		const notice = entry({ id: 'n', kind: 'notice' });
+		const report = entry({ id: 'p', kind: 'report', payload: { report: 'rep-1' } });
+		expect(isWaiting(decision)).toBe(true);
+		expect(isWaiting(request)).toBe(true);
+		expect(isWaiting(approval)).toBe(true);
+		expect(isWaiting(notice)).toBe(false);
+		expect(isWaiting(report)).toBe(false);
+		expect(waitingCount([decision, request, approval, notice, report])).toBe(3);
+	});
+
+	it('keeps an open notice in the feed but out of "only waiting on me"', () => {
+		const notice = entry({ id: 'n', kind: 'notice' });
+		const request = entry({ id: 'r', kind: 'request' });
+		const only = visibleEntries([notice, request], { ...EMPTY_FILTER, onlyWaiting: true });
+		expect(only.map((e) => e.id)).toEqual(['r']);
+		expect(visibleEntries([notice, request], EMPTY_FILTER)).toHaveLength(2);
 	});
 });

@@ -179,7 +179,9 @@
 											{@const s = sv.ship}
 											<li class="ship" data-ship={s.name} class:needs={sv.needs > 0}>
 												<div class="ship-head">
-													<span class="ship-name">{s.name}</span>
+													<a class="ship-name" href={resolve('/ship/[name]', { name: s.name })}
+														>{s.name}</a
+													>
 													<span
 														class="presence"
 														class:asleep={!sv.awake}
@@ -239,7 +241,12 @@
 								<p class="none">Not reachable from here. Showing ship names only.</p>
 								<ul class="ship-names">
 									{#each mv.ships as sv (sv.ship.name)}
-										<li class="tag tag-outline">{sv.ship.name}</li>
+										<li>
+											<a
+												class="tag tag-outline"
+												href={resolve('/ship/[name]', { name: sv.ship.name })}>{sv.ship.name}</a
+											>
+										</li>
 									{/each}
 								</ul>
 							{/if}
@@ -415,6 +422,21 @@
 		font-weight: 650;
 		color: var(--ink);
 		overflow-wrap: anywhere;
+		text-decoration: none;
+	}
+	.ship-name:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.ship-name:focus-visible,
+	.ship-names a:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+		border-radius: 4px;
+	}
+	.ship-names a {
+		text-decoration: none;
+		color: inherit;
 	}
 	.presence {
 		display: inline-flex;

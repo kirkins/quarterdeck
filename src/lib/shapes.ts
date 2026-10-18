@@ -562,3 +562,162 @@ export function parseFeed(result: unknown): FeedPage {
 		next: str(root?.next)
 	};
 }
+
+/*
+ * The ship profile (PROVISIONAL). Privateer's `ship.profile {ship}` is not built
+ * yet, and this page is the only reader. The field names are our guess at what
+ * a captain needs to see about one ship: its machine and hosting, its first
+ * mate, the model routes it may use, its charter and permissions, and the tools
+ * it carries. Every field is optional and extras are ignored. Nothing secret is
+ * kept: an option whose name looks like a credential keeps only whether it is
+ * set, MCP servers keep credential names and never values, and a URL keeps no
+ * user name, password or secret query value. Adjust these parsers alone; see
+ * docs/DECISIONS.md section 17.
+ */
+
+/** Names that mark a value as a secret. Matched case-insensitively against a field's name. */
+const SECRET_NAME = /token|secret|key|password|passwd|credential|auth/i;
+
+/** One first-mate option. A secret-looking option has no value, only whether one is set. */
+export interface ProfileOption {
+	name: string;
+	value: string | null;
+	secret: boolean;
+	set: boolean;
+}
+
+/** Which list a route kind uses on this ship: the ship's own, or the fleet's default. */
+export interface ProfileRoutes {
+	kind: string;
+	list: 'ship' | 'fleet' | null;
+	names: string[];
+}
+
+export interface ProfileTool {
+	name: string;
+	description: string | null;
+}
+
+export interface ProfileMcpServer {
+	name: string;
+	url: string | null;
+	/** Credential names the server reads. Values are never kept. */
+	credentials: string[];
+}
+
+export interface ShipProfile {
+	ship: string;
+	machine: string | null;
+	hosted: boolean | null;
+	sleep: { policy: string | null; idle_minutes: number | null };
+	firstMate: { harness: string | null; options: ProfileOption[] };
+	routes: ProfileRoutes[];
+	charter: { actions: string[] };
+	permissions: { fleetMode: string | null; fleetRules: string[]; shipRules: string[] };
+	skills: ProfileTool[];
+	mcpServers: ProfileMcpServer[];
+	plugins: ProfileTool[];
+}
+
+/** A URL with no user name or password, and with any secret-looking query value hidden. */
+export function displayUrl(raw: unknown): string | null {
+	const text = str(raw);
+	if (text === null) return null;
+	try {
+		const url = new URL(text);
+		url.username = '';
+		url.password = '';
+		for (const [key, value] of url.searchParams) {
+			if (SECRET_NAME.test(key) && value !== '') url.searchParams.set(key, 'hidden');
+		}
+		return url.toString();
+	} catch {
+		return null;
+	}
+}
+
+function option(name: string, raw: unknown): ProfileOption {
+	const value = typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : str(raw);
+	const secret = SECRET_NAME.test(name);
+	// A non-secret option can still hold a URL with credentials in it: scrub it.
+	const shown = secret || value === null ? null : (displayUrl(value) ?? value);
+	return { name, value: shown, secret, set: value !== null };
+}
+
+/** A keyed object (`{ name: value }`) read in its key order. */
+function keyed(value: unknown): [string, unknown][] {
+	const object = rec(value);
+	return object ? Object.entries(object) : [];
+}
+
+/** Credential names from either a list of names or a keyed object; never the values. */
+function credentialNames(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value.flatMap((c) => {
+			const name = typeof c === 'string' ? c : str(rec(c)?.name);
+			return name ? [name] : [];
+		});
+	}
+	return keyed(value).map(([name]) => name);
+}
+
+/** Named tools (skills, plugins) from a list of `{ name, description }`. */
+function tools(value: unknown): ProfileTool[] {
+	return list(value).flatMap((raw) => {
+		const tool = rec(raw);
+		const name = str(tool?.name);
+		return tool && name ? [{ name, description: str(tool.description) }] : [];
+	});
+}
+
+/** Read `ship.profile`. Missing parts become null, empty or false. */
+export function parseShipProfile(result: unknown, ship: string): ShipProfile {
+	const root = rec(result) ?? {};
+	const sleep = rec(root.sleep);
+	const firstMate = rec(root.first_mate);
+	const permissions = rec(root.permissions);
+	const charter = rec(root.charter);
+	return {
+		ship,
+		machine: str(root.machine),
+		hosted: typeof root.hosted === 'boolean' ? root.hosted : null,
+		sleep: {
+			policy: str(sleep?.policy),
+			idle_minutes: num(sleep?.idle_minutes)
+		},
+		firstMate: {
+			harness: str(firstMate?.harness),
+			options: keyed(firstMate?.options).map(([name, value]) => option(name, value))
+		},
+		routes: keyed(root.routes).map(([kind, value]) => {
+			const route = rec(value);
+			const scope = str(route?.list);
+			return {
+				kind,
+				list: scope === 'ship' || scope === 'fleet' ? scope : null,
+				names: strings(route?.names)
+			};
+		}),
+		charter: { actions: strings(charter?.actions) },
+		permissions: {
+			fleetMode: str(permissions?.fleet_mode),
+			fleetRules: strings(permissions?.fleet_rules),
+			shipRules: strings(permissions?.ship_rules)
+		},
+		skills: tools(root.skills),
+		mcpServers: list(root.mcp_servers).flatMap((raw) => {
+			const server = rec(raw);
+			const name = str(server?.name);
+			return server && name
+				? [
+						{
+							name,
+							url: displayUrl(server.url),
+							credentials: credentialNames(server.credentials)
+						}
+					]
+				: [];
+		}),
+		plugins: tools(root.plugins)
+	};
+}

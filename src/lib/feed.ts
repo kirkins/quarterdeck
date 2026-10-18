@@ -109,6 +109,15 @@ export function isOpen(entry: FeedEntry): boolean {
 	return entry.from !== CAPTAIN && entry.to === CAPTAIN && (entry.state ?? 'open') === 'open';
 }
 
+/**
+ * An open message that waits on the captain's decision or step: a decision, request,
+ * approval or needs_hands. A plain notice or report is open too, but it is unread,
+ * not waiting, so it is labelled and counted apart.
+ */
+export function isWaiting(entry: FeedEntry): boolean {
+	return isOpen(entry) && !['notice', 'report'].includes(feedKindOf(entry));
+}
+
 export function isShipToShip(entry: FeedEntry): boolean {
 	return entry.from !== CAPTAIN && entry.to !== CAPTAIN;
 }
@@ -232,7 +241,7 @@ export function visibleEntries(entries: readonly FeedEntry[], filter: FeedFilter
 				e.ship === filter.ship ||
 				e.from === filter.ship ||
 				e.to === filter.ship) &&
-			(!filter.onlyWaiting || isOpen(e))
+			(!filter.onlyWaiting || isWaiting(e))
 	);
 }
 
@@ -245,9 +254,9 @@ export function shipsIn(entries: readonly FeedEntry[]): string[] {
 	return [...names].sort();
 }
 
-/** How many open items are waiting on the captain. */
+/** How many items are waiting on the captain. Unread notices are not counted. */
 export function waitingCount(entries: readonly FeedEntry[]): number {
-	return entries.filter(isOpen).length;
+	return entries.filter(isWaiting).length;
 }
 
 /* ------------------------------------------------------------------------ */
