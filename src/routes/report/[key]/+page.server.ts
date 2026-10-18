@@ -1,5 +1,4 @@
 import { error, fail } from '@sveltejs/kit';
-import { MAX_LIMIT as FIND_LIMIT } from '#lib/feed.ts';
 import { askKey, type MailItem } from '#lib/decision.ts';
 import {
 	checkAnnotations,
@@ -10,51 +9,27 @@ import {
 } from '#lib/report.ts';
 import { triageKind } from '#lib/triage.ts';
 import { getPortal, loadItems } from '#lib/server/app.ts';
-import type { FeedEntry } from '#lib/shapes.ts';
-import { loadFeed } from '#lib/server/feed.ts';
 import { renderFrame } from '#lib/server/render.ts';
-import { errorText, submitAnnotations } from '#lib/server/submit.ts';
+import { errorText, findOpenItem, submitAnnotations } from '#lib/server/submit.ts';
 import { notHeldHere } from '#lib/server/source.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
  * The ask a report belongs to, found by its key. Requests and decisions are in
- * captain.waiting; a notice or a report is not, so it is read from the feed's
+ * captain.waiting; a notice or a report is not, so it is found among the feed's
  * open items. A plain report is found there too, and is read only.
  */
 async function findAsk(key: string): Promise<MailItem | null> {
 	const found = await loadItems();
 	const waiting = found.items.find((m) => askKey(m.from, m.id) === key);
-	if (waiting) return waiting;
-	const read = await loadFeed({ limit: FIND_LIMIT, include_ship_mail: false, open_only: true });
-	if (read.status === 'unsupported') return null;
-	const entry = read.page.entries.find((e) => askKey(e.from, e.id) === key);
-	return entry ? mailOf(entry) : null;
-}
-
-function mailOf(entry: FeedEntry): MailItem {
-	return {
-		id: entry.id,
-		from: entry.from,
-		to: entry.to,
-		kind: entry.kind,
-		body: entry.body,
-		payload: entry.payload,
-		task_id: entry.task_id,
-		correlation: entry.correlation,
-		request_kind: entry.request_kind,
-		deadline_ms: entry.deadline_ms,
-		created_ms: entry.created_ms ?? undefined,
-		urgency: entry.urgency
-	};
+	return waiting ?? (await findOpenItem(key));
 }
 
 /** Why this ask cannot take the reply, or null. Checked before anything is sent. */
 function refusal(item: MailItem): string | null {
-	const rights = commentRights(item.kind, triageKind(item));
-	if (rights.send) return null;
-	if (rights.comment) return 'Sending comments on this report needs a Privateer update.';
-	return 'Only a request or a notice takes comments.';
+	return commentRights(item.kind, triageKind(item)).send
+		? null
+		: 'Only a request or a notice takes comments.';
 }
 
 /**

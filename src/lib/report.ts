@@ -109,14 +109,13 @@ export function reportOf(payload: unknown): Checked<ReportRef> | null {
 
 /**
  * What the captain may do with a report's comments on one ask. Comments are
- * taken on a request or a notice; a report on its own is read only. A reply
- * is sent on a request. A notice's comments stay a draft until Privateer
- * accepts them: captain.reply finds requests and decisions, not notices.
- * `kind` is the mail kind, `triage` the kind triageKind gives the item.
+ * taken on a request or a notice; a report on its own is read only. Both send:
+ * captain.reply answers a request, and takes a report notice's annotations
+ * (Privateer's PR 246). `kind` is the mail kind, `triage` the kind triageKind gives the item.
  */
 export function commentRights(kind: string, triage: string): { comment: boolean; send: boolean } {
 	const comment = kind !== 'report' && (triage === 'request' || triage === 'notice');
-	return { comment, send: comment && triage === 'request' };
+	return { comment, send: comment };
 }
 
 /** Check report content fetched by id, against the same size limit as inline content. */

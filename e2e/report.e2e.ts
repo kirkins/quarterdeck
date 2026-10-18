@@ -4,9 +4,10 @@
  * fixtures hold an inline Markdown notice from archive-sync (in the feed, as
  * captain.waiting does not carry notices), an HTML request held by id from
  * metrics-rollup, and a notice by id from ledger, which is on another machine,
- * so report.get here does not hold it. A notice's comments are kept but not
- * sent, so only the request is sent, and sending it answers it. That test is
- * the last in this file, and runs before triage, which reads the same fixtures.
+ * so report.get here does not hold it. Only the request is sent, and sending it
+ * answers it; a notice's comments go back as its annotations, but that is not
+ * sent here. That test is the last in this file, and runs before triage, which
+ * reads the same fixtures.
  */
 import { createServer, type Server } from 'node:http';
 import { expect, test, type Frame, type Page } from '@playwright/test';
@@ -257,13 +258,20 @@ test.describe('on a phone', () => {
 	});
 });
 
+test('a click on a paragraph offers the block Comment pop-up on desktop', async ({ page }) => {
+	await page.goto(HTML);
+	const frame = await frameOf(page);
+	await frame.locator('p', { hasText: 'Tell me which of these' }).click();
+	await expect(frame.getByRole('button', { name: 'Comment on this' })).toBeVisible();
+});
+
 // Sending answers the request for the rest of the server's life, so this stays the last test that reads it.
 test('sending a request logs the reply and clears the draft', async ({ page }) => {
 	await page.goto(HTML);
-	// A click on a paragraph offers the block's Comment pop-up, the same as a tap on a phone.
+	// Desktop: a real triple-click selects a visible paragraph, and the Comment pop-up offers itself.
 	const frame = await frameOf(page);
-	await frame.locator('p', { hasText: 'Tell me which of these' }).click();
-	await frame.getByRole('button', { name: 'Comment on this' }).click();
+	await frame.locator('p', { hasText: 'Tell me which of these' }).click({ clickCount: 3 });
+	await frame.getByRole('button', { name: 'Comment', exact: true }).click();
 	await page.getByRole('textbox', { name: 'Your comment' }).fill('Keep the query-volume series.');
 	await page.getByRole('button', { name: 'Save comment' }).click();
 	await expect(page.getByRole('list').getByText('Keep the query-volume series.')).toBeVisible();
