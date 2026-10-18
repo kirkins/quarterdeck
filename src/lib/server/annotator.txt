@@ -1,0 +1,356 @@
+/*
+ * The annotator, run inside a report's sandboxed frame. It is the only script
+ * in the frame: the server gives it a nonce and the frame's CSP lets nothing
+ * else run. It does the DOM work (flattening the text, painting highlights,
+ * the Comment pop-up and the block tap) and talks to the portal only by
+ * postMessage. The portal checks every message (src/lib/report.ts), so this
+ * file is the frame's side of that contract, not a place to trust input.
+ *
+ * Every message to the portal carries TOKEN, which the server writes in for
+ * this render alone. If the frame is navigated to another document, that
+ * document cannot know it, so the portal drops what it sends.
+ *
+ * Offsets are character indexes into the flattened text, which puts a newline
+ * between blocks. The portal matches quotes on that text, so both sides use
+ * the same flattening (flatten below).
+ */
+(function () {
+	'use strict';
+
+	var TOKEN = '__QD_TOKEN__';
+	var XLINK = 'http://www.w3.org/1999/xlink';
+	var BLOCK = 'p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote,td,th,dt,dd,figcaption,caption,hr';
+	var CONTEXT = 32;
+	var QUOTE = 2000;
+	var MAX_MARKS = 100;
+
+	var spans = [];
+	var text = '';
+	var popover = null;
+	var pill = null;
+	var timer = 0;
+
+	function post(message) {
+		message.token = TOKEN;
+		window.parent.postMessage(message, '*');
+	}
+
+	/** Every text node, in order, with its place in the flattened text. */
+	function flatten() {
+		var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+		var parts = [];
+		var length = 0;
+		var lastBlock = null;
+		var node;
+		spans = [];
+		while ((node = walker.nextNode())) {
+			var parent = node.parentElement;
+			if (!parent || parent.closest('script,style,noscript,template')) continue;
+			var block = parent.closest(BLOCK) || document.body;
+			if (lastBlock !== null && block !== lastBlock) {
+				parts.push('\n');
+				length += 1;
+			}
+			lastBlock = block;
+			spans.push({ node: node, start: length, end: length + node.data.length });
+			parts.push(node.data);
+			length += node.data.length;
+		}
+		text = parts.join('');
+	}
+
+	/** The span of flattened text a DOM range covers, trimmed of the whitespace around it. */
+	function spanOf(range) {
+		var start = -1;
+		var end = -1;
+		for (var i = 0; i < spans.length; i++) {
+			var s = spans[i];
+			if (!range.intersectsNode(s.node)) continue;
+			var from = s.node === range.startContainer ? range.startOffset : 0;
+			var to = s.node === range.endContainer ? range.endOffset : s.node.data.length;
+			if (start < 0) start = s.start + from;
+			end = s.start + to;
+		}
+		while (start >= 0 && start < end && /\s/.test(text.charAt(start))) start++;
+		while (end > start && /\s/.test(text.charAt(end - 1))) end--;
+		return start < 0 || start >= end ? null : { start: start, end: end };
+	}
+
+	/** A DOM position for a character index: a text node and an offset in it. */
+	function pointAt(index, isEnd) {
+		for (var i = 0; i < spans.length; i++) {
+			var s = spans[i];
+			var inside = isEnd ? index > s.start && index <= s.end : index >= s.start && index < s.end;
+			if (inside) return { node: s.node, offset: index - s.start };
+		}
+		return null;
+	}
+
+	function rangeFor(start, end) {
+		var from = pointAt(start, false);
+		var to = pointAt(end, true);
+		if (!from || !to) return null;
+		var range = document.createRange();
+		range.setStart(from.node, from.offset);
+		range.setEnd(to.node, to.offset);
+		return range;
+	}
+
+	/** Where a block sits in the document: its character span, and a path of child indexes to find it again. */
+	function blockAnchor(block) {
+		var quote = '';
+		var start = -1;
+		var end = -1;
+		for (var i = 0; i < spans.length; i++) {
+			var s = spans[i];
+			if (!block.contains(s.node)) continue;
+			if (start < 0) start = s.start;
+			end = s.end;
+		}
+		if (start >= 0) quote = text.slice(start, Math.min(end, start + QUOTE));
+		return { selector: pathOf(block), quote: quote.trim() };
+	}
+
+	function pathOf(element) {
+		var parts = [];
+		for (var el = element; el && el !== document.body; el = el.parentElement) {
+			var up = el.parentElement;
+			if (!up) break;
+			parts.unshift(Array.prototype.indexOf.call(up.children, el));
+		}
+		return parts.join('/');
+	}
+
+	function quoteAt(span) {
+		var quote = text.slice(span.start, span.end);
+		return {
+			quote: quote.slice(0, QUOTE),
+			prefix: text.slice(Math.max(0, span.start - CONTEXT), span.start),
+			suffix: text.slice(span.end, span.end + CONTEXT)
+		};
+	}
+
+	/* Highlights: the CSS Custom Highlight API where it exists; a block tint where it does not. */
+
+	function clearMarks() {
+		if (window.CSS && CSS.highlights) {
+			CSS.highlights.delete('qd-comment');
+		}
+		document.querySelectorAll('.qd-marked').forEach(function (el) {
+			el.classList.remove('qd-marked');
+		});
+	}
+
+	var lastMarks = [];
+
+	function paint(marks) {
+		clearMarks();
+		lastMarks = [];
+		var highlight = window.CSS && CSS.highlights ? new Highlight() : null;
+		marks.slice(0, MAX_MARKS).forEach(function (mark) {
+			var range = rangeFor(mark.start, mark.end);
+			if (!range) return;
+			lastMarks.push({ id: mark.id, range: range });
+			if (highlight) {
+				highlight.add(range);
+			} else {
+				var block =
+					range.startContainer.parentElement && range.startContainer.parentElement.closest(BLOCK);
+				if (block) block.classList.add('qd-marked');
+			}
+		});
+		if (highlight) CSS.highlights.set('qd-comment', highlight);
+	}
+
+	function focusMark(id) {
+		var found = lastMarks.find(function (mark) {
+			return mark.id === id;
+		});
+		if (!found) return;
+		var el = found.range.startContainer.parentElement;
+		if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		if (window.CSS && CSS.highlights) {
+			CSS.highlights.set('qd-focus', new Highlight(found.range));
+			setTimeout(function () {
+				CSS.highlights.delete('qd-focus');
+			}, 1400);
+		}
+	}
+
+	/* The Comment pop-up on a selection, and the block pill for a tap. */
+
+	function hideAll() {
+		if (popover) popover.hidden = true;
+		if (pill) pill.hidden = true;
+	}
+
+	function button(label, className, onpress) {
+		var el = document.createElement('button');
+		el.type = 'button';
+		el.className = className;
+		el.textContent = label;
+		// Keep the selection when the button is pressed, so the anchor is still there.
+		el.addEventListener('mousedown', function (event) {
+			event.preventDefault();
+		});
+		el.addEventListener('click', onpress);
+		return el;
+	}
+
+	function ensurePopover() {
+		if (popover) return popover;
+		popover = document.createElement('div');
+		popover.className = 'qd-pop';
+		popover.hidden = true;
+		popover.appendChild(
+			button('Comment', 'qd-pop-button', function () {
+				if (!popover.anchor) return;
+				post({ type: 'select', anchor: popover.anchor });
+				hideAll();
+				var selection = window.getSelection();
+				if (selection) selection.removeAllRanges();
+			})
+		);
+		document.body.appendChild(popover);
+		return popover;
+	}
+
+	function ensurePill() {
+		if (pill) return pill;
+		pill = button('Comment on this', 'qd-pop-button', function () {
+			if (!pill.anchor) return;
+			post({ type: 'block', anchor: pill.anchor });
+			hideAll();
+		});
+		pill.classList.add('qd-pill');
+		pill.hidden = true;
+		document.body.appendChild(pill);
+		return pill;
+	}
+
+	function showSelection() {
+		var selection = window.getSelection();
+		if (!selection || selection.isCollapsed || selection.rangeCount === 0) return hideAll();
+		var range = selection.getRangeAt(0);
+		var span = spanOf(range);
+		if (!span) return hideAll();
+		var rect = range.getBoundingClientRect();
+		var el = ensurePopover();
+		el.anchor = quoteAt(span);
+		if (span.end - span.start > QUOTE) {
+			el.anchor = null;
+		}
+		el.style.top = rect.top + window.scrollY + 'px';
+		el.style.left = rect.left + rect.width / 2 + window.scrollX + 'px';
+		el.hidden = false;
+		var button = el.querySelector('button');
+		if (button) button.disabled = !el.anchor;
+	}
+
+	function showPill(event) {
+		var selection = window.getSelection();
+		if (selection && !selection.isCollapsed) return;
+		var target = event.target;
+		var block = target instanceof Element ? target.closest(BLOCK) : null;
+		if (!block || block === document.body) return hideAll();
+		var rect = block.getBoundingClientRect();
+		var el = ensurePill();
+		el.anchor = blockAnchor(block);
+		el.style.top = rect.top + window.scrollY - 8 + 'px';
+		el.style.left = rect.right + window.scrollX - 8 + 'px';
+		el.hidden = false;
+	}
+
+	/* Messages from the portal. The frame accepts them only from its parent. */
+
+	window.addEventListener('message', function (event) {
+		if (event.source !== window.parent) return;
+		var data = event.data;
+		if (!data || typeof data !== 'object') return;
+		if (data.type === 'marks' && Array.isArray(data.marks)) {
+			paint(
+				data.marks.filter(function (m) {
+					return (
+						m &&
+						typeof m.id === 'string' &&
+						m.id.length <= 64 &&
+						Number.isInteger(m.start) &&
+						Number.isInteger(m.end) &&
+						m.start >= 0 &&
+						m.end > m.start
+					);
+				})
+			);
+		} else if (data.type === 'focus' && typeof data.id === 'string') {
+			focusMark(data.id);
+		} else if (data.type === 'theme') {
+			if (data.theme === 'light' || data.theme === 'dark') {
+				document.documentElement.setAttribute('data-theme', data.theme);
+			} else {
+				document.documentElement.removeAttribute('data-theme');
+			}
+		}
+	});
+
+	document.addEventListener('selectionchange', function () {
+		clearTimeout(timer);
+		timer = setTimeout(showSelection, 120);
+	});
+
+	/**
+	 * Whether a click lands on anything that would navigate this frame away
+	 * from the report: an HTML a or area, an SVG a (href or xlink:href), or any
+	 * element with an href (MathML). The path is walked, not just the target,
+	 * so text inside a link counts too.
+	 */
+	function inLink(event) {
+		var path = event.composedPath ? event.composedPath() : [];
+		for (var i = 0; i < path.length; i++) {
+			var el = path[i];
+			if (!(el instanceof Element)) continue;
+			var name = el.localName;
+			if (name === 'a' || name === 'area') return true;
+			if (el.hasAttribute('href') || el.hasAttributeNS(XLINK, 'href')) return true;
+		}
+		return false;
+	}
+
+	// Links do nothing here: following one would take the frame away from the
+	// report. This listens first (capture, on the window) for every click,
+	// middle click and Enter on a link, and form submits and drops are
+	// cancelled too, though the sandbox already refuses forms.
+	function stop(event) {
+		event.preventDefault();
+	}
+	['click', 'auxclick'].forEach(function (type) {
+		window.addEventListener(
+			type,
+			function (event) {
+				if (inLink(event)) event.preventDefault();
+			},
+			true
+		);
+	});
+	window.addEventListener('submit', stop, true);
+	window.addEventListener('dragover', stop, true);
+	window.addEventListener('drop', stop, true);
+
+	document.addEventListener('click', function (event) {
+		if (!inLink(event)) showPill(event);
+	});
+
+	document.addEventListener('scroll', hideAll, { passive: true });
+
+	function start() {
+		flatten();
+		post({ type: 'text', text: text });
+	}
+
+	// The script sits in the head, ahead of the report, so the report cannot
+	// stop it from running (see render.ts). It waits for the report to parse.
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', start);
+	} else {
+		start();
+	}
+})();

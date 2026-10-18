@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { buildCards, toQuestion } from '#lib/decision.ts';
+	import { askKey, buildCards, reportTitle, toQuestion } from '#lib/decision.ts';
 	import { dismissLabel } from '#lib/dismiss.ts';
 	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, isoTime, urgencyOf } from '#lib/time.ts';
 	import { KIND_LABELS, type TriageKind, type TriageRow } from '#lib/triage.ts';
 	import DecisionCard from './DecisionCard.svelte';
 	import Dismiss from './Dismiss.svelte';
+	import { resolve } from '$app/paths';
 	import Icon, { type IconName } from './Icon.svelte';
 
 	let {
@@ -44,6 +45,8 @@
 	const dismissText = $derived(dismissLabel(row.kind, row.needsHands));
 	const step = $derived(typeof item.hands_on === 'string' ? item.hands_on.trim() : '');
 	const panel = $derived(`triage-${encodeURIComponent(item.from)}-${encodeURIComponent(item.id)}`);
+	const report = $derived(reportTitle(item.payload));
+	const reportHref = $derived(resolve('/report/[key]', { key: askKey(item.from, item.id) }));
 
 	const dl = $derived.by(() => {
 		const payload = item.payload ?? {};
@@ -78,6 +81,9 @@
 			{#if row.needsHands}
 				<span class="flag hands"><Icon name="hand" size={13} /> Your hands</span>
 			{/if}
+			{#if report}
+				<span class="flag report"><Icon name="doc" size={13} /> Report</span>
+			{/if}
 			<span class="age">
 				<time datetime={isoTime(row.asked_ms)} title={isoTime(row.asked_ms)}
 					>{formatAge(row.asked_ms, now)}</time
@@ -103,6 +109,12 @@
 			{#if row.kind === 'decision' && card}
 				<DecisionCard {card} {now} failure={failed} dismissFailure={dismissed} />
 			{:else if row.kind === 'request'}
+				{#if report}
+					<a class="btn btn-primary open-report" href={reportHref}>
+						<Icon name="doc" size={14} /> Open report: {report}
+					</a>
+				{/if}
+
 				{#if step}
 					<section class="step" aria-label="The step for you">
 						<p class="label"><Icon name="hand" size={14} /> The step only you can do</p>
@@ -163,6 +175,12 @@
 
 				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
 			{:else if row.kind === 'notice'}
+				{#if report}
+					<a class="btn btn-primary open-report" href={reportHref}>
+						<Icon name="doc" size={14} /> Open report: {report}
+					</a>
+				{/if}
+
 				{#if question.why}
 					<p class="context">{question.why}</p>
 				{/if}
@@ -259,6 +277,14 @@
 		background: var(--danger-soft);
 		color: var(--danger);
 		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+	}
+	.flag.report {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: var(--sea-soft);
+		color: var(--sea-strong);
+		border-color: color-mix(in srgb, var(--sea) 35%, transparent);
 	}
 	.flag.hands {
 		display: inline-flex;

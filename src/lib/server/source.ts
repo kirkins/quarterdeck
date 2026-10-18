@@ -17,6 +17,7 @@ import {
 	type Waiting
 } from '#lib/shapes.ts';
 import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
+import { REPORT_FORMATS, checkContent, type ReportFormat } from '#lib/report.ts';
 import type { ReplyArgs } from './answer.ts';
 import type { Config } from './config.ts';
 import type { DismissArgs } from './dismiss.ts';
@@ -47,6 +48,35 @@ export interface Source {
 	routesShow(): Promise<Read<RoutesConfig>>;
 	/** Token totals across the fleet for a period (`usage.summary`), read-only. */
 	usage(query: UsageQuery): Promise<Read<UsageSummary>>;
+	/** A report held by id, from whichever home has it (`report.get`). */
+	report(id: string): Promise<FetchedReport>;
+}
+
+export interface FetchedReport {
+	format: ReportFormat;
+	content: string;
+}
+
+/**
+ * Read `report.get`. Its answer may carry the report at the top level or
+ * under `report`; either way the content must be a string within the limit.
+ */
+export function parseFetched(result: unknown, id: string): FetchedReport {
+	const root = rec(result);
+	const body = rec(root?.report) ?? root;
+	const format = body?.format;
+	if (!REPORT_FORMATS.includes(format as ReportFormat)) {
+		throw new Error(`report ${id} came back without a markdown or html format`);
+	}
+	const content = checkContent(body?.content);
+	if (!content.ok) throw new Error(`report ${id}: ${content.error}`);
+	return { format: format as ReportFormat, content: content.value };
+}
+
+function rec(value: unknown): Record<string, unknown> | null {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: null;
 }
 
 /**
@@ -104,6 +134,10 @@ export class CliSource implements Source {
 		return this.#run(command, { ...args });
 	}
 
+	async report(id: string): Promise<FetchedReport> {
+		return parseFetched(await this.#run('report.get', { id }), id);
+	}
+
 	async snapshot(): Promise<FleetRead> {
 		try {
 			return { status: 'ok', snapshot: parseSnapshot(await this.#run('fleet.snapshot', {})) };
@@ -137,6 +171,8 @@ export class CliSource implements Source {
 
 /** Fixture files, named after the command whose output they stand in for. */
 export const FIXTURE_FILES = ['captain.waiting.json', 'runtime.needs.json'] as const;
+/** Reports held by id, keyed by report_id: `{ "reports": { "<id>": { format, content } } }`. */
+export const REPORT_FIXTURE = 'report.get.json';
 export const FLEET_FIXTURE = 'fleet-snapshot.json';
 export const ROUTES_FIXTURE = 'routes-show.json';
 export const USAGE_FIXTURE = 'usage-records.json';
@@ -200,6 +236,13 @@ export class FixtureSource implements Source {
 
 	write(): Promise<unknown> {
 		return Promise.reject(new Error('FixtureSource never writes to privateer'));
+	}
+
+	async report(id: string): Promise<FetchedReport> {
+		const raw = rec(await this.#read(REPORT_FIXTURE));
+		const held = rec(raw?.reports)?.[id];
+		if (!held) throw new Error(`report ${id} is not in the fixtures`);
+		return parseFetched(held, id);
 	}
 
 	async snapshot(): Promise<FleetRead> {
