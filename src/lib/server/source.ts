@@ -225,6 +225,8 @@ export class FixtureSource implements Source {
 	readonly #now: () => number;
 	/** When this process first read the feed; see feed(). */
 	#feedBase: number | undefined;
+	/** When each held feed message first arrived; see feed(). */
+	readonly #arrivals = new Map<string, number>();
 
 	constructor(dir: string, now: () => number = Date.now) {
 		this.#dir = dir;
@@ -290,11 +292,18 @@ export class FixtureSource implements Source {
 		const raw = await this.#read(FEED_FIXTURE, this.#feedBase);
 		if (raw === null) return { status: 'unsupported' };
 		const sent = rec(raw)?.entries;
-		const arrived = (Array.isArray(sent) ? sent : []).filter(
-			(e) =>
-				typeof rec(e)?.arrives_in_s !== 'number' ||
-				(rec(e)!.arrives_in_s as number) * 1000 <= elapsed
-		);
+		const arrived: unknown[] = [];
+		for (const e of Array.isArray(sent) ? sent : []) {
+			const delay = rec(e)?.arrives_in_s;
+			if (typeof delay !== 'number') {
+				arrived.push(e);
+			} else if (delay * 1000 <= elapsed) {
+				// A held message is stamped when it first arrives, so it is newer than anything before it.
+				const id = String(rec(e)?.id);
+				if (!this.#arrivals.has(id)) this.#arrivals.set(id, this.#now());
+				arrived.push({ ...(rec(e) ?? {}), created_ms: this.#arrivals.get(id) });
+			}
+		}
 		const visible = parseFeed({ entries: arrived })
 			.entries.filter((e) => query.include_ship_mail || !isShipToShip(e))
 			.filter(

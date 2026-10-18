@@ -347,8 +347,8 @@ test.describe('feed phone', () => {
 
 	test('a decision answered in place', async ({ page }) => {
 		await openFeed(page, 'light');
-		const ask = page.locator('li.msg[data-entry="f0013-shard-count"]');
-		await ask.getByRole('radio', { name: /Eight shards/ }).check();
+		const ask = page.locator('li.msg[data-entry="f0007-onboarding-android"]');
+		await ask.getByRole('radio', { name: /Android first/ }).check();
 		await ask.evaluate((el) =>
 			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 120)
 		);

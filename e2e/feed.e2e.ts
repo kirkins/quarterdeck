@@ -65,16 +65,16 @@ test('a decision is answered in place, with a confirm step, and the reply appear
 	page
 }) => {
 	await openFeed(page);
-	const ask = page.locator('li.msg[data-entry="f0013-shard-count"]');
+	const ask = page.locator('li.msg[data-entry="f0007-onboarding-android"]');
 	const send = ask.getByRole('button', { name: 'Send answer' });
 	await expect(send).toBeHidden();
 
-	await ask.getByRole('radio', { name: /Eight shards/ }).check();
+	await ask.getByRole('radio', { name: /Android first/ }).check();
 	await expect(send).toBeVisible();
 	await send.click();
 
 	await expect(ask).toHaveAttribute('data-open', 'false');
-	const reply = page.locator('li.msg.mine').filter({ hasText: 'Eight shards' });
+	const reply = page.locator('li.msg.mine').filter({ hasText: 'Android first' });
 	await expect(reply).toBeVisible();
 	await expect(reply).toContainText('Logged, not sent');
 });

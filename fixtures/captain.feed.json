@@ -991,44 +991,20 @@
 		},
 		{
 			"machine": "north-rig",
-			"ship": "search-index",
-			"id": "f0013-shard-count",
+			"ship": "mobile-app",
+			"id": "f0007-onboarding-android",
 			"created_ms": 1792291000000,
-			"from": "search-index",
+			"from": "mobile-app",
 			"to": "captain",
 			"kind": "decision",
 			"correlation": null,
-			"task_id": "index-shards",
+			"task_id": "onboarding-v2",
 			"urgency": "normal",
 			"deadline_ms": 1792294000000,
 			"state": "open",
-			"body": "Which shard count should the new index use?",
+			"body": "Ship the new onboarding on Android first, or wait for both platforms?",
 			"payload": {
-				"decision": {
-					"question": "Which shard count should the new index use?",
-					"why": "The corpus doubles next quarter. The count is hard to change once data is written.",
-					"options": [
-						{
-							"id": "four",
-							"label": "Four shards",
-							"what_happens": "Simplest. Enough for today's corpus, not for next quarter."
-						},
-						{
-							"id": "eight",
-							"label": "Eight shards",
-							"what_happens": "Room for the doubling. Slightly more memory at idle.",
-							"cost": "~$30/mo",
-							"recommended": true
-						},
-						{
-							"id": "twelve",
-							"label": "Twelve shards",
-							"what_happens": "Headroom for two years. Costs more at idle.",
-							"cost": "~$55/mo"
-						}
-					],
-					"free_text_ok": false
-				}
+				"choices": ["Android first", "Wait for both platforms"]
 			}
 		},
 		{
