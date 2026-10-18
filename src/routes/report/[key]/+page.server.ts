@@ -1,15 +1,61 @@
 import { error, fail } from '@sveltejs/kit';
-import { askKey } from '#lib/decision.ts';
-import { checkAnnotations, checkContent, reportOf, REPORT_LIMITS } from '#lib/report.ts';
+import { MAX_LIMIT as FIND_LIMIT } from '#lib/feed.ts';
+import { askKey, type MailItem } from '#lib/decision.ts';
+import {
+	checkAnnotations,
+	checkContent,
+	commentRights,
+	reportOf,
+	REPORT_LIMITS
+} from '#lib/report.ts';
 import { triageKind } from '#lib/triage.ts';
 import { getPortal, loadItems } from '#lib/server/app.ts';
+import type { FeedEntry } from '#lib/shapes.ts';
+import { loadFeed } from '#lib/server/feed.ts';
 import { renderFrame } from '#lib/server/render.ts';
 import { errorText, submitAnnotations } from '#lib/server/submit.ts';
 import { notHeldHere } from '#lib/server/source.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-/** Only a request or a notice carries a report the captain comments on. */
-const REPORT_KINDS = new Set(['request', 'notice']);
+/**
+ * The ask a report belongs to, found by its key. Requests and decisions are in
+ * captain.waiting; a notice or a report is not, so it is read from the feed's
+ * open items. A plain report is found there too, and is read only.
+ */
+async function findAsk(key: string): Promise<MailItem | null> {
+	const found = await loadItems();
+	const waiting = found.items.find((m) => askKey(m.from, m.id) === key);
+	if (waiting) return waiting;
+	const read = await loadFeed({ limit: FIND_LIMIT, include_ship_mail: false, open_only: true });
+	if (read.status === 'unsupported') return null;
+	const entry = read.page.entries.find((e) => askKey(e.from, e.id) === key);
+	return entry ? mailOf(entry) : null;
+}
+
+function mailOf(entry: FeedEntry): MailItem {
+	return {
+		id: entry.id,
+		from: entry.from,
+		to: entry.to,
+		kind: entry.kind,
+		body: entry.body,
+		payload: entry.payload,
+		task_id: entry.task_id,
+		correlation: entry.correlation,
+		request_kind: entry.request_kind,
+		deadline_ms: entry.deadline_ms,
+		created_ms: entry.created_ms ?? undefined,
+		urgency: entry.urgency
+	};
+}
+
+/** Why this ask cannot take the reply, or null. Checked before anything is sent. */
+function refusal(item: MailItem): string | null {
+	const rights = commentRights(item.kind, triageKind(item));
+	if (rights.send) return null;
+	if (rights.comment) return 'Sending comments on this report needs a Privateer update.';
+	return 'Only a request or a notice takes comments.';
+}
 
 /**
  * True when the ship that sent the report runs on another machine. Its report
@@ -25,9 +71,10 @@ async function sentFromElsewhere(ship: string): Promise<boolean> {
 export const load: PageServerLoad = async ({ params }) => {
 	const { answers } = getPortal();
 	const now = Date.now();
-	let found;
+	const key = params.key;
+	let item;
 	try {
-		found = await loadItems();
+		item = await findAsk(key);
 	} catch (error) {
 		return {
 			now,
@@ -37,8 +84,6 @@ export const load: PageServerLoad = async ({ params }) => {
 			frame: null
 		};
 	}
-	const key = params.key;
-	const item = found.items.find((m) => askKey(m.from, m.id) === key);
 	if (!item) error(404, 'This report is no longer waiting.');
 
 	const reported = reportOf(item.payload);
@@ -80,6 +125,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const format = ref.format;
+	const rights = commentRights(item.kind, triageKind(item));
 	return {
 		now,
 		error: null,
@@ -94,7 +140,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			deadline_ms: typeof item.deadline_ms === 'number' ? item.deadline_ms : null,
 			body: item.body ?? null,
 			answered: answers.get(key) ?? null,
-			canComment: REPORT_KINDS.has(triageKind(item))
+			canComment: rights.comment,
+			canSend: rights.send
 		},
 		// The frame's document is built here, on the server, so the report never runs in this origin.
 		frame: { ...renderFrame(format, content), format }
@@ -128,8 +175,7 @@ export const actions: Actions = {
 		const result = await submitAnnotations(
 			ask,
 			{ annotations: annotations.value, note: note === '' ? null : note },
-			(item) =>
-				REPORT_KINDS.has(triageKind(item)) ? null : 'Only a request or a notice takes comments.'
+			refusal
 		);
 		if (!result.ok) return fail(result.status, { ...echo, error: result.error });
 		return {

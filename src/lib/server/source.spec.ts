@@ -9,6 +9,7 @@ import {
 	FixtureSource,
 	isUnknownCommand,
 	notHeldHere,
+	refusalOf,
 	parseFetched,
 	rebaseFixture,
 	sendDismiss,
@@ -590,6 +591,20 @@ describe('reports by id', () => {
 		expect(notHeldHere(new Error('no report report-7 in the fleet'))).toBe(false);
 	});
 
+	it('recognises the same refusal when the CLI puts it on stderr and exits non-zero', () => {
+		// The runner reads a refusal on stderr as an exec error, which is what a live read gets.
+		const onStderr = (stderr: string) =>
+			new PrivateerExecError('report.get', 'privateer report.get exited with status 1', stderr);
+		expect(notHeldHere(onStderr('{"ok":false,"error":"no report report-7 in the fleet"}\n'))).toBe(
+			true
+		);
+		expect(
+			notHeldHere(onStderr('warning: slow\n{"ok":false,"error":"no report report-7 in the fleet"}'))
+		).toBe(true);
+		expect(notHeldHere(onStderr('{"ok":false,"error":"identifier is invalid"}'))).toBe(false);
+		expect(notHeldHere(onStderr('privateer: cannot open home'))).toBe(false);
+	});
+
 	it('CliSource asks report.get for the id', async () => {
 		const run = vi.fn(async () => ({ format: 'markdown', content: 'x' }));
 		const source = new CliSource(run as never);
@@ -608,7 +623,10 @@ describe('reports by id', () => {
 			format: 'html',
 			content: '<h1>Audit</h1>'
 		});
-		await expect(source.report('nope')).rejects.toThrow(/no report nope in the fleet/);
+		const missing = await source.report('nope').catch((e: unknown) => e);
+		expect(missing).toBeInstanceOf(PrivateerExecError);
+		expect(refusalOf(missing)).toBe('no report nope in the fleet');
+		expect(notHeldHere(missing)).toBe(true);
 	});
 });
 

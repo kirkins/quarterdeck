@@ -107,6 +107,18 @@ export function reportOf(payload: unknown): Checked<ReportRef> | null {
 	};
 }
 
+/**
+ * What the captain may do with a report's comments on one ask. Comments are
+ * taken on a request or a notice; a report on its own is read only. A reply
+ * is sent on a request. A notice's comments stay a draft until Privateer
+ * accepts them: captain.reply finds requests and decisions, not notices.
+ * `kind` is the mail kind, `triage` the kind triageKind gives the item.
+ */
+export function commentRights(kind: string, triage: string): { comment: boolean; send: boolean } {
+	const comment = kind !== 'report' && (triage === 'request' || triage === 'notice');
+	return { comment, send: comment && triage === 'request' };
+}
+
 /** Check report content fetched by id, against the same size limit as inline content. */
 export function checkContent(content: unknown): Checked<string> {
 	if (typeof content !== 'string') return { ok: false, error: 'report content must be a string' };

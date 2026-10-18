@@ -3,6 +3,7 @@ import {
 	REPORT_LIMITS,
 	checkAnnotation,
 	checkAnnotations,
+	commentRights,
 	findQuote,
 	parseFromFrame,
 	reportOf
@@ -203,5 +204,24 @@ describe('anchor limits as Privateer checks them', () => {
 			comment: 'ok'
 		});
 		expect(checked).toEqual({ ok: true, value: { anchor: { quote: 'a' }, comment: 'ok' } });
+	});
+});
+
+describe('commentRights', () => {
+	it('takes comments on a request, and sends them', () => {
+		expect(commentRights('request', 'request')).toEqual({ comment: true, send: true });
+	});
+
+	it('takes comments on a notice, but does not send them until Privateer accepts them', () => {
+		expect(commentRights('notice', 'notice')).toEqual({ comment: true, send: false });
+	});
+
+	it('reads a report on its own, and takes no comments on it', () => {
+		expect(commentRights('report', 'notice')).toEqual({ comment: false, send: false });
+	});
+
+	it('takes no comments on a decision or an approval', () => {
+		expect(commentRights('decision', 'decision')).toEqual({ comment: false, send: false });
+		expect(commentRights('request', 'approval')).toEqual({ comment: false, send: false });
 	});
 });

@@ -96,13 +96,32 @@ export function parseFetched(result: unknown, id: string): FetchedReport {
  */
 const NOT_HELD_HERE = /^no report \S+ in the fleet$/;
 
+/**
+ * Privateer's words for a refused command. A refusal is JSON on stdout, which the
+ * runner reads as a PrivateerCommandError, or JSON on stderr with a non-zero exit,
+ * which it reads as a PrivateerExecError. Null when the error carries no refusal.
+ */
+export function refusalOf(error: unknown): string | null {
+	if (error instanceof PrivateerCommandError) {
+		return typeof error.error === 'string' ? error.error : null;
+	}
+	if (error instanceof PrivateerExecError) {
+		for (const line of error.stderr.split('\n')) {
+			try {
+				const refusal = rec(JSON.parse(line.trim()))?.error;
+				if (typeof refusal === 'string') return refusal;
+			} catch {
+				// Not JSON: keep looking.
+			}
+		}
+	}
+	return null;
+}
+
 /** True when `report.get` said the report is not held on this machine. */
 export function notHeldHere(error: unknown): boolean {
-	return (
-		error instanceof PrivateerCommandError &&
-		typeof error.error === 'string' &&
-		NOT_HELD_HERE.test(error.error)
-	);
+	const refusal = refusalOf(error);
+	return refusal !== null && NOT_HELD_HERE.test(refusal);
 }
 
 function rec(value: unknown): Record<string, unknown> | null {
@@ -404,8 +423,16 @@ export class FixtureSource implements Source {
 	async report(id: string): Promise<FetchedReport> {
 		const raw = rec(await this.#read(REPORT_FIXTURE));
 		const held = rec(raw?.reports)?.[id];
-		// What report.get says for a report no home on this machine holds.
-		if (!held) throw new PrivateerCommandError('report.get', `no report ${id} in the fleet`);
+		// What the real runner raises for report.get on a report no home here holds: the
+		// CLI exits 1 with its JSON error on stderr, and nothing on stdout.
+		if (!held) {
+			const error = JSON.stringify({ ok: false, error: `no report ${id} in the fleet` });
+			throw new PrivateerExecError(
+				'report.get',
+				'privateer report.get exited with status 1',
+				error
+			);
+		}
 		return parseFetched(held, id);
 	}
 

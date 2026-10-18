@@ -497,7 +497,12 @@
 						{/if}
 
 						{#if composing}
-							{#if !confirming}
+							{#if !ask.canSend}
+								<p class="callout" role="status">
+									Sending comments on this report needs a Privateer update. Your comments are kept
+									here as a draft.
+								</p>
+							{:else if !confirming}
 								<button
 									type="button"
 									class="btn btn-primary send"
