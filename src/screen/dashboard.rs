@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use data::config::{Position, Source};
 use data::dashboard::{Axis, Layout, View};
 use iced::widget::pane_grid::{self, PaneGrid};
@@ -51,6 +53,8 @@ pub struct Dashboard {
     panes: pane_grid::State<Pane>,
     focus: Option<pane_grid::Pane>,
     triage: Triage,
+    /// Asks whose answer controls are open under them in the Feed.
+    answering: HashSet<String>,
 }
 
 impl Dashboard {
@@ -62,6 +66,7 @@ impl Dashboard {
             panes,
             focus,
             triage: Triage::default(),
+            answering: HashSet::new(),
         }
     }
 
@@ -151,8 +156,13 @@ impl Dashboard {
                 Some(Event::OpenLink(url))
             }
             Message::Feed(feed::Message::Answer(key)) => {
-                self.triage.reveal(&key, connection);
-                self.update(Message::Open(View::Triage), connection)
+                if !self.answering.remove(&key) {
+                    self.answering.insert(key);
+                }
+                None
+            }
+            Message::Feed(feed::Message::Triage(message)) => {
+                self.update(Message::Triage(message), connection)
             }
             Message::Triage(message) => {
                 match self.triage.update(message, connection)? {
@@ -318,7 +328,10 @@ impl Dashboard {
                 View::Triage => {
                     self.triage.view(connection, theme).map(Message::Triage)
                 }
-                View::Feed => feed::view(connection, theme).map(Message::Feed),
+                View::Feed => {
+                    feed::view(connection, &self.triage, &self.answering, theme)
+                        .map(Message::Feed)
+                }
                 view => placeholder(view),
             };
 

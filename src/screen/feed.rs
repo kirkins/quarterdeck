@@ -1,6 +1,8 @@
 //! The Feed: one conversation with every ship, oldest at the top. Asks show
 //! their state; an open one is answered in Triage, the one answer path.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Local, TimeZone};
 use data::feed::Entry;
 use iced::widget::{button, column, container, row, scrollable, space};
@@ -10,18 +12,23 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::Connection;
 use crate::font;
+use crate::screen::triage::{self, Triage};
 use crate::widget::{Column, Element, markdown, text};
 
 #[derive(Debug, Clone)]
 pub enum Message {
     LoadOlder,
-    /// Open this ask, by its key, in Triage.
+    /// Show or hide the answer controls under an open ask, by its key.
     Answer(String),
     OpenLink(String),
+    /// Answering in place, through Triage's one answer path.
+    Triage(triage::Message),
 }
 
 pub fn view<'a>(
     connection: &'a Connection,
+    triage: &'a Triage,
+    answering: &'a HashSet<String>,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let feed = &connection.feed;
@@ -76,9 +83,14 @@ pub fn view<'a>(
                 );
             }
         }
+        let key = entry.key();
+        let panel = answering
+            .contains(&key)
+            .then(|| answer_panel(&key, connection, triage));
         list = list.push(message_view(
             entry,
-            connection.feed.bodies.get(&entry.key()),
+            connection.feed.bodies.get(&key),
+            panel,
             theme,
         ));
     }
@@ -89,6 +101,7 @@ pub fn view<'a>(
 fn message_view<'a>(
     entry: &'a Entry,
     body: Option<&'a data::markdown::Document>,
+    panel: Option<Element<'a, Message>>,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let mine = entry.from == "captain";
@@ -124,14 +137,22 @@ fn message_view<'a>(
         None => content = content.push(text(entry.body.as_str())),
     }
     if entry.is_open_ask() {
+        let open = panel.is_some();
         content = content.push(
-            button(text("Answer"))
+            button(text(if open { "Hide" } else { "Answer" }))
                 .padding([4, 12])
-                .style(|theme, status| {
-                    theme::button::primary(theme, status, false)
+                .style(move |theme, status| {
+                    if open {
+                        theme::button::secondary(theme, status, false)
+                    } else {
+                        theme::button::primary(theme, status, false)
+                    }
                 })
                 .on_press(Message::Answer(entry.key())),
         );
+        if let Some(panel) = panel {
+            content = content.push(panel);
+        }
     }
 
     // The captain's own messages sit indented, as a reply does in a chat.
@@ -141,6 +162,24 @@ fn message_view<'a>(
         Padding::default()
     };
     container(content).padding(padding).into()
+}
+
+/// The answer controls under an ask. An ask that is open in the Feed but
+/// not yet in Privateer's list of what waits on the captain cannot be
+/// answered until the next poll.
+fn answer_panel<'a>(
+    key: &str,
+    connection: &'a Connection,
+    triage: &'a Triage,
+) -> Element<'a, Message> {
+    match triage.answer_panel(key, connection) {
+        Some(panel) => container(panel.map(Message::Triage))
+            .padding([6, 0])
+            .into(),
+        None => text("This ask is not in the list of what waits on you yet; it will be after the next check.")
+            .style(theme::text::tertiary)
+            .into(),
+    }
 }
 
 /// What became of an ask; nothing for a notice or a reply.

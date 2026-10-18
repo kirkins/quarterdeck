@@ -188,19 +188,6 @@ impl Triage {
         }
     }
 
-    /// Show an ask open, as when the Feed asks to answer it.
-    pub fn reveal(&mut self, key: &str, connection: &Connection) {
-        let decision = connection
-            .details
-            .get(key)
-            .is_some_and(|d| !d.card.options.is_empty());
-        if decision {
-            self.toggled.remove(key);
-        } else {
-            self.toggled.insert(key.to_owned());
-        }
-    }
-
     /// What became of a write. A sent answer leaves the list on the next
     /// poll; a refused one keeps the draft so nothing typed is lost.
     pub fn written(&mut self, key: String, result: Result<Sent, Error>) {
@@ -288,6 +275,35 @@ impl Triage {
         scrollable(container(list).padding(12))
             .height(Length::Fill)
             .into()
+    }
+
+    /// The answer controls for one open ask, without the ask itself: for a
+    /// view that already shows it, such as the Feed. None when Privateer's
+    /// list of what waits on the captain does not hold the ask.
+    pub fn answer_panel<'a>(
+        &'a self,
+        key: &str,
+        connection: &'a Connection,
+    ) -> Option<Element<'a, Message>> {
+        let (item, details) = find(connection, key)?;
+        let draft = self.drafts.get(key).cloned().unwrap_or_default();
+        let outcome = self.outcomes.get(key);
+        let mut panel = Column::new().spacing(8);
+        if let Some(outcome) = outcome {
+            panel = panel.push(outcome_label(outcome));
+            if matches!(outcome, Outcome::Sent | Outcome::Held) {
+                return Some(panel.into());
+            }
+        }
+        if let Some(split) = &details.choices {
+            panel = panel.push(ticks(key, split, &draft));
+        }
+        panel = panel.push(self.answer_view(key, item, details, &draft));
+        if let Some(Outcome::Failed(problem)) = outcome {
+            panel =
+                panel.push(text(problem.as_str()).style(theme::text::error));
+        }
+        Some(panel.into())
     }
 
     fn item_view<'a>(
