@@ -33,6 +33,7 @@
 	import { parseFeed, type FeedEntry, type FeedPage } from '#lib/shapes.ts';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { onMount, untrack } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 
 	interface Props {
 		/** The first page, as the server read it for this filter. */
@@ -205,6 +206,11 @@
 		const response = await fetch(`/feed/data?${search}`, {
 			headers: { accept: 'application/json' }
 		});
+		if (response.status === 401) {
+			// The session ended: reloading the page's data sends the captain to sign in, then back here.
+			await invalidateAll();
+			throw new Error('Signed out. Sign in again.');
+		}
 		const body = (await response.json()) as { status: string; error?: string } & Record<
 			string,
 			unknown

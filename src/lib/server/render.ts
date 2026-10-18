@@ -5,16 +5,24 @@
  * report must never run in the portal's origin. The frame is a sandboxed
  * iframe without allow-same-origin, and this document sets a CSP that lets
  * nothing load from the network and only the annotator script (carrying a
- * fresh nonce) run. Markdown is rendered here, with raw HTML escaped and only
+ * fresh nonce) run. A srcdoc frame also inherits the portal's own CSP, which
+ * allows the annotator by its hash (ANNOTATOR_HASH, set in vite.config.ts), so
+ * the annotator's text is the same in every render. Markdown is rendered here, with raw HTML escaped and only
  * http(s), mailto and #fragment links kept, and then takes the same path as
  * HTML. Every render also has a token that only the annotator knows; the
  * portal drops any message without it. See docs/DECISIONS.md, section 15.
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Marked } from 'marked';
 // Kept as text, not a module, so the app's TypeScript and lint do not treat it as app code.
 import annotator from './annotator.txt?raw';
 import type { ReportFormat } from '#lib/report.ts';
+
+/**
+ * The CSP source for the annotator, as the portal's own CSP lists it. The
+ * frame inherits that policy as well as its own, so both must allow the script.
+ */
+export const ANNOTATOR_HASH = `sha256-${createHash('sha256').update(annotator).digest('base64')}`;
 
 const markdown = new Marked({
 	gfm: true,
@@ -208,9 +216,9 @@ export interface RenderedFrame {
 
 /**
  * The srcdoc for one report, with a fresh nonce for its annotator and a fresh
- * token. The token is written into the annotator's script text (never an
- * attribute, which CSS could match), and the portal never sends it into the
- * frame, so a document the frame is navigated to cannot learn it.
+ * token. The token is the text of a JSON block the annotator reads and removes
+ * (never an attribute, which CSS could match), and the portal never sends it
+ * into the frame, so a document the frame is navigated to cannot learn it.
  */
 export function renderFrame(format: ReportFormat, content: string): RenderedFrame {
 	const nonce = randomBytes(16).toString('base64');
@@ -218,7 +226,6 @@ export function renderFrame(format: ReportFormat, content: string): RenderedFram
 	const body = defuse(
 		format === 'markdown' ? (markdown.parse(content, { async: false }) as string) : content
 	);
-	const script = annotator.replaceAll('__QD_TOKEN__', token);
 	const srcdoc = `<!doctype html>
 <html lang="en">
 <head>
@@ -226,7 +233,8 @@ export function renderFrame(format: ReportFormat, content: string): RenderedFram
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${frameCsp(nonce)}">
 <style>${CSS}</style>
-<script nonce="${nonce}">${script}</script>
+<script type="application/json" id="qd-token">"${token}"</script>
+<script nonce="${nonce}">${annotator}</script>
 </head>
 <body>
 <div class="report">${body}</div>

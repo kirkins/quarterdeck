@@ -214,8 +214,11 @@ test('a frame that is navigated anyway is closed, its messages ignored, and can 
 	const warning = page.getByRole('alert').filter({ hasText: 'tried to leave the page' });
 	await expect(warning).toBeVisible();
 	await expect(page.locator('iframe.frame')).toHaveCount(0);
-	expect(trapped).toEqual(['/elsewhere']);
-	// The new document posted a comment request without the token: no composer opened.
+	// The portal's CSP (frame-src 'self') refuses the navigation before it leaves, so the
+	// trap's page, which would post a request without the token, never loads. The frame
+	// shows an error page instead, and that second load is what closes it. Dropping a
+	// message without the token is covered in src/lib/report.spec.ts.
+	expect(trapped).toEqual([]);
 	await expect(page.getByRole('textbox', { name: 'Your comment' })).toHaveCount(0);
 
 	await warning.getByRole('button', { name: 'Load the report again' }).click();

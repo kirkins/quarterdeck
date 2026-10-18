@@ -21,7 +21,8 @@
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"test:e2e": "playwright test",
-		"screenshots": "QD_SCREENSHOTS=1 playwright test e2e/screenshots.e2e.ts"
+		"screenshots": "QD_SCREENSHOTS=1 playwright test e2e/screenshots.e2e.ts e2e/login.screenshots.e2e.ts",
+		"hash-password": "node scripts/hash-password.js"
 	},
 	"imports": {
 		"#lib/*": "./src/lib/*"

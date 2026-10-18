@@ -33,6 +33,8 @@
 	const open = $derived(typeof page.data.open === 'number' ? page.data.open : null);
 	const triage = $derived(typeof data.triage === 'number' ? data.triage : null);
 	const wide = $derived(WIDE.some((p) => page.url.pathname.startsWith(p)));
+	/** The login page stands alone: no navigation, nothing read from the fleet. */
+	const bare = $derived(page.route.id === '/login');
 
 	// Every form action echoes what it did; say so for a moment.
 	$effect(() => {
@@ -63,60 +65,83 @@
 	<div class="progress" role="progressbar" aria-label="Loading"></div>
 {/if}
 
-<div class="shell">
-	<header class="rail">
-		<a class="brand" href={resolve('/feed')} aria-label="Quarterdeck, home">
-			<Mark size={30} />
-			<span class="wordmark">Quarterdeck</span>
-		</a>
-
-		<nav aria-label="Sections">
-			<ul>
-				{#each SECTIONS as s (s.path)}
-					{@const current = page.url.pathname.startsWith(s.path)}
-					<li>
-						<a class="tab" href={resolve(s.path)} aria-current={current ? 'page' : undefined}>
-							<span class="tab-icon"
-								><Icon name={s.icon} size={22} stroke={current ? 2 : 1.75} /></span
-							>
-							<span class="tab-label">{s.label}</span>
-							{#if s.path === '/feed' && triage}
-								<span class="dot" aria-label="{triage} waiting on you"></span>
-							{:else if s.path === '/triage' && triage}
-								<span class="count count-brass" aria-label="{triage} owed to you">{triage}</span>
-							{:else if s.path === '/decisions' && open}
-								<span class="count" aria-label="{open} waiting">{open}</span>
-							{/if}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</nav>
-
-		{#if !data.live}
-			<p class="mode" role="note">
-				<span class="mode-dot" aria-hidden="true"></span>
-				{#if data.mode === 'fixtures'}
-					<span><strong>Fixture data</strong> · answers are logged, not sent</span>
-				{:else}
-					<span><strong>Dry run</strong> · live asks; answers are logged, not sent</span>
-				{/if}
-			</p>
-		{/if}
-
-		<div class="tools">
-			<ThemeToggle initial={data.theme} />
-		</div>
-	</header>
-
-	<main id="main" tabindex="-1" class:wide>
-		{#if slow}
-			<Skeleton />
-		{:else}
-			{@render children()}
-		{/if}
+{#if bare}
+	<main id="main" tabindex="-1" class="bare">
+		{@render children()}
 	</main>
-</div>
+{:else}
+	<div class="shell">
+		<header class="rail">
+			<a class="brand" href={resolve('/feed')} aria-label="Quarterdeck, home">
+				<Mark size={30} />
+				<span class="wordmark">Quarterdeck</span>
+			</a>
+
+			<nav aria-label="Sections">
+				<ul>
+					{#each SECTIONS as s (s.path)}
+						{@const current = page.url.pathname.startsWith(s.path)}
+						<li>
+							<a class="tab" href={resolve(s.path)} aria-current={current ? 'page' : undefined}>
+								<span class="tab-icon"
+									><Icon name={s.icon} size={22} stroke={current ? 2 : 1.75} /></span
+								>
+								<span class="tab-label">{s.label}</span>
+								{#if s.path === '/feed' && triage}
+									<span class="dot" aria-label="{triage} waiting on you"></span>
+								{:else if s.path === '/triage' && triage}
+									<span class="count count-brass" aria-label="{triage} owed to you">{triage}</span>
+								{:else if s.path === '/decisions' && open}
+									<span class="count" aria-label="{open} waiting">{open}</span>
+								{/if}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</nav>
+
+			{#if !data.live}
+				<p class="mode" role="note">
+					<span class="mode-dot" aria-hidden="true"></span>
+					{#if data.mode === 'fixtures'}
+						<span><strong>Fixture data</strong> · answers are logged, not sent</span>
+					{:else}
+						<span><strong>Dry run</strong> · live asks; answers are logged, not sent</span>
+					{/if}
+				</p>
+			{/if}
+
+			<div class="tools">
+				<ThemeToggle initial={data.theme} />
+				{#if data.auth === 'signed-in'}
+					<!-- A plain post, so the page reloads and keeps nothing from the session. -->
+					<form class="session" method="POST" action="/logout">
+						<span class="signed-in"
+							><span class="signed-in-dot" aria-hidden="true"></span>Signed in</span
+						>
+						<button
+							class="btn btn-quiet sign-out"
+							type="submit"
+							aria-label="Sign out"
+							title="Sign out"
+						>
+							<Icon name="sign-out" size={20} />
+							<span class="sign-out-text">Sign out</span>
+						</button>
+					</form>
+				{/if}
+			</div>
+		</header>
+
+		<main id="main" tabindex="-1" class:wide>
+			{#if slow}
+				<Skeleton />
+			{:else}
+				{@render children()}
+			{/if}
+		</main>
+	</div>
+{/if}
 
 <Toaster />
 
@@ -209,6 +234,20 @@
 	}
 	.tools {
 		grid-area: tools;
+		display: flex;
+		align-items: center;
+	}
+	.session {
+		display: contents;
+	}
+	.signed-in,
+	.sign-out-text {
+		display: none;
+	}
+	.sign-out {
+		width: var(--tap);
+		padding: 0;
+		color: var(--ink-2);
 	}
 
 	.mode {
@@ -321,6 +360,10 @@
 	main:focus {
 		outline: none;
 	}
+	main.bare {
+		max-width: none;
+		padding: 0;
+	}
 
 	/* Desktop: the rail becomes a sidebar and the tabs a list. */
 	@media (min-width: 60rem) {
@@ -421,6 +464,40 @@
 		}
 		.tools {
 			margin-top: 0;
+			flex-direction: column;
+			align-items: stretch;
+			gap: var(--s-1);
+		}
+		.session {
+			display: flex;
+			align-items: center;
+			gap: var(--s-2);
+			padding-top: var(--s-2);
+			border-top: 1px solid var(--line);
+		}
+		.signed-in {
+			display: inline-flex;
+			align-items: center;
+			gap: var(--s-2);
+			padding-left: var(--s-2);
+			color: var(--ink-3);
+			font-size: var(--text-xs);
+			font-weight: 550;
+		}
+		.signed-in-dot {
+			width: 7px;
+			height: 7px;
+			border-radius: 50%;
+			background: var(--ok);
+		}
+		.sign-out {
+			width: auto;
+			margin-left: auto;
+			padding: 0 var(--s-2);
+			font-weight: 550;
+		}
+		.sign-out-text {
+			display: inline;
 		}
 		.rail:not(:has(.mode)) .tools {
 			margin-top: auto;

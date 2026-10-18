@@ -1,6 +1,7 @@
 // Startup checks, run by server.js before the server listens. Plain JS so that
 // `npm start` needs no extra build step; the types are in startup-guard.d.ts.
 // Nothing here prints or returns a secret.
+import { parseLoginHash } from './login-hash.js';
 
 /** @param {string} host */
 export function isLoopback(host) {
@@ -51,10 +52,12 @@ export function checkStartup(env = process.env) {
 	const port = (env.PORT || '3000').trim();
 	const source = (env.QD_SOURCE || 'fixtures').trim().toLowerCase();
 	const send = env.QD_ALLOW_SEND === '1';
-	// Login is not built yet, so a QD_LOGIN_SECRET protects nothing and must not
-	// unlock sending on a network bind. The login change will turn this on.
-	const loginEnforced = false;
-	const login = loginEnforced && Boolean(env.QD_LOGIN_SECRET?.trim());
+	const secret = env.QD_LOGIN_SECRET?.trim();
+	const parsed = secret ? parseLoginHash(secret) : null;
+	// The login is built (src/lib/server/auth.ts): a valid hash turns it on for
+	// every route, so it counts as a login. An invalid one refuses to start.
+	const loginEnforced = true;
+	const login = loginEnforced && parsed?.ok === true;
 	const exposed = !isLoopback(host);
 
 	/** @type {string[]} */
@@ -62,11 +65,22 @@ export function checkStartup(env = process.env) {
 	/** @type {string[]} */
 	const warnings = [];
 
+	if (parsed && !parsed.ok) errors.push(parsed.error);
 	if (exposed && send && !login) {
 		errors.push(
 			`HOST=${host} is not loopback and QD_ALLOW_SEND=1, but no login is configured. ` +
-				'Set QD_ALLOW_SEND=0, or bind HOST to 127.0.0.1 until login exists.'
+				'Set QD_LOGIN_SECRET (`npm run hash-password`, see docs/DEPLOY.md), ' +
+				'or QD_ALLOW_SEND=0, or bind HOST to 127.0.0.1.'
 		);
+	}
+	for (const [name, max] of /** @type {const} */ ([
+		['QD_SESSION_HOURS', 24 * 30],
+		['QD_SESSION_IDLE_MINUTES', 24 * 60 * 30]
+	])) {
+		const value = env[name]?.trim();
+		if (value && !(Number(value) > 0 && Number(value) <= max)) {
+			errors.push(`${name} must be a positive number, at most ${max}.`);
+		}
 	}
 	if (send && source === 'fixtures') {
 		errors.push(
@@ -81,13 +95,18 @@ export function checkStartup(env = process.env) {
 			);
 		}
 	} else if (exposed) {
-		warnings.push(
-			'HOST is not loopback and ORIGIN is unset: form posts may be rejected. ' +
-				'Set ORIGIN=http://<vpn-address>:<port> (see docs/DEPLOY.md).'
+		// The origin check on every form post, and the login cookie's Secure
+		// flag, are only right when the server knows the address the browser uses.
+		errors.push(
+			`HOST=${host} is not loopback and ORIGIN is unset. ` +
+				'Set ORIGIN=http://<vpn-address>:<port>, the address the browser uses (see docs/DEPLOY.md).'
 		);
 	}
-	if (env.QD_LOGIN_SECRET?.trim()) {
-		warnings.push('QD_LOGIN_SECRET is set, but login is not implemented yet: nothing enforces it.');
+	if (exposed && !login) {
+		warnings.push(
+			'HOST is not loopback and no login is configured: anyone who can reach the port can read the portal. ' +
+				'Set QD_LOGIN_SECRET (see docs/DEPLOY.md).'
+		);
 	}
 
 	const summary =
@@ -114,4 +133,21 @@ export function hostAllowed(env, hostHeader) {
 	const origin = env.ORIGIN ? originUrl(env.ORIGIN) : null;
 	if (origin) allowed.add(origin.host.toLowerCase());
 	return allowed.has((hostHeader ?? '').trim().toLowerCase());
+}
+
+/**
+ * What the server's request URLs should say about themselves. adapter-node 6
+ * no longer reads ORIGIN: it builds each request's URL from headers, and
+ * assumes https when no protocol header names it. SvelteKit's origin check
+ * compares a form post's Origin with that URL, so over plain http every post
+ * would be refused. server.js passes these values in headers it sets itself
+ * on every request, overwriting anything a client sent.
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ protocol: string, host: string | null }}
+ */
+export function requestOrigin(env) {
+	const origin = env.ORIGIN ? originUrl(env.ORIGIN) : null;
+	if (origin) return { protocol: origin.protocol.slice(0, -1), host: origin.host };
+	// No ORIGIN means a loopback bind (the guard requires one otherwise): plain http, any Host.
+	return { protocol: 'http', host: null };
 }

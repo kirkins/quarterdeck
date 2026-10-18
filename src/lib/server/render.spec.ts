@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import type { ReportFormat } from '#lib/report.ts';
-import { defuse, frameCsp, renderFrame, safeHref } from './render.ts';
+import { ANNOTATOR_HASH, defuse, frameCsp, renderFrame, safeHref } from './render.ts';
 
 /** The frame's document alone. */
 function srcdocOf(format: ReportFormat, content: string): string {
@@ -158,7 +160,10 @@ describe('renderFrame', () => {
 		const b = srcdocOf('html', '<p>b</p>');
 		expect(nonceOf(a)).not.toBe(nonceOf(b));
 		expect(a).toContain(`'nonce-${nonceOf(a)}'`);
-		expect(a.match(/<script\b/g)).toHaveLength(1);
+		// The other script element is the token's JSON block, which never runs.
+		expect(a.match(/<script\b/g)).toHaveLength(2);
+		expect(a.match(/<script nonce=/g)).toHaveLength(1);
+		expect(a.match(/<script type="application\/json" id="qd-token">/g)).toHaveLength(1);
 	});
 
 	it('sets a CSP that allows only the nonce’d script, styles, and data: images', () => {
@@ -175,18 +180,36 @@ describe('renderFrame', () => {
 		expect(srcdoc.indexOf('<script nonce=')).toBeLessThan(srcdoc.indexOf('<!-- unclosed'));
 	});
 
-	it('gives every render its own token, written only into the annotator’s script', () => {
+	it('gives every render its own token, written only into the block the annotator reads', () => {
 		const a = renderFrame('html', '<p>a</p>');
 		const b = renderFrame('html', '<p>a</p>');
 		expect(a.token).toMatch(/^[0-9a-f]{32}$/);
 		expect(a.token).not.toBe(b.token);
-		const script = scriptOf(a.srcdoc);
-		expect(script).toContain(`'${a.token}'`);
+		expect(tokenOf(a.srcdoc)).toBe(a.token);
 		expect(a.srcdoc.split(a.token)).toHaveLength(2);
-		expect(a.srcdoc).not.toContain('__QD_TOKEN__');
 		expect(a.srcdoc).not.toContain(b.token);
+		// The block comes before the annotator, which reads it while the head is parsed.
+		expect(a.srcdoc.indexOf('id="qd-token"')).toBeLessThan(a.srcdoc.indexOf('<script nonce='));
+	});
+
+	it('writes the same annotator into every frame, matching the hash the portal’s CSP allows', () => {
+		const a = scriptOf(renderFrame('html', '<p>a</p>').srcdoc);
+		const b = scriptOf(renderFrame('markdown', '# b').srcdoc);
+		expect(a).toBe(b);
+		const hash = `sha256-${createHash('sha256').update(a).digest('base64')}`;
+		expect(hash).toBe(ANNOTATOR_HASH);
+		// vite.config.ts hashes the file itself; the ?raw import must be byte for byte the same.
+		const file = readFileSync(new URL('./annotator.txt', import.meta.url), 'utf8');
+		expect(a).toBe(file);
 	});
 });
+
+/** The render's token, from the JSON block before the annotator. */
+function tokenOf(srcdoc: string): string {
+	const match = srcdoc.match(/<script type="application\/json" id="qd-token">([^<]*)<\/script>/);
+	if (!match) throw new Error('no token block in the frame');
+	return JSON.parse(match[1]);
+}
 
 /** The annotator's source, as written into the frame. */
 function scriptOf(srcdoc: string): string {
@@ -226,7 +249,10 @@ function runAnnotator(srcdoc: string) {
 		parent: { postMessage: (message: unknown) => sent.push(message) },
 		getSelection: () => ({ isCollapsed: true })
 	};
+	const token = tokenOf(srcdoc);
 	const document = {
+		getElementById: (id: string) =>
+			id === 'qd-token' ? { textContent: JSON.stringify(token), remove: () => {} } : null,
 		readyState: 'complete',
 		body: new Element('body'),
 		addEventListener: on,

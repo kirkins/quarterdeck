@@ -7,7 +7,7 @@ A web portal for a [Privateer](https://github.com/kirkins/privateer) fleet: wher
 - **Fleet**: machines, ships and crew, with what each is doing. Read-only; refreshes every 15 s while visible.
 - **Reports**: a ship's Markdown or HTML report, read in a sandboxed frame. Select a passage (or tap a paragraph on a phone) to comment; send every comment back to the ship as one reply.
 
-Quarterdeck reads Privateer only through its JSON commands, and answers as the captain. It must never be reachable without authentication.
+Quarterdeck reads Privateer only through its JSON commands, and answers as the captain. It must never be reachable without authentication: it has a built-in passphrase login for that.
 
 Status: early development. Decisions, Triage, Fleet and Reports are live. Fleet reads a provisional `fleet.snapshot` shape; see [docs/DECISIONS.md](docs/DECISIONS.md) section 13.
 
@@ -18,11 +18,13 @@ Status: early development. Decisions, Triage, Fleet and Reports are live. Fleet 
 ## Security
 
 > [!WARNING]
-> Quarterdeck acts as the captain: anyone who can load it can answer for you. Version 0 has **no authentication**. It listens on `127.0.0.1` by default. Do not expose it beyond the local machine (LAN, VPN or public host) until a login exists; if you do, put an authenticating proxy in front and firewall the port. [docs/DEPLOY.md](docs/DEPLOY.md) is the step-by-step guide for a server.
+> Quarterdeck acts as the captain: anyone who can use it can answer for you. It listens on `127.0.0.1` by default, with no login, for local development. Before it listens anywhere else, set `QD_LOGIN_SECRET` (`npm run hash-password`), keep it on a firewalled VPN address, and only then turn sending on. [docs/DEPLOY.md](docs/DEPLOY.md) is the step-by-step guide for a server.
 
-- `HOST` changes the listen address. Leave it at loopback unless an authenticating proxy is in front, or you are deliberately deploying behind a firewalled VPN address (see the guide).
-- **Startup guard.** The server refuses to start when `HOST` is not loopback **and** `QD_ALLOW_SEND=1`, until the built-in login exists (`QD_LOGIN_SECRET` is reserved for it and unlocks nothing yet). It also refuses `QD_ALLOW_SEND=1` with `QD_SOURCE=fixtures`. Refusal exits with status 78 and says why.
-- **Host check.** With a non-loopback `HOST`, requests whose `Host` header is not `HOST:PORT` or the `ORIGIN` host get 403. `ORIGIN` should be set to the address the browser uses; startup warns when it is not.
+- **Login.** With `QD_LOGIN_SECRET` set to a scrypt hash of a passphrase, every page, form action and endpoint needs a session, except the login page itself. Sessions are held in server memory (12 hours at most, 2 hours idle; a restart signs out) and named by a random id in an `HttpOnly`, `SameSite=Strict` cookie. Wrong passphrases are rate limited per address and overall. One user, no second factor: see [docs/DECISIONS.md](docs/DECISIONS.md), section 18.
+- `HOST` changes the listen address. Leave it at loopback unless a login is set and you are deploying behind a firewalled VPN address (see the guide), or an authenticating proxy is in front.
+- **Startup guard.** The server refuses to start when `HOST` is not loopback **and** `QD_ALLOW_SEND=1` without a valid login hash, when `QD_LOGIN_SECRET` is set but is not a strong enough scrypt hash, when `HOST` is not loopback and `ORIGIN` is unset, and when `QD_ALLOW_SEND=1` with `QD_SOURCE=fixtures`. Refusal exits with status 78 and says why.
+- **Origin and Host checks.** Every request that changes something must carry this site's `Origin`, whatever its content type. With a non-loopback `HOST`, requests whose `Host` header is not `HOST:PORT` or the `ORIGIN` host get 403.
+- **Headers.** Pages send a Content-Security-Policy (scripts by nonce, no framing, no plugins), `X-Frame-Options: DENY`, `Referrer-Policy: same-origin` and `Cache-Control: no-store`.
 - Privateer is called with `execFile` and an argv array, never through a shell.
 - Answers are only logged, not sent, unless `QD_SOURCE=cli` **and** `QD_ALLOW_SEND=1`.
 
@@ -48,15 +50,17 @@ To run it on a server, reachable only over a VPN, follow [docs/DEPLOY.md](docs/D
 
 All settings come from the environment (see [.env.example](.env.example)). `npm start` also reads a `.env` file if there is one.
 
-| Variable                          | Default     | Meaning                                                                              |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
-| `QD_SOURCE`                       | `fixtures`  | `fixtures` reads JSON from `fixtures/`; `cli` asks a live Privateer home.            |
-| `PRIVATEER_BIN`, `PRIVATEER_HOME` |             | The privateer binary and home, for `QD_SOURCE=cli`.                                  |
-| `QD_ALLOW_SEND`                   | off         | Exactly `1` to really send answers from the `cli` source. Otherwise they are logged. |
-| `QD_LOGIN_SECRET`                 |             | Reserved for the coming login; unlocks nothing yet.                                  |
-| `QD_FIXTURES_DIR`                 | `fixtures`  | Where the fixture source reads `captain.waiting.json` and `runtime.needs.json`.      |
-| `HOST`, `PORT`                    | `127.0.0.1` | Listen address. `PORT` defaults to 3000 for `npm start`, 5173 for `npm run dev`.     |
-| `ORIGIN`                          |             | The browser's address, `http://<host>:<port>`. Required when `HOST` is not loopback. |
+| Variable                          | Default     | Meaning                                                                                                                            |
+| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `QD_SOURCE`                       | `fixtures`  | `fixtures` reads JSON from `fixtures/`; `cli` asks a live Privateer home.                                                          |
+| `PRIVATEER_BIN`, `PRIVATEER_HOME` |             | The privateer binary and home, for `QD_SOURCE=cli`.                                                                                |
+| `QD_ALLOW_SEND`                   | off         | Exactly `1` to really send answers from the `cli` source. Otherwise they are logged.                                               |
+| `QD_LOGIN_SECRET`                 |             | The login: a scrypt hash from `npm run hash-password`. Unset means no login (loopback only).                                       |
+| `QD_SESSION_HOURS`                | `12`        | A session's absolute lifetime.                                                                                                     |
+| `QD_SESSION_IDLE_MINUTES`         | `120`       | A session ends after this long without a visit.                                                                                    |
+| `QD_FIXTURES_DIR`                 | `fixtures`  | Where the fixture source reads `captain.waiting.json` and `runtime.needs.json`.                                                    |
+| `HOST`, `PORT`                    | `127.0.0.1` | Listen address. `PORT` defaults to 3000 for `npm start`, 5173 for `npm run dev`.                                                   |
+| `ORIGIN`                          |             | The browser's address, `http://<host>:<port>`. Required when `HOST` is not loopback; `https://` makes the session cookie `Secure`. |
 
 The live source runs `captain.waiting` and `runtime.needs`. `captain.waiting` is open to the captain and the captain's liaison; `runtime.needs` is an operator command. The process needs one of those rights on that home, or Privateer refuses both.
 
@@ -86,7 +90,8 @@ In fixture mode, or without `QD_ALLOW_SEND=1`, the server logs the exact `captai
 npm run lint           # prettier + eslint
 npm run check          # svelte-check
 npm test               # vitest: schema, data layer, fixtures
-npm run test:e2e       # Playwright smoke test (chromium) against a production build
+npm run test:e2e       # Playwright smoke test (chromium) against a production build, and the login on a second server
+npm run hash-password  # print a QD_LOGIN_SECRET for a passphrase
 npm run screenshots    # refresh docs/screenshots
 ```
 
@@ -100,6 +105,8 @@ Layout:
 - `src/lib/fleet.ts`: the fleet map's summary, needs per ship, and machine and ship sort order.
 - `src/lib/server/answer.ts`: builds the reply from the captain's choice.
 - `startup-guard.js`: the startup checks (`server.js` runs them) and the Host check (`src/hooks.server.ts`).
+- `login-hash.js`: the login secret's format, scrypt hashing and constant-time verification (`npm run hash-password` and the guard use it).
+- `src/lib/server/auth.ts`: sessions, the login rate limiter and the `next` path check. `src/hooks.server.ts` requires a session on every route but `/login`.
 - `src/routes/+page.server.ts`: loads cards; the `answer` form action.
 - `fixtures/`: invented ships and asks covering every card variant.
 
