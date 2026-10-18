@@ -10,6 +10,7 @@ use data::choices;
 use data::config::{self, Source};
 use data::decision::Card;
 use data::feed::{Page, Thread};
+use data::fleet::Snapshot;
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
 use data::report::Report;
@@ -31,6 +32,11 @@ pub enum Message {
         result: Result<Page, Error>,
     },
     Waited(u64, Result<Waiting, Error>),
+    FleetRead {
+        generation: u64,
+        since: bool,
+        result: Result<Snapshot, Error>,
+    },
 }
 
 /// One ask, read for drawing: its card, and its Markdown.
@@ -82,7 +88,24 @@ pub struct Connection {
     /// Stored reports read so far, by id, with their Markdown.
     pub reports: HashMap<String, Result<(Report, Document), Error>>,
     reading_ships: bool,
+    pub fleet: Fleet,
 }
+
+/// The fleet as last read, and whether the last read worked.
+#[derive(Default)]
+pub struct Fleet {
+    pub snapshot: Option<Snapshot>,
+    pub error: Option<Error>,
+    /// When the snapshot held was read.
+    pub read_ms: Option<i64>,
+    asked_ms: Option<i64>,
+    reading: bool,
+    /// The last read went wrong: read the next in full.
+    doubt: bool,
+}
+
+/// The fleet is read at most this often while it is on screen.
+const FLEET_EVERY_MS: i64 = 15_000;
 
 /// A live session's last screen.
 pub struct Screen {
@@ -127,6 +150,7 @@ impl Connection {
             reports: HashMap::new(),
             screen: None,
             reading_session: false,
+            fleet: Fleet::default(),
         }
     }
 
@@ -201,6 +225,50 @@ impl Connection {
             },
             move |result| {
                 Message::SessionRead(generation, ship.clone(), result)
+            },
+        )
+    }
+
+    /// The fleet, unless it was asked for in the last 15 s. Machines
+    /// unchanged since the snapshot held are not sent again.
+    pub fn read_fleet(&mut self) -> Task<Message> {
+        let due = self
+            .fleet
+            .asked_ms
+            .is_none_or(|at| now_ms() - at >= FLEET_EVERY_MS);
+        if !due || self.fleet.reading {
+            return Task::none();
+        }
+        self.ask_fleet()
+    }
+
+    fn ask_fleet(&mut self) -> Task<Message> {
+        let fleet = &mut self.fleet;
+        let since = fleet
+            .snapshot
+            .as_ref()
+            .filter(|_| !fleet.doubt)
+            .and_then(Snapshot::since);
+        fleet.reading = true;
+        fleet.asked_ms = Some(now_ms());
+        let client = self.client.clone();
+        let generation = self.generation;
+        let args = since
+            .as_ref()
+            .map_or_else(|| json!({}), |since| json!({ "since": since }));
+        let since = since.is_some();
+        Task::perform(
+            async move {
+                let value = client.run("fleet.snapshot", args).await?;
+                Snapshot::parse(value).map_err(|error| Error::Command {
+                    command: "fleet.snapshot".into(),
+                    error: format!("unexpected answer: {error}"),
+                })
+            },
+            move |result| Message::FleetRead {
+                generation,
+                since,
+                result,
             },
         )
     }
@@ -408,6 +476,41 @@ impl Connection {
                     Err(error) => {
                         log::warn!("{error}");
                         feed.error = Some(error);
+                    }
+                }
+                Task::none()
+            }
+            Message::FleetRead {
+                generation,
+                since,
+                result,
+            } => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                let fleet = &mut self.fleet;
+                fleet.reading = false;
+                match result {
+                    Ok(next) => {
+                        let held = fleet.snapshot.as_ref();
+                        match Snapshot::merge(held, next.clone()) {
+                            Some(merged) => fleet.snapshot = Some(merged),
+                            // An unchanged machine with nothing held: read
+                            // again in full.
+                            None if since => {
+                                fleet.doubt = true;
+                                return self.ask_fleet();
+                            }
+                            None => fleet.snapshot = Some(next),
+                        }
+                        fleet.read_ms = Some(now_ms());
+                        fleet.error = None;
+                        fleet.doubt = false;
+                    }
+                    Err(error) => {
+                        log::warn!("{error}");
+                        fleet.error = Some(error);
+                        fleet.doubt = true;
                     }
                 }
                 Task::none()

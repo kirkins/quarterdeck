@@ -33,6 +33,7 @@ const GRACE: Duration = Duration::from_secs(2);
 const WAITING_FIXTURE: &str =
     include_str!("../../fixtures/captain.waiting.json");
 const FEED_FIXTURE: &str = include_str!("../../fixtures/captain.feed.json");
+const FLEET_FIXTURE: &str = include_str!("../../fixtures/fleet.snapshot.json");
 const REPORTS_FIXTURE: &str = include_str!("../../fixtures/report.get.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -162,6 +163,7 @@ fn fixture(command: &str, args: &Value) -> Result<Value, Error> {
     let text = match command {
         "captain.waiting" => WAITING_FIXTURE,
         "captain.feed" => FEED_FIXTURE,
+        "fleet.snapshot" => FLEET_FIXTURE,
         "ship.list" => {
             r#"{"ships": [{"name": "billing"}, {"name": "status-page"}, {"name": "chandlery"}]}"#
         }
