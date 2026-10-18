@@ -143,7 +143,7 @@ test('ship-to-ship mail is behind a toggle, and drawn apart', async ({ page }) =
 	await toggle.check();
 	const mail = page.locator('li.msg.s2s').filter({ hasText: 'Refund totals match the ledger' });
 	await expect(mail).toBeVisible();
-	await expect(mail).toContainText('billing → storefront');
+	await expect(mail).toContainText('billing → chandlery');
 });
 
 test('filtering to one ship shows only its mail and its replies', async ({ page }) => {

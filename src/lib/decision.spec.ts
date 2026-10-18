@@ -26,7 +26,7 @@ function decision(overrides: Record<string, unknown> = {}) {
 function mail(overrides: Partial<MailItem> = {}): MailItem {
 	return {
 		id: 'm1',
-		from: 'storefront',
+		from: 'chandlery',
 		to: 'captain',
 		kind: 'decision',
 		body: 'Ship it?',
@@ -204,7 +204,7 @@ describe('toQuestion', () => {
 		const q = toQuestion(mail({ task_id: 't1', deadline_ms: NOW + HOUR }), NOW);
 		expect(q).toMatchObject({
 			id: 'm1',
-			from: 'storefront',
+			from: 'chandlery',
 			task_id: 't1',
 			kind: 'decision',
 			question: 'Ship it?',
@@ -292,12 +292,12 @@ describe('buildCards', () => {
 			NOW
 		);
 		expect(cards.map((c) => c.key)).toEqual([
-			'storefront/overdue',
-			'storefront/soon-old',
-			'storefront/soon-new',
-			'storefront/later',
-			'storefront/none-old',
-			'storefront/none-new'
+			'chandlery/overdue',
+			'chandlery/soon-old',
+			'chandlery/soon-new',
+			'chandlery/later',
+			'chandlery/none-old',
+			'chandlery/none-new'
 		]);
 	});
 
@@ -333,7 +333,7 @@ describe('buildCards', () => {
 				g('z', null, NOW)
 			],
 			NOW,
-			new Map([[askKey('storefront', 'y'), { at_ms: NOW, sent: false, option_id: 'yes' }]])
+			new Map([[askKey('chandlery', 'y'), { at_ms: NOW, sent: false, option_id: 'yes' }]])
 		);
 		expect(card.deadline_ms).toBe(NOW + 5 * HOUR);
 		expect(card.asked_ms).toBe(NOW - 4 * HOUR);
@@ -349,20 +349,20 @@ describe('buildCards', () => {
 				mail({ id: 'plain', kind: 'request', payload: {} })
 			],
 			NOW,
-			new Map([[askKey('storefront', 'done'), { at_ms: NOW, sent: false }]])
+			new Map([[askKey('chandlery', 'done'), { at_ms: NOW, sent: false }]])
 		);
-		expect(cards.map((c) => c.key)).toEqual(['storefront/open', 'storefront/done']);
+		expect(cards.map((c) => c.key)).toEqual(['chandlery/open', 'chandlery/done']);
 	});
 
 	it('keys asks by sender and id, so one id from two ships is two asks', () => {
 		const cards = buildCards(
-			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'storefront' })],
+			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'chandlery' })],
 			NOW,
-			new Map([[askKey('storefront', 'a'), { at_ms: NOW, sent: false, dismissed: true }]])
+			new Map([[askKey('chandlery', 'a'), { at_ms: NOW, sent: false, dismissed: true }]])
 		);
 		const questions = cards.flatMap((c) => c.questions);
 		expect(questions).toHaveLength(2);
-		expect(questions.find((q) => q.from === 'storefront')?.answered).toMatchObject({
+		expect(questions.find((q) => q.from === 'chandlery')?.answered).toMatchObject({
 			dismissed: true
 		});
 		expect(questions.find((q) => q.from === 'billing')?.answered).toBeNull();
@@ -370,10 +370,10 @@ describe('buildCards', () => {
 
 	it('gives each ungrouped ask its own card, even when two ships reuse an id', () => {
 		const cards = buildCards(
-			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'storefront' })],
+			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'chandlery' })],
 			NOW
 		);
-		expect(cards.map((c) => c.key).sort()).toEqual(['billing/a', 'storefront/a']);
+		expect(cards.map((c) => c.key).sort()).toEqual(['billing/a', 'chandlery/a']);
 		expect(new Set(cards.map((c) => c.key)).size).toBe(cards.length);
 	});
 });
