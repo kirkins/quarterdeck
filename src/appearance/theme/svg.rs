@@ -18,6 +18,13 @@ pub fn none(_theme: &Theme, _status: Status) -> Style {
     Style { color: None }
 }
 
+/// One colour for a whole single-colour icon: the theme's secondary text.
+pub fn secondary(theme: &Theme, _status: Status) -> Style {
+    Style {
+        color: Some(theme.styles().text.secondary.color),
+    }
+}
+
 pub fn error(theme: &Theme, _status: Status) -> Style {
     Style {
         color: Some(theme.styles().text.error.color),

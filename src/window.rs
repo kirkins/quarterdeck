@@ -74,9 +74,21 @@ pub enum Event {
     CloseRequested,
 }
 
+/// The app's icon, for the window and the task bar.
+fn app_icon() -> Option<iced::window::Icon> {
+    iced::window::icon::from_file_data(
+        include_bytes!("../assets/icons/app-256.png"),
+        None,
+    )
+    .ok()
+}
+
 #[cfg(not(target_os = "linux"))]
 pub fn settings() -> Settings {
-    Settings::default()
+    Settings {
+        icon: app_icon(),
+        ..Settings::default()
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -89,6 +101,7 @@ pub fn settings() -> Settings {
             application_id: environment::APPLICATION_ID.to_string(),
             override_redirect: false,
         },
+        icon: app_icon(),
         ..Default::default()
     }
 }

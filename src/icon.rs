@@ -184,3 +184,55 @@ fn to_text<'a>(unicode: char) -> Text<'a> {
         .size(theme::ICON_SIZE)
         .font(font::ICON)
 }
+
+/// The naval icons, one per view and one for Settings (`assets/icons`).
+pub mod naval {
+    use std::sync::LazyLock;
+
+    use data::dashboard::View;
+    use iced::widget::svg::{self, Handle, Svg};
+
+    use crate::{Theme, theme};
+
+    macro_rules! icon {
+        ($name:ident, $file:literal) => {
+            static $name: LazyLock<Handle> = LazyLock::new(|| {
+                Handle::from_memory(include_bytes!(concat!(
+                    "../assets/icons/",
+                    $file
+                )))
+            });
+        };
+    }
+
+    icon!(TRIAGE, "triage.svg");
+    icon!(FEED, "feed.svg");
+    icon!(SHIPS, "ships.svg");
+    icon!(FLEET, "fleet.svg");
+    icon!(SPEND, "spend.svg");
+    icon!(REPORTS, "reports.svg");
+    icon!(SETTINGS, "settings.svg");
+
+    /// The icon for a view, in the theme's secondary text colour.
+    pub fn view<'a>(view: View) -> Svg<'a, Theme> {
+        tinted(match view {
+            View::Triage => &TRIAGE,
+            View::Feed => &FEED,
+            View::Ships => &SHIPS,
+            View::Fleet => &FLEET,
+            View::Spend => &SPEND,
+            View::Reports => &REPORTS,
+        })
+    }
+
+    pub fn settings<'a>() -> Svg<'a, Theme> {
+        tinted(&SETTINGS)
+    }
+
+    fn tinted<'a>(handle: &LazyLock<Handle>) -> Svg<'a, Theme> {
+        svg::Svg::new((**handle).clone())
+            .width(16)
+            .height(16)
+            .style(theme::svg::secondary)
+    }
+}

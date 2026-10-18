@@ -227,7 +227,7 @@ impl Dashboard {
             let is_focused = focused == Some(view);
 
             let mut label = row![
-                section_icon(view).style(theme::text::secondary),
+                icon::naval::view(view),
                 text(view.title()).width(Length::Fill),
             ]
             .spacing(8)
@@ -252,12 +252,9 @@ impl Dashboard {
         });
 
         let settings = button(
-            row![
-                icon::config().style(theme::text::secondary),
-                text("Settings")
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
+            row![icon::naval::settings(), text("Settings")]
+                .spacing(8)
+                .align_y(Alignment::Center),
         )
         .width(Length::Fill)
         .padding([5, 8])
@@ -302,7 +299,7 @@ impl Dashboard {
             let is_focused = self.focus == Some(id);
 
             let title = row![
-                section_icon(pane.view).style(theme::text::secondary),
+                icon::naval::view(pane.view),
                 text(pane.view.title()).style(theme::text::buffer_title_bar),
             ]
             .spacing(8)
@@ -465,17 +462,6 @@ fn status(connection: &Connection) -> Element<'_, Message> {
         iced::widget::tooltip::Position::Top,
     )
     .into()
-}
-
-fn section_icon<'a>(view: View) -> crate::widget::Text<'a> {
-    match view {
-        View::Triage => icon::bell(),
-        View::Feed => icon::mail_alt(),
-        View::Ships => icon::people(),
-        View::Fleet => icon::globe(),
-        View::Spend => icon::certificate(),
-        View::Reports => icon::book(),
-    }
 }
 
 fn configuration(layout: &Layout) -> pane_grid::Configuration<Pane> {
