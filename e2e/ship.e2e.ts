@@ -33,19 +33,22 @@ test('a ship opens from the Feed, and its conversation shows only that ship', as
 	for (const who of senders) expect(['billing', 'You']).toContain(who.trim());
 });
 
-test('an open decision is answered in place from the ship conversation', async ({ page }) => {
+test('an open request takes a written reply in place from the ship conversation', async ({
+	page
+}) => {
 	await openShip(page, 'billing');
-	const ask = page.locator('li.msg[data-entry="f0001-billing-retry"]');
+	// An ask no other spec answers: the server keeps answers for the whole run.
+	const ask = page.locator('li.msg[data-entry="f0011-invoice-template"]');
 	await expect(ask.getByText('Waiting on you')).toBeVisible();
 	await ask.getByRole('button', { name: 'Answer', exact: true }).click();
 	const send = ask.getByRole('button', { name: 'Send answer' });
 	await expect(send).toBeHidden();
 
-	await ask.getByRole('radio').first().check();
+	await ask.getByLabel('Your answer').fill('Keep it for the audit.');
 	await send.click();
 
 	await expect(ask).toHaveAttribute('data-open', 'false');
-	await expect(ask.locator('.outcome')).toBeVisible();
+	await expect(ask.locator('.outcome')).toHaveText('You answered: Keep it for the audit.');
 });
 
 test('an open notice reads Unread, not Waiting on you', async ({ page }) => {

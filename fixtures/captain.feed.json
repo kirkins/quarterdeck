@@ -1150,6 +1150,22 @@
 					"free_text_ok": false
 				}
 			}
+		},
+		{
+			"machine": "atlas",
+			"ship": "billing",
+			"id": "f0011-invoice-template",
+			"created_ms": 1792127200000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": "invoice-template",
+			"urgency": "low",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Is the old invoice template still needed for the audit?",
+			"payload": {}
 		}
 	]
 }
