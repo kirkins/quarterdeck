@@ -52,6 +52,22 @@ export function waitLabel(wait: FleetWait, now: number): string {
 	return `waiting${since}`;
 }
 
+/**
+ * What a parked crew waits behind, in a few words: the park text, then the jobs it
+ * is behind, with a note on each one that is unhealthy. Null when Privateer gives neither.
+ */
+export function waitDetail(wait: FleetWait): string | null {
+	const behind = wait.behind.map(
+		(b) =>
+			`${b.job_id ?? 'another job'}${b.ship ? ` on ${b.ship}` : ''}${b.unhealthy ? ' (unhealthy)' : ''}`
+	);
+	const shown = behind.slice(0, 2);
+	if (behind.length > shown.length) shown.push(`${behind.length - shown.length} more`);
+	const parts = [wait.park, shown.length > 0 ? `behind ${shown.join(', ')}` : null];
+	const text = parts.filter((p): p is string => p !== null).join(' · ');
+	return text === '' ? null : text;
+}
+
 export interface ShipView {
 	ship: FleetShip;
 	/** Items needing the captain that name this ship. Counted even when the machine is unreachable. */

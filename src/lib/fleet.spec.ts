@@ -7,6 +7,7 @@ import {
 	isUnsure,
 	presenceLabel,
 	routeLabel,
+	waitDetail,
 	waitLabel
 } from './fleet.ts';
 import { parseSnapshot } from './shapes.ts';
@@ -94,6 +95,34 @@ describe('presence and job states', () => {
 		expect(
 			waitLabel({ for: 'job', since_ms: null, job_id: 'job-store-11', park: null, behind: [] }, NOW)
 		).toBe('waiting on job-store-11');
+	});
+
+	it('says what a parked crew is parked for, and the jobs it is behind, compactly', () => {
+		const wait = (extra: Record<string, unknown>) => ({
+			for: 'job',
+			since_ms: null,
+			job_id: 'job-store-11',
+			park: null,
+			behind: [],
+			...extra
+		});
+		expect(
+			waitDetail(
+				wait({
+					park: 'waiting for the cart layout to land',
+					behind: [{ job_id: 'job-store-11', ship: 'chandlery', unhealthy: false }]
+				})
+			)
+		).toBe('waiting for the cart layout to land · behind job-store-11 on chandlery');
+		expect(waitDetail(wait({ park: 'waiting' }))).toBe('waiting');
+		expect(waitDetail(wait({}))).toBeNull();
+		// Two jobs are named, the unhealthy one marked, and the rest counted.
+		const behind = [
+			{ job_id: 'a', ship: 'x', unhealthy: true },
+			{ job_id: 'b', ship: null, unhealthy: false },
+			{ job_id: 'c', ship: 'y', unhealthy: false }
+		];
+		expect(waitDetail(wait({ behind }))).toBe('behind a on x (unhealthy), b, 1 more');
 	});
 });
 

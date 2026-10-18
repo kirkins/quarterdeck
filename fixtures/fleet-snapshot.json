@@ -36,7 +36,9 @@
 					"error": null,
 					"allowance": null
 				}
-			]
+			],
+			"desk": true,
+			"stowed": false
 		},
 		{
 			"name": "boreas",
@@ -58,7 +60,14 @@
 					"state": "capped",
 					"until_ms": 1792307800000,
 					"error": "Weekly allowance used; shared with the captain",
-					"allowance": null
+					"allowance": {
+						"shape": "rolling",
+						"window_ends_ms": 1792303600000,
+						"weekly_ends_ms": 1792560000000,
+						"window_used": 0.4,
+						"week_used": 0.87,
+						"last_used_ms": 1792299000000
+					}
 				},
 				{
 					"name": "free-pool",
@@ -80,7 +89,9 @@
 					"error": null,
 					"allowance": null
 				}
-			]
+			],
+			"desk": false,
+			"stowed": true
 		},
 		{
 			"name": "calypso",
@@ -93,7 +104,9 @@
 			"unchanged": false,
 			"truncated": false,
 			"unknown": [],
-			"routes": []
+			"routes": [],
+			"desk": false,
+			"stowed": null
 		}
 	],
 	"ships": [
@@ -231,7 +244,13 @@
 						"since_ms": 1792299800000,
 						"job_id": "job-store-11",
 						"park": "waiting for the cart layout to land",
-						"behind": [{ "job_id": "job-store-11", "ship": "chandlery", "unhealthy": false }]
+						"behind": [
+							{
+								"job_id": "job-store-11",
+								"ship": "chandlery",
+								"unhealthy": false
+							}
+						]
 					}
 				}
 			],

@@ -135,6 +135,8 @@
 										{s.label}
 									{/if}
 								</span>
+								{#if s.allowance}<span class="detail allowance">{s.allowance}</span>{/if}
+								{#if s.identity}<span class="detail identity">route {s.identity}</span>{/if}
 								{#if s.lastError}
 									<details class="error-detail">
 										<summary>Last error</summary>
@@ -420,6 +422,12 @@
 		gap: 6px;
 		color: var(--ink);
 		font-variant-numeric: tabular-nums;
+	}
+	.state-line .detail {
+		flex-basis: 100%;
+		font-size: var(--text-xs);
+		color: var(--ink-3);
+		overflow-wrap: anywhere;
 	}
 	.state-line .error-detail {
 		flex-basis: 100%;

@@ -8,6 +8,7 @@ import path from 'node:path';
 import {
 	assemble,
 	firstCursorOf,
+	keepTruncated,
 	forwardCursorOf,
 	parseFeed,
 	parseRoutesShow,
@@ -19,6 +20,7 @@ import {
 	type FeedEntry,
 	type FeedPage,
 	type FleetSnapshot,
+	sinceFixture,
 	sinceOf,
 	type RoutesConfig,
 	type ShipProfile,
@@ -197,8 +199,8 @@ export class CliSource implements Source {
 			let snapshot = since ? await this.#fleetSince(since, held) : null;
 			// Any doubt about a partial read reads in full.
 			snapshot ??= parseSnapshot(await this.#run('fleet.snapshot', {}));
-			this.#fleet = snapshot;
-			return { status: 'ok', snapshot };
+			this.#fleet = keepTruncated(held, snapshot);
+			return { status: 'ok', snapshot: this.#fleet };
 		} catch (error) {
 			if (isUnknownCommand(error)) return { status: 'unsupported' };
 			throw error;
@@ -322,6 +324,10 @@ export class FixtureSource implements Source {
 	readonly #now: () => number;
 	/** When this process first read the feed; see feed(). */
 	#feedBase: number | undefined;
+	/** When this process first read the fleet, which pins its times as feed() pins its own. */
+	#fleetBase: number | undefined;
+	/** The last fleet read, which a `since` read joins onto, as CliSource's does. */
+	#fleet: FleetSnapshot | null = null;
 	/** When each held feed message first arrived; see feed(). */
 	readonly #arrivals = new Map<string, number>();
 	/**
@@ -387,11 +393,21 @@ export class FixtureSource implements Source {
 		return parseFetched(held, id);
 	}
 
+	/**
+	 * The fleet fixture, answered as a `since` read when one is held: an unchanged
+	 * machine keeps what was held, as it does from Privateer. The times are pinned to
+	 * the first read, so a machine's changed_ms holds from one read to the next.
+	 */
 	async snapshot(): Promise<FleetRead> {
-		const raw = await this.#read(FLEET_FIXTURE);
-		return raw === null
-			? { status: 'unsupported' }
-			: { status: 'ok', snapshot: parseSnapshot(raw) };
+		this.#fleetBase ??= this.#now();
+		const raw = await this.#read(FLEET_FIXTURE, this.#fleetBase);
+		if (raw === null) return { status: 'unsupported' };
+		const held = this.#fleet;
+		const since = sinceOf(held);
+		const joined =
+			since && held ? mergeSnapshot(held, parseSnapshot(sinceFixture(raw, since))) : null;
+		this.#fleet = keepTruncated(held, joined ?? parseSnapshot(raw));
+		return { status: 'ok', snapshot: this.#fleet };
 	}
 
 	async routesShow(): Promise<Read<RoutesConfig>> {

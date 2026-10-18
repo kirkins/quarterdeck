@@ -6,7 +6,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import RefreshButton from '#lib/components/RefreshButton.svelte';
-	import { formatUpdated, presenceLabel, routeLabel, waitLabel } from '#lib/fleet.ts';
+	import { formatUpdated, presenceLabel, routeLabel, waitDetail, waitLabel } from '#lib/fleet.ts';
 	import { formatSpan } from '#lib/time.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
@@ -157,6 +157,8 @@
 								{:else}
 									unreachable · as of {formatUpdated(asOf ?? now, now)}
 								{/if}
+								{#if m.desk}<span class="tag tag-sea role">captain's desk</span>{/if}
+								{#if m.stowed}<span class="tag tag-warn role">stowed</span>{/if}
 							</span>
 							{#if m.reachable && mv.ships.length > 0}
 								<span class="awake">
@@ -190,6 +192,12 @@
 							{/if}
 							{#if m.unknown.length > 0}
 								<p class="none">Some items could not be checked from here.</p>
+							{/if}
+							{#if m.truncated}
+								<p class="none">partial: more ships than one read holds</p>
+							{/if}
+							{#if m.stowed}
+								<p class="none">Stowed: new jobs are held on this machine until it is resumed.</p>
 							{/if}
 							{#if mv.ships.length === 0}
 								<p class="none">No ships on this machine.</p>
@@ -247,6 +255,9 @@
 																		>{waitLabel(job.wait, now)}</span
 																	>{/if}
 															</p>
+															{#if job.wait && waitDetail(job.wait)}
+																<p class="wait-detail">{waitDetail(job.wait)}</p>
+															{/if}
 														</li>
 													{/each}
 												</ul>
@@ -565,6 +576,14 @@
 	}
 	.job.waits .job-title {
 		color: var(--warn);
+	}
+	.wait-detail {
+		font-size: var(--text-xs);
+		color: var(--ink-3);
+		overflow-wrap: anywhere;
+	}
+	.role {
+		font-size: var(--text-2xs);
 	}
 
 	.routes {
