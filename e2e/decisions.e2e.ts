@@ -132,3 +132,41 @@ test('works at phone width without horizontal scroll', async ({ page }) => {
 	);
 	expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('picking an option after writing your own answer hands the answer back to the options', async ({
+	page
+}) => {
+	await page.goto('/');
+	const card = page.locator('[data-card]').filter({ hasText: 'autumn sale' });
+	const own = card.locator('.option.own');
+
+	await own.click();
+	await card.getByLabel('Your own answer').fill('Use the spring hero.');
+	await expect(own).toHaveClass(/open/);
+
+	// Picking an option closes the own-answer row and keeps the text as a note.
+	await card.getByRole('radio').first().check();
+	await expect(own).not.toHaveClass(/open/);
+	await expect(own).toContainText('Write my own answer');
+	await expect(card.getByLabel('Add a note (optional)')).toHaveValue('Use the spring hero.');
+	await expect(card.getByText(/with your note/)).toBeVisible();
+});
+
+test.describe('without JavaScript', () => {
+	test.use({ javaScriptEnabled: false });
+
+	test('the note and own answer are in the plain form, and send', async ({ page }) => {
+		await page.goto('/');
+		const card = page.locator('[data-card]').filter({ hasText: 'autumn sale' });
+
+		await expect(card.getByRole('button', { name: /write my own answer/i })).toHaveCount(0);
+		await expect(card.getByLabel('Your own answer or a note')).toBeVisible();
+
+		await card.getByRole('radio').first().check();
+		await card.getByLabel('Your own answer or a note').fill('Keep the spring hero.');
+		await card.getByRole('button', { name: 'Send answer' }).click();
+
+		await expect(card.getByRole('status')).toContainText('Keep the spring hero.');
+		await expect(card.getByRole('status')).toContainText('Logged, not sent');
+	});
+});
