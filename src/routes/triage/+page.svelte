@@ -2,7 +2,10 @@
 	import { onMount } from 'svelte';
 	import { refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import PageHeader from '#lib/components/PageHeader.svelte';
+	import RefreshButton from '#lib/components/RefreshButton.svelte';
 	import TriageRow from '#lib/components/TriageRow.svelte';
 	import { askKey } from '#lib/decision.ts';
 	import { failureFrom } from '#lib/form.ts';
@@ -109,15 +112,14 @@
 	<title>{data.rows.length > 0 ? `(${data.rows.length}) ` : ''}Triage · Quarterdeck</title>
 </svelte:head>
 
-<div class="head">
-	<div>
-		<h1>Triage</h1>
+<PageHeader title="Triage">
+	{#snippet summary()}
 		{#if !data.error}
 			<p class="summary" aria-live="polite">
 				{#if data.rows.length === 0}
-					Nothing is owed to you.
+					<span>Nothing is owed to you</span>
 				{:else}
-					<span><strong>{data.rows.length}</strong> owed to you</span>
+					<span class="need"><strong>{data.rows.length}</strong> owed to you</span>
 					{#if data.rows.some((r) => r.overdue)}
 						<span class="overdue"
 							><strong>{data.rows.filter((r) => r.overdue).length}</strong> overdue</span
@@ -128,33 +130,26 @@
 					>{/if}
 			</p>
 		{/if}
-	</div>
-	<button
-		type="button"
-		class="btn btn-quiet refresh"
-		onclick={refresh}
-		disabled={refreshing}
-		aria-label="Refresh triage"
-	>
-		<span class:spin={refreshing}><Icon name="refresh" /></span>
-		<span class="refresh-text">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-	</button>
-</div>
+	{/snippet}
+	{#snippet actions()}
+		<RefreshButton label="Refresh triage" {refreshing} onclick={refresh} />
+	{/snippet}
+</PageHeader>
 
 {#if data.error}
-	<div class="state error" role="alert">
-		<Icon name="alert" size={28} />
-		<h2>Could not read what is owed to you</h2>
+	<EmptyState tone="error" title="Could not read what is owed to you">
 		<p class="detail">{data.error}</p>
 		<p>Check that Privateer is reachable from this machine, then try again.</p>
-		<button type="button" class="btn btn-primary" onclick={refresh} disabled={refreshing}>
-			{refreshing ? 'Trying…' : 'Try again'}
-		</button>
-	</div>
+		{#snippet action()}
+			<button type="button" class="btn btn-primary" onclick={refresh} disabled={refreshing}>
+				{refreshing ? 'Trying…' : 'Try again'}
+			</button>
+		{/snippet}
+	</EmptyState>
 {:else}
 	{#if data.unavailable}
-		<p class="notice" role="note">
-			<Icon name="alert" size={15} /> Blocked items could not be read: {data.unavailable}
+		<p class="callout callout-warn notice" role="note">
+			<Icon name="alert" size={16} /> Blocked items could not be read: {data.unavailable}
 		</p>
 	{/if}
 
@@ -191,23 +186,18 @@
 	{/if}
 
 	{#if data.rows.length === 0}
-		<div class="state empty">
-			<svg class="horizon" viewBox="0 0 120 48" aria-hidden="true">
-				<circle cx="60" cy="30" r="14" class="sun" />
-				<path d="M4 34h112" class="sea" />
-				<path d="M16 40c4 2 8 2 12 0s8-2 12 0M72 42c4 2 8 2 12 0s8-2 12 0" class="sea" />
-			</svg>
-			<h2>All clear</h2>
+		<EmptyState title="All clear">
 			<p>Nothing is owed to you by any ship.</p>
-		</div>
+		</EmptyState>
 	{:else if sections.length === 0}
-		<div class="state empty">
-			<h2>Nothing matches these filters</h2>
-			<button type="button" class="btn btn-quiet" onclick={clearFilters}>Clear filters</button>
-		</div>
+		<EmptyState tone="quiet" title="Nothing matches these filters" icon="inbox">
+			{#snippet action()}
+				<button type="button" class="btn" onclick={clearFilters}>Clear filters</button>
+			{/snippet}
+		</EmptyState>
 	{:else}
 		{#each sections as section (section.id)}
-			<section class="section" aria-labelledby="section-{section.id}">
+			<section class="section section-{section.id}" aria-labelledby="section-{section.id}">
 				<h2 id="section-{section.id}">
 					{section.title}
 					<span class="count">{section.rows.length}</span>
@@ -236,138 +226,58 @@
 {/if}
 
 <style>
-	.head {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: var(--s-4);
-		margin-bottom: var(--s-5);
-	}
-	h1 {
-		font-family: var(--font-display);
-		font-size: var(--text-2xl);
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-		font-variation-settings: 'opsz' 72;
-	}
-	.summary {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--s-1) var(--s-3);
-		margin-top: var(--s-2);
-		color: var(--ink-2);
-		font-size: var(--text-sm);
-	}
-	.summary span + span::before {
-		content: '·';
-		margin-right: var(--s-3);
-		color: var(--ink-3);
-	}
-	.summary strong {
-		color: var(--ink);
-		font-variant-numeric: tabular-nums;
-	}
-	.summary .overdue,
-	.summary .overdue strong {
-		color: var(--danger);
-	}
-	.summary .updated {
-		color: var(--ink-3);
-	}
-	.refresh {
-		flex: none;
-	}
-	.spin {
-		display: inline-flex;
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-	@media (max-width: 30rem) {
-		.refresh-text {
-			display: none;
-		}
-	}
-
 	.notice {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--s-2);
 		margin-bottom: var(--s-4);
-		padding: var(--s-3);
-		border-radius: var(--radius);
-		background: var(--warn-soft);
-		color: var(--warn);
-		font-size: var(--text-sm);
-		overflow-wrap: anywhere;
 	}
 
 	.filters {
 		display: grid;
 		gap: var(--s-2);
-		margin-bottom: var(--s-5);
+		margin: calc(-1 * var(--s-2)) calc(-1 * var(--s-4)) var(--s-4);
 	}
 	.chips {
 		display: flex;
 		gap: var(--s-2);
+		padding: 2px var(--s-4);
 		overflow-x: auto;
-		padding-bottom: var(--s-1);
-		scrollbar-width: thin;
+		scrollbar-width: none;
+		-webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 2rem), transparent);
+		mask-image: linear-gradient(90deg, #000 calc(100% - 2rem), transparent);
 	}
-	.chip {
-		flex: none;
-		padding: 4px 12px;
-		border-radius: 999px;
-		border: 1px solid var(--line-strong);
-		background: var(--surface);
-		color: var(--ink-2);
-		font: inherit;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	.chip[aria-pressed='true'] {
-		background: var(--sea-soft);
-		border-color: var(--sea);
-		color: var(--sea-strong);
-		font-weight: 650;
-	}
-	.chip:focus-visible {
-		outline: 2px solid var(--sea);
-		outline-offset: 2px;
+	.chips::-webkit-scrollbar {
+		display: none;
 	}
 
 	.section {
-		margin-bottom: var(--s-6);
+		margin-bottom: var(--s-8);
 	}
 	.section h2 {
 		display: flex;
 		align-items: center;
 		gap: var(--s-2);
-		margin-bottom: var(--s-2);
-		font-size: var(--text-xs);
-		font-weight: 650;
-		letter-spacing: 0.08em;
+		margin-bottom: var(--s-3);
+		font-size: var(--text-2xs);
+		font-weight: 700;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
-		color: var(--sea);
-	}
-	.count {
-		padding: 0 7px;
-		border-radius: 999px;
-		background: var(--surface-2);
 		color: var(--ink-2);
-		font-variant-numeric: tabular-nums;
-		letter-spacing: 0;
+	}
+	.section h2::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+	.section-now h2 {
+		color: var(--danger);
+	}
+	.section-now .count {
+		background: var(--danger-soft);
+		color: var(--danger);
 	}
 	.rows {
 		display: grid;
 		gap: var(--s-2);
-		padding: 0;
-		margin: 0;
-		list-style: none;
 	}
 	.footnote {
 		font-size: var(--text-sm);
@@ -380,51 +290,16 @@
 		font: inherit;
 		color: var(--sea);
 		text-decoration: underline;
+		text-underline-offset: 0.18em;
 		cursor: pointer;
 	}
-
-	.state {
-		display: grid;
-		justify-items: center;
-		gap: var(--s-3);
-		padding: var(--s-12) var(--s-6);
-		text-align: center;
-		border: 1px dashed var(--line-strong);
-		border-radius: var(--radius-lg);
-		color: var(--ink-2);
-	}
-	.state h2 {
-		font-family: var(--font-display);
-		font-size: var(--text-xl);
-		font-weight: 600;
-		color: var(--ink);
-	}
-	.state.error {
-		border-style: solid;
-		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-		background: var(--danger-soft);
-	}
-	.state.error > :global(.icon) {
-		color: var(--danger);
-	}
-	.detail {
-		font-family: var(--font-mono);
-		font-size: var(--text-sm);
-		color: var(--danger);
-		overflow-wrap: anywhere;
-	}
-	.horizon {
-		width: 120px;
-		height: 48px;
-	}
-	.horizon .sun {
-		fill: var(--brass-soft);
-		stroke: var(--brass-line);
-	}
-	.horizon .sea {
-		fill: none;
-		stroke: var(--sea);
-		stroke-width: 2;
-		stroke-linecap: round;
+	@media (min-width: 60rem) {
+		.filters {
+			margin-left: 0;
+			margin-right: 0;
+		}
+		.chips {
+			padding: 2px 0;
+		}
 	}
 </style>

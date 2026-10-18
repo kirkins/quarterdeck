@@ -17,14 +17,18 @@
 	.mark {
 		flex: none;
 		display: block;
+		border-radius: 8px;
+		box-shadow:
+			0 1px 2px var(--shadow-color),
+			0 4px 12px -4px var(--shadow-color);
 	}
 	.tile {
-		fill: light-dark(#13294b, #e9eef5);
+		fill: light-dark(#12284a, #e8edf3);
 	}
 	.star {
-		fill: light-dark(#f2ead8, #13294b);
+		fill: light-dark(#f4f1ea, #12284a);
 	}
 	.shade {
-		fill: light-dark(#c9a24e, #b48a32);
+		fill: light-dark(#c6952f, #b48a32);
 	}
 </style>

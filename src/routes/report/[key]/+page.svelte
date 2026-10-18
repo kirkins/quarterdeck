@@ -302,22 +302,26 @@
 
 {#if data.error}
 	<section class="page">
-		<p class="back"><a href={resolve('/triage')}>← Triage</a></p>
-		<p class="error" role="alert">{data.error}</p>
+		<p class="back">
+			<a href={resolve('/triage')}><Icon name="arrow-left" size={16} /> Triage</a>
+		</p>
+		<p class="callout callout-danger" role="alert"><Icon name="alert" size={16} />{data.error}</p>
 	</section>
 {:else if ask && data.frame}
 	<section class="page">
 		<header class="head">
-			<p class="back"><a href={resolve('/triage')}>← Triage</a></p>
+			<p class="back">
+				<a href={resolve('/triage')}><Icon name="arrow-left" size={16} /> Triage</a>
+			</p>
 			<p class="kind">
-				<Icon name="doc" size={15} />
+				<Icon name="doc" size={14} />
 				Report
 				<span class="sep" aria-hidden="true">·</span>
 				{KIND_LABELS[ask.kind]}
 			</p>
-			<h1>{ask.title}</h1>
+			<h1 class="display">{ask.title}</h1>
 			<p class="meta">
-				<span class="ship"><Icon name="ship" size={14} /> {ask.from || 'Unknown ship'}</span>
+				<span class="ship"><Icon name="ship" size={15} /> {ask.from || 'Unknown ship'}</span>
 				<span>{formatAge(ask.asked_ms, data.now)}</span>
 				<span class="deadline">{formatDeadline(ask.deadline_ms, data.now)}</span>
 			</p>
@@ -325,10 +329,12 @@
 		</header>
 
 		{#if ask.answered}
-			<p class="done" role="status">
-				<Icon name="check" size={15} />
-				Already answered{ask.answered.sent ? '' : ' (logged, not sent)'}:
-				{ask.answered.text ?? ask.answered.label ?? 'closed'}
+			<p class="done callout callout-ok" role="status">
+				<Icon name="check" size={16} />
+				<span>
+					Already answered{ask.answered.sent ? '' : ' (logged, not sent)'}:
+					{ask.answered.text ?? ask.answered.label ?? 'closed'}
+				</span>
 			</p>
 		{/if}
 
@@ -336,6 +342,7 @@
 			<section class="document" aria-label="The report">
 				<p class="hint">
 					{#if composing}
+						<Icon name="feed" size={15} />
 						Select a passage to comment on it. On a phone, tap a paragraph.
 					{:else}
 						Read-only here: {ask.canComment
@@ -346,7 +353,7 @@
 				{#if stopped}
 					<div class="stopped" role="alert">
 						<Icon name="alert" size={24} />
-						<h2>This report tried to leave the page and was stopped</h2>
+						<h2 class="display">This report tried to leave the page and was stopped</h2>
 						<p>
 							Something in it tried to load another page in its place. Quarterdeck closed it and
 							ignores anything it sends. Your comments are kept.
@@ -364,7 +371,13 @@
 				{:else if mounted}
 					<div class="frame-box" {@attach reportFrame(data.frame.srcdoc, ask.title)}></div>
 				{:else}
-					<div class="frame-box loading">Loading the report…</div>
+					<div class="frame-box loading" aria-busy="true">
+						<span class="visually-hidden">Loading the report…</span>
+						<span class="skeleton l1" aria-hidden="true"></span>
+						<span class="skeleton l2" aria-hidden="true"></span>
+						<span class="skeleton l3" aria-hidden="true"></span>
+						<span class="skeleton l2" aria-hidden="true"></span>
+					</div>
 				{/if}
 			</section>
 
@@ -376,15 +389,20 @@
 						aria-expanded={sheetOpen}
 						onclick={() => (sheetOpen = !sheetOpen)}
 					>
-						<Icon name="chevron" size={16} />
-						Comments
-						<span class="count" aria-label="{count} comments">{count}</span>
+						<span class="grip" aria-hidden="true"></span>
+						<span class="sheet-title">
+							Comments
+							<span class="count" class:count-brass={count > 0} aria-label="{count} comments"
+								>{count}</span
+							>
+						</span>
+						<Icon name="chevron" size={18} />
 					</button>
 
 					<div class="sheet-body">
 						<h2 class="heading">Your comments <span class="count">{count}</span></h2>
 
-						{#if limitNote}<p class="note-warn" role="status">{limitNote}</p>{/if}
+						{#if limitNote}<p class="callout callout-warn" role="status">{limitNote}</p>{/if}
 
 						{#if composer}
 							<form
@@ -399,6 +417,7 @@
 								<label>
 									<span class="visually-hidden">Your comment</span>
 									<textarea
+										class="field"
 										bind:value={composer.text}
 										rows="4"
 										maxlength={REPORT_LIMITS.comment}
@@ -423,16 +442,20 @@
 										{#if frameText !== null && span === null}
 											<span class="flag">No longer in the report</span>
 										{:else}
-											<button type="button" class="btn btn-quiet" onclick={() => jump(note.id)}
-												>Show in report</button
+											<button
+												type="button"
+												class="btn btn-quiet btn-sm"
+												onclick={() => jump(note.id)}>Show in report</button
 											>
 										{/if}
-										<button type="button" class="btn btn-quiet" onclick={() => editNote(note)}
-											>Edit</button
+										<button
+											type="button"
+											class="btn btn-quiet btn-sm"
+											onclick={() => editNote(note)}>Edit</button
 										>
 										<button
 											type="button"
-											class="btn btn-quiet danger"
+											class="btn btn-quiet btn-sm danger"
 											onclick={() => removeNote(note.id)}>Delete</button
 										>
 									</div>
@@ -452,11 +475,13 @@
 						{/if}
 
 						{#if sent}
-							<p class="done" role="status">
-								<Icon name="check" size={15} />
-								{sent.sent
-									? `Sent ${sent.count} ${sent.count === 1 ? 'comment' : 'comments'} to ${ask.from}.`
-									: 'Logged, not sent: this portal is reading fixtures, so nothing reached the ship.'}
+							<p class="done callout callout-ok" role="status">
+								<Icon name="check" size={16} />
+								<span>
+									{sent.sent
+										? `Sent ${sent.count} ${sent.count === 1 ? 'comment' : 'comments'} to ${ask.from}.`
+										: 'Logged, not sent: this portal is reading fixtures, so nothing reached the ship.'}
+								</span>
 							</p>
 						{/if}
 
@@ -468,6 +493,7 @@
 									disabled={!sendable}
 									onclick={startSend}
 								>
+									<Icon name="send" size={16} />
 									Send {count}
 									{count === 1 ? 'comment' : 'comments'}
 								</button>
@@ -480,6 +506,7 @@
 									<label>
 										<span class="label">Note to {ask.from || 'the ship'} (optional)</span>
 										<textarea
+											class="field"
 											name="note"
 											rows="2"
 											maxlength={REPORT_LIMITS.note}
@@ -511,36 +538,41 @@
 
 <style>
 	.page {
-		max-width: 72rem;
-		margin: 0 auto;
-		padding: var(--s-4) var(--s-4) calc(var(--s-12) + 4rem);
 		min-width: 0;
+		padding-bottom: 4rem;
 	}
 	.back {
-		margin: 0 0 var(--s-2);
+		margin: 0 0 var(--s-3) calc(-1 * var(--s-2));
 		font-size: var(--text-sm);
 	}
 	.back a {
-		color: var(--ink-3);
-		text-decoration: none;
 		display: inline-flex;
 		align-items: center;
+		gap: var(--s-1);
 		min-height: var(--tap);
+		padding: 0 var(--s-2);
+		border-radius: var(--radius-sm);
+		color: var(--ink-3);
+		font-weight: 550;
+		text-decoration: none;
 	}
 	.back a:hover {
 		color: var(--ink);
+		background: var(--sea-wash);
 	}
 	.head {
-		margin-bottom: var(--s-4);
+		margin-bottom: var(--s-5);
+		padding-bottom: var(--s-4);
+		border-bottom: 1px solid var(--line);
 	}
 	.kind {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
 		margin: 0;
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
 		font-weight: 700;
-		letter-spacing: 0.08em;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
 		color: var(--sea);
 	}
@@ -548,15 +580,18 @@
 		color: var(--ink-3);
 	}
 	h1 {
-		margin: var(--s-1) 0 var(--s-2);
-		font-family: var(--font-display);
-		font-size: var(--text-2xl);
-		line-height: 1.15;
+		margin: var(--s-2) 0 var(--s-3);
+		font-size: var(--text-3xl);
+		line-height: 1.08;
+		letter-spacing: -0.025em;
+		font-weight: 540;
 		overflow-wrap: anywhere;
+		text-wrap: balance;
 	}
 	.meta {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: var(--s-2) var(--s-4);
 		margin: 0;
 		font-size: var(--text-sm);
@@ -566,11 +601,17 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--s-1);
-		color: var(--ink-2);
+		color: var(--ink);
+		font-weight: 650;
+	}
+	.meta .ship :global(.icon) {
+		color: var(--sea);
 	}
 	.context {
 		margin: var(--s-3) 0 0;
+		max-width: 44rem;
 		color: var(--ink-2);
+		text-wrap: pretty;
 	}
 	.reader {
 		display: grid;
@@ -581,17 +622,20 @@
 		min-width: 0;
 	}
 	.hint {
-		margin: 0 0 var(--s-2);
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
+		margin: 0 0 var(--s-3);
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
 	.frame-box {
-		height: 62svh;
+		height: 64svh;
 		min-height: 22rem;
 		overflow: hidden;
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
+		border-radius: var(--radius-xl);
 		background: var(--surface);
+		box-shadow: var(--elev-2);
 	}
 	.frame-box :global(.frame) {
 		display: block;
@@ -601,17 +645,29 @@
 	}
 	.loading {
 		display: grid;
-		place-items: center;
-		font-size: var(--text-sm);
-		color: var(--ink-3);
+		align-content: start;
+		gap: var(--s-3);
+		padding: var(--s-6);
+	}
+	.loading .l1 {
+		width: 55%;
+		height: 1.75rem;
+		margin-bottom: var(--s-3);
+	}
+	.loading .l2 {
+		width: 100%;
+		height: 0.875rem;
+	}
+	.loading .l3 {
+		width: 72%;
+		height: 0.875rem;
 	}
 	.stopped {
 		display: grid;
 		justify-items: start;
 		gap: var(--s-3);
 		padding: var(--s-6);
-		border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
-		border-radius: var(--radius);
+		border-radius: var(--radius-xl);
 		background: var(--warn-soft);
 		color: var(--ink-2);
 	}
@@ -620,9 +676,7 @@
 	}
 	.stopped h2 {
 		margin: 0;
-		font-family: var(--font-display);
 		font-size: var(--text-lg);
-		font-weight: 600;
 		color: var(--ink);
 	}
 	.stopped p {
@@ -630,69 +684,82 @@
 		max-width: 38rem;
 	}
 
+	/* On a phone the comments are a sheet over the report, above the tab bar. */
 	.notes {
 		position: fixed;
-		inset: auto 0 0 0;
+		inset: auto 0 var(--dock) 0;
 		z-index: 20;
-		max-height: 70svh;
+		max-height: min(72svh, calc(100svh - var(--dock) - 3rem));
 		display: flex;
 		flex-direction: column;
-		background: var(--surface);
-		border-top: 1px solid var(--line-strong);
-		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-		box-shadow: 0 -8px 24px var(--shadow-color);
-		transform: translateY(calc(100% - 3.5rem));
-		transition: transform 0.2s var(--ease);
+		background: var(--surface-raised);
+		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+		box-shadow:
+			0 -1px 0 var(--line),
+			0 -12px 32px var(--shadow-color);
+		transform: translateY(calc(100% - 3.75rem));
+		transition: transform var(--dur-3) var(--ease);
 	}
 	.notes.open {
 		transform: none;
 	}
 	.sheet-toggle {
+		position: relative;
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: var(--s-2);
-		min-height: 3.5rem;
-		padding: 0 var(--s-4);
+		min-height: 3.75rem;
+		padding: var(--s-2) var(--s-5) 0;
 		border: 0;
 		background: none;
 		color: var(--ink);
 		font: inherit;
-		font-weight: 600;
+		font-weight: 650;
 		cursor: pointer;
 	}
-	.sheet-toggle :global(svg) {
-		transition: transform 0.2s var(--ease);
+	.grip {
+		position: absolute;
+		top: 7px;
+		left: 50%;
+		width: 2.25rem;
+		height: 4px;
+		margin-left: -1.125rem;
+		border-radius: var(--radius-pill);
+		background: var(--line-strong);
 	}
-	.notes.open .sheet-toggle :global(svg) {
+	.sheet-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+	}
+	.sheet-toggle > :global(svg) {
+		color: var(--ink-3);
 		transform: rotate(180deg);
+		transition: transform var(--dur-3) var(--ease);
+	}
+	.notes.open .sheet-toggle > :global(svg) {
+		transform: none;
 	}
 	.sheet-body {
 		overflow-y: auto;
-		padding: 0 var(--s-4) var(--s-6);
+		overscroll-behavior: contain;
+		padding: 0 var(--s-5) var(--s-6);
 	}
 	.heading {
 		display: none;
-	}
-	.count {
-		display: inline-block;
-		min-width: 1.5em;
-		padding: 0 0.4em;
-		border-radius: 999px;
-		text-align: center;
-		font-size: var(--text-xs);
-		background: var(--sea-soft);
-		color: var(--sea-strong);
 	}
 
 	.composer,
 	.confirm {
 		display: grid;
-		gap: var(--s-2);
+		gap: var(--s-3);
 		margin: var(--s-2) 0 var(--s-4);
-		padding: var(--s-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
+		padding: var(--s-4);
+		border-radius: var(--radius-lg);
 		background: var(--surface-2);
+		box-shadow: inset 0 0 0 1px var(--line);
+		animation: rise var(--dur-3) var(--ease);
 	}
 	.label {
 		margin: 0;
@@ -703,25 +770,11 @@
 	.quote {
 		margin: 0;
 		padding: 0.1rem 0 0.1rem var(--s-3);
-		border-left: 3px solid var(--brass-line);
+		border-left: 2px solid var(--brass-line);
 		color: var(--ink-2);
 		font-size: var(--text-sm);
+		font-style: italic;
 		overflow-wrap: anywhere;
-	}
-	textarea {
-		width: 100%;
-		box-sizing: border-box;
-		padding: var(--s-2) var(--s-3);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		color: var(--ink);
-		font: inherit;
-		resize: vertical;
-	}
-	textarea:focus-visible {
-		outline: 2px solid var(--focus);
-		outline-offset: 1px;
 	}
 	.row,
 	.actions {
@@ -732,38 +785,45 @@
 	}
 	.actions {
 		justify-content: flex-start;
+		gap: 0;
+		margin-left: calc(-1 * var(--s-2));
 	}
 	.list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
 		display: grid;
 		gap: var(--s-3);
 	}
 	.note {
-		padding: var(--s-3);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
+		padding: var(--s-4) var(--s-4) var(--s-2);
+		border-radius: var(--radius-lg);
 		background: var(--surface);
+		box-shadow: var(--elev-1);
+		animation: rise var(--dur-3) var(--ease);
 	}
 	.note.lost {
-		border-style: dashed;
+		box-shadow: none;
+		outline: 1.5px dashed var(--line-strong);
+		outline-offset: -1.5px;
 	}
 	.comment {
-		margin: var(--s-2) 0;
+		margin: var(--s-2) 0 var(--s-1);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
+	.empty {
+		padding: var(--s-4);
+		border-radius: var(--radius-lg);
+		background: var(--surface-2);
+		text-align: center;
+	}
 	.empty,
-	.detail,
-	.note-warn {
+	.detail {
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
-	.note-warn {
-		color: var(--warn);
-	}
 	.flag {
+		display: inline-flex;
+		align-items: center;
+		padding: 0 var(--s-2);
 		font-size: var(--text-xs);
 		font-weight: 600;
 		color: var(--warn);
@@ -777,73 +837,59 @@
 		color: var(--danger);
 	}
 	.done {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--s-2);
 		margin: var(--s-3) 0;
-		padding: var(--s-2) var(--s-3);
-		border-radius: var(--radius-sm);
-		background: var(--ok-soft);
-		color: var(--ok);
-		font-size: var(--text-sm);
-		overflow-wrap: anywhere;
 	}
 	.send {
 		width: 100%;
-		margin-top: var(--s-3);
+		margin-top: var(--s-4);
 	}
 	.confirm label {
 		display: grid;
 		gap: var(--s-1);
 	}
-	.visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		white-space: nowrap;
-	}
 
 	/* Wider screens: the notes become a column beside the report. */
 	@media (min-width: 60rem) {
 		.reader {
-			grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+			grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
 			align-items: start;
 		}
 		.frame-box {
-			height: max(32rem, calc(100svh - 15rem));
+			height: max(32rem, calc(100svh - 16rem));
 		}
 		.notes {
 			position: sticky;
-			top: var(--s-4);
+			top: var(--s-6);
 			inset: auto;
-			max-height: none;
+			max-height: calc(100svh - 3rem);
 			transform: none;
-			border: 1px solid var(--line);
-			border-radius: var(--radius-lg);
-			box-shadow: var(--shadow);
+			border-radius: var(--radius-xl);
+			background: var(--surface);
+			box-shadow: var(--elev-2);
 		}
 		.sheet-toggle {
 			display: none;
 		}
 		.sheet-body {
-			overflow: visible;
+			padding: 0 var(--s-4) var(--s-4);
 		}
 		.heading {
-			display: block;
-			margin: var(--s-4) 0 var(--s-2);
-			font-size: var(--text-md);
-			font-weight: 600;
+			display: flex;
+			align-items: center;
+			gap: var(--s-2);
+			margin: var(--s-4) 0 var(--s-3);
+			font-family: var(--font-display);
+			font-size: var(--text-lg);
+			font-weight: 560;
 		}
 		.page {
-			padding: var(--s-6) var(--s-4) var(--s-12);
+			padding-bottom: 0;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.notes,
-		.sheet-toggle :global(svg) {
+		.sheet-toggle > :global(svg) {
 			transition: none;
 		}
 	}

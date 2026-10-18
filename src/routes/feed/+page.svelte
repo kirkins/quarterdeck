@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount, tick, untrack } from 'svelte';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FeedMessage from '#lib/components/FeedMessage.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { failureFrom } from '#lib/form.ts';
 	import {
 		EMPTY_FILTER,
@@ -311,34 +314,38 @@
 	<title>{waiting > 0 ? `(${waiting}) ` : ''}Feed · Quarterdeck</title>
 </svelte:head>
 
-<div class="head">
-	<h1>Feed</h1>
-	{#if data.page}
-		<p class="summary" aria-live="polite">
-			{#if waiting === 0}
-				Nothing waiting on you.
-			{:else}
-				<span><strong>{waiting}</strong> waiting on you</span>
-			{/if}
-			{#if next !== null}<span>next {formatDeadline(next, now).toLowerCase()}</span>{/if}
-		</p>
-	{/if}
-</div>
+<PageHeader title="Feed">
+	{#snippet summary()}
+		{#if data.page}
+			<p class="summary" aria-live="polite">
+				{#if waiting === 0}
+					<span>Nothing waiting on you</span>
+				{:else}
+					<span class="need"><strong>{waiting}</strong> waiting on you</span>
+				{/if}
+				{#if next !== null}<span>next {formatDeadline(next, now).toLowerCase()}</span>{/if}
+			</p>
+		{/if}
+	{/snippet}
+</PageHeader>
 
 {#if data.unsupported}
-	<section class="calm" aria-labelledby="unsupported-title">
-		<h2 id="unsupported-title">The feed is not on this Privateer yet</h2>
+	<EmptyState tone="quiet" title="The feed is not on this Privateer yet" icon="feed">
 		<p>
 			This Privateer does not offer <code>captain.feed</code>. Decisions, Triage and the Fleet still
 			work; the feed appears once Privateer has it.
 		</p>
-	</section>
+	</EmptyState>
 {:else if data.error}
-	<p class="error" role="alert">Could not read the feed: {data.error}</p>
+	<EmptyState tone="error" title="Could not read the feed">
+		<p class="detail">{data.error}</p>
+		<p>Check that Privateer is reachable from this machine, then reload.</p>
+	</EmptyState>
 {:else}
 	<div class="toolbar" role="group" aria-label="Filter the feed">
 		<label class="ship-pick">
 			<span class="visually-hidden">Ship</span>
+			<Icon name="ship" size={16} />
 			<select
 				value={filter.ship ?? ''}
 				onchange={(event) => changeFilter({ ...filter, ship: event.currentTarget.value || null })}
@@ -346,36 +353,43 @@
 				<option value="">All ships</option>
 				{#each ships as ship (ship)}<option value={ship}>{ship}</option>{/each}
 			</select>
+			<Icon name="chevron" size={16} />
 		</label>
-		<label class="toggle">
+		<label class="chip toggle">
 			<input
 				type="checkbox"
 				checked={filter.onlyWaiting}
 				onchange={(event) => changeFilter({ ...filter, onlyWaiting: event.currentTarget.checked })}
 			/>
+			<span class="tick" aria-hidden="true"><Icon name="check" size={12} stroke={2.5} /></span>
 			Only waiting on me
 		</label>
-		<label class="toggle">
+		<label class="chip toggle">
 			<input
 				type="checkbox"
 				checked={filter.shipMail}
 				onchange={(event) => changeFilter({ ...filter, shipMail: event.currentTarget.checked })}
 			/>
+			<span class="tick" aria-hidden="true"><Icon name="check" size={12} stroke={2.5} /></span>
 			Include ship-to-ship mail
 		</label>
 	</div>
 
 	{#if fetchError}
-		<p class="error" role="alert">{fetchError}</p>
+		<p class="callout callout-danger fetch-error" role="alert">
+			<Icon name="alert" size={16} />{fetchError}
+		</p>
 	{/if}
 
-	<div class="stream-wrap" aria-busy={reloading}>
+	<div class="stream-wrap" aria-busy={reloading} class:reloading>
 		{#if hasOlder}
 			<p class="older">
 				{#if loadingOlder}
-					<span role="status">Loading older messages…</span>
+					<span role="status" class="loading-older"
+						><span class="skeleton bar" aria-hidden="true"></span>Loading older messages…</span
+					>
 				{:else}
-					<button type="button" class="btn btn-quiet" onclick={() => loadOlder()}
+					<button type="button" class="btn btn-quiet btn-sm" onclick={() => loadOlder()}
 						>Load older messages</button
 					>
 				{/if}
@@ -383,9 +397,17 @@
 		{/if}
 
 		{#if rows.length === 0}
-			<p class="empty">
-				{entries.length === 0 ? 'No messages yet.' : 'Nothing matches these filters.'}
-			</p>
+			<EmptyState
+				tone={entries.length === 0 ? 'calm' : 'quiet'}
+				title={entries.length === 0 ? 'No messages yet' : 'Nothing matches these filters'}
+				icon="feed"
+			>
+				<p>
+					{entries.length === 0
+						? 'When a ship writes to you, it appears here.'
+						: 'Try all ships, or include everything, not only what waits on you.'}
+				</p>
+			</EmptyState>
 		{/if}
 
 		<ol class="stream" aria-label="Messages with the captain">
@@ -418,93 +440,147 @@
 
 	{#if unseen > 0}
 		<button type="button" class="pill" onclick={jumpToEnd}>
+			<Icon name="arrow-down" size={16} />
 			{unseen} new {unseen === 1 ? 'message' : 'messages'}
 		</button>
 	{/if}
 {/if}
 
 <style>
-	.head {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: var(--s-2) var(--s-4);
-		margin-bottom: var(--s-4);
-	}
-	h1 {
-		margin: 0;
-		font-size: var(--text-2xl);
-	}
-	.summary {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--s-1) var(--s-4);
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--ink-2);
-	}
-	.summary strong {
-		color: var(--ink);
-	}
-
 	.toolbar {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--s-2) var(--s-4);
-		margin-bottom: var(--s-4);
-		font-size: var(--text-sm);
-	}
-	.ship-pick select {
-		min-height: var(--tap);
-		padding: 0 var(--s-3);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		color: var(--ink);
-		font: inherit;
-	}
-	.toggle {
-		display: inline-flex;
 		align-items: center;
 		gap: var(--s-2);
-		min-height: var(--tap);
+		margin: calc(-1 * var(--s-2)) calc(-1 * var(--s-4)) var(--s-2);
+		padding: var(--s-1) var(--s-4) var(--s-2);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.toolbar::-webkit-scrollbar {
+		display: none;
+	}
+
+	.ship-pick {
+		position: relative;
+		flex: none;
+		display: inline-flex;
+		align-items: center;
 		color: var(--ink-2);
+	}
+	.ship-pick > :global(.icon:first-of-type) {
+		position: absolute;
+		left: 11px;
+		pointer-events: none;
+		color: var(--sea);
+	}
+	.ship-pick > :global(.icon:last-of-type) {
+		position: absolute;
+		right: 10px;
+		pointer-events: none;
+		color: var(--ink-3);
+	}
+	.ship-pick select {
+		appearance: none;
+		min-height: 2.25rem;
+		padding: 0 2rem 0 2.125rem;
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--surface-raised);
+		box-shadow: var(--elev-1);
+		color: var(--ink);
+		font-size: var(--text-sm);
+		font-weight: 600;
 		cursor: pointer;
 	}
+	.ship-pick select:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+
+	.toggle {
+		position: relative;
+	}
 	.toggle input {
-		width: 18px;
-		height: 18px;
-		accent-color: var(--sea);
+		position: absolute;
+		inset: 0;
+		margin: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
+	.toggle:has(input:focus-visible) {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+	.tick {
+		display: grid;
+		place-items: center;
+		width: 1rem;
+		height: 1rem;
+		margin-left: -2px;
+		border-radius: 5px;
+		box-shadow: inset 0 0 0 1.5px var(--line-input);
+		color: transparent;
+		transition:
+			background-color var(--dur-1) var(--ease),
+			color var(--dur-1) var(--ease);
+	}
+	.toggle:has(input:checked) {
+		background: var(--sea-soft);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sea) 45%, transparent);
+		color: var(--sea-strong);
+	}
+	.toggle:has(input:checked) .tick {
+		background: var(--sea);
+		box-shadow: none;
+		color: var(--sea-ink);
+	}
+
+	.fetch-error {
+		margin-bottom: var(--s-3);
 	}
 
 	.stream-wrap {
 		display: grid;
 		gap: var(--s-2);
+		transition: opacity var(--dur-2) var(--ease);
+	}
+	.stream-wrap.reloading {
+		opacity: 0.55;
 	}
 	.stream {
 		display: grid;
-		gap: 0;
 		margin: 0;
 		padding: 0 0 var(--s-4);
 		list-style: none;
 	}
 	.older {
+		display: flex;
+		justify-content: center;
 		margin: 0;
-		text-align: center;
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
+	.loading-older {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: 2.25rem;
+	}
+	.loading-older .bar {
+		width: 2.5rem;
+		height: 0.5rem;
+		border-radius: var(--radius-pill);
+	}
+
 	.day,
 	.unread {
 		display: flex;
 		align-items: center;
 		gap: var(--s-3);
-		margin: var(--s-5) 0 var(--s-2);
-		font-size: var(--text-xs);
+		margin: var(--s-8) 0 var(--s-1);
+		font-size: var(--text-2xs);
 		font-weight: 650;
-		letter-spacing: 0.04em;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
 		color: var(--ink-3);
 	}
@@ -517,56 +593,45 @@
 		height: 1px;
 		background: var(--line);
 	}
+	.day span {
+		padding: 3px 10px;
+		border-radius: var(--radius-pill);
+		background: var(--bg);
+		box-shadow: inset 0 0 0 1px var(--line);
+	}
 	.unread {
-		color: var(--sea-strong);
+		margin-top: var(--s-6);
+		color: var(--brass);
 	}
 	.unread::before,
 	.unread::after {
-		background: var(--sea);
-	}
-
-	.empty {
-		padding: var(--s-8) 0;
-		text-align: center;
-		color: var(--ink-3);
-	}
-	.calm {
-		padding: var(--s-6);
-		border: 1px dashed var(--line-strong);
-		border-radius: var(--radius);
-		color: var(--ink-2);
-	}
-	.calm h2 {
-		margin: 0 0 var(--s-2);
-		font-size: var(--text-lg);
-		color: var(--ink);
-	}
-	.calm p {
-		margin: 0;
-	}
-	.error {
-		display: flex;
-		align-items: center;
-		gap: var(--s-2);
-		color: var(--danger);
+		background: var(--brass-line);
 	}
 
 	.pill {
 		position: fixed;
 		left: 50%;
-		bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+		bottom: calc(var(--dock) + var(--s-4));
 		transform: translateX(-50%);
-		z-index: 4;
+		z-index: 25;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
 		min-height: var(--tap);
-		padding: 0 var(--s-4);
+		padding: 0 var(--s-5) 0 var(--s-4);
 		border: 0;
-		border-radius: 999px;
-		background: var(--sea);
-		color: var(--sea-ink);
-		font: inherit;
+		border-radius: var(--radius-pill);
+		background: var(--navy);
+		color: var(--navy-ink);
 		font-size: var(--text-sm);
 		font-weight: 650;
-		box-shadow: var(--shadow);
+		box-shadow: var(--elev-3);
 		cursor: pointer;
+		animation: rise var(--dur-3) var(--ease);
+	}
+	@media (min-width: 60rem) {
+		.pill {
+			left: calc(50% + var(--sidebar-w) / 2);
+		}
 	}
 </style>

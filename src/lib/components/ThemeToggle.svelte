@@ -1,3 +1,7 @@
+<!--
+	The theme: follow the system, or pick light or dark. A desktop shows the
+	three as a segmented control; a phone has one button that steps through them.
+-->
 <script lang="ts">
 	import Icon from './Icon.svelte';
 
@@ -10,32 +14,60 @@
 	// svelte-ignore state_referenced_locally
 	let theme = $state<Theme>(initial);
 
-	function next() {
-		theme = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+	function choose(next: Theme) {
+		theme = next;
 		document.documentElement.dataset.theme = theme;
 		document.cookie = `qd_theme=${theme}; path=/; max-age=31536000; samesite=lax`;
+	}
+
+	function next() {
+		choose(ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]);
 	}
 </script>
 
 <button
 	type="button"
-	class="toggle btn btn-quiet"
+	class="cycle btn btn-quiet"
 	onclick={next}
 	aria-label="Theme: {LABEL[theme]}. Change theme"
 	title="Theme: {LABEL[theme]}"
 >
-	<Icon name={ICON[theme]} />
-	<span class="text">{LABEL[theme]}</span>
+	<Icon name={ICON[theme]} size={20} />
 </button>
 
+<div class="pick segmented" role="group" aria-label="Theme">
+	{#each ORDER as t (t)}
+		<button type="button" aria-pressed={theme === t} title={LABEL[t]} onclick={() => choose(t)}>
+			<Icon name={ICON[t]} size={16} />
+			<span class="visually-hidden">{LABEL[t]}</span>
+		</button>
+	{/each}
+</div>
+
 <style>
-	.toggle {
-		padding: 0 var(--s-3);
-		font-weight: 500;
+	.cycle {
+		width: var(--tap);
+		padding: 0;
+		color: var(--ink-2);
 	}
-	@media (max-width: 30rem) {
-		.text {
+	.pick {
+		display: none;
+		width: 100%;
+	}
+	.pick button {
+		flex: 1;
+		min-height: 2rem;
+		color: var(--ink-3);
+	}
+	.pick button[aria-pressed='true'] {
+		color: var(--ink);
+	}
+	@media (min-width: 60rem) {
+		.cycle {
 			display: none;
+		}
+		.pick {
+			display: flex;
 		}
 	}
 </style>

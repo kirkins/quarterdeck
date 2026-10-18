@@ -4,6 +4,7 @@
 	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, isoTime, urgencyOf } from '#lib/time.ts';
 	import { KIND_LABELS, type TriageKind, type TriageRow } from '#lib/triage.ts';
+	import { enhance } from '$app/forms';
 	import CopyStep from './CopyStep.svelte';
 	import DecisionCard from './DecisionCard.svelte';
 	import Dismiss from './Dismiss.svelte';
@@ -60,38 +61,44 @@
 
 <li class="row kind-{row.kind}" class:open data-row={item.id} data-kind={row.kind}>
 	<button type="button" class="head" aria-expanded={open} aria-controls={panel} onclick={ontoggle}>
-		<span class="line top">
-			<span class="kind">
-				<Icon name={ICON[row.kind]} size={15} />
-				{KIND_LABELS[row.kind]}
-			</span>
-			{#if row.urgency === 'high'}
-				<span class="flag high"><span class="visually-hidden">Urgency: </span>High</span>
-			{/if}
-			{#if row.needsHands}
-				<span class="flag hands"><Icon name="hand" size={13} /> Your hands</span>
-			{/if}
-			{#if report}
-				<span class="flag report"><Icon name="doc" size={13} /> Report</span>
-			{/if}
-			<span class="age">
-				<time datetime={isoTime(row.asked_ms)} title={isoTime(row.asked_ms)}
-					>{formatAge(row.asked_ms, now)}</time
+		<span class="glyph" aria-hidden="true"><Icon name={ICON[row.kind]} size={18} /></span>
+		<span class="main">
+			<span class="line top">
+				<span class="ship-name">{item.from || 'Unknown ship'}</span>
+				<span
+					class="deadline deadline-{urgency} tag"
+					class:tag-danger={urgency === 'overdue'}
+					class:tag-warn={urgency === 'soon'}
 				>
+					{#if urgency === 'overdue'}<Icon
+							name="alert"
+							size={12}
+						/>{:else if urgency !== 'none'}<Icon name="clock" size={12} />{/if}
+					{formatDeadline(row.deadline_ms, now)}
+				</span>
 			</span>
-			<span class="deadline deadline-{urgency}">
-				{#if urgency === 'overdue'}<Icon name="alert" size={13} />{:else}<Icon
-						name="clock"
-						size={13}
-					/>{/if}
-				{formatDeadline(row.deadline_ms, now)}
+			<span class="summary">{question.question}</span>
+			<span class="line facts">
+				<span class="kind">{KIND_LABELS[row.kind]}</span>
+				<span class="age">
+					<time datetime={isoTime(row.asked_ms)} title={isoTime(row.asked_ms)}
+						>{formatAge(row.asked_ms, now)}</time
+					>
+				</span>
+				{#if row.urgency === 'high'}
+					<span class="flag high tag tag-danger"
+						><span class="visually-hidden">Urgency: </span>High</span
+					>
+				{/if}
+				{#if row.needsHands}
+					<span class="flag hands tag tag-brass"><Icon name="hand" size={12} /> Your hands</span>
+				{/if}
+				{#if report}
+					<span class="flag report tag tag-sea"><Icon name="doc" size={12} /> Report</span>
+				{/if}
 			</span>
 		</span>
-		<span class="line ship">
-			<Icon name="ship" size={14} />
-			<span class="ship-name">{item.from || 'Unknown ship'}</span>
-		</span>
-		<span class="summary">{question.question}</span>
+		<span class="chev" aria-hidden="true"><Icon name="chevron" size={18} /></span>
 	</button>
 
 	{#if open}
@@ -101,7 +108,7 @@
 			{:else if row.kind === 'request'}
 				{#if report}
 					<a class="btn btn-primary open-report" href={reportHref}>
-						<Icon name="doc" size={14} /> Open report: {report}
+						<Icon name="doc" size={16} /> Open report: {report}
 					</a>
 				{/if}
 
@@ -111,12 +118,12 @@
 						<pre class="command"><code>{step}</code></pre>
 						<div class="step-actions">
 							<CopyStep text={step} />
-							<form method="POST" action="?/reply">
+							<form method="POST" action="?/reply" use:enhance>
 								<input type="hidden" name="from" value={item.from} />
 								<input type="hidden" name="id" value={item.id} />
 								<input type="hidden" name="text" value="Done." />
 								<button type="submit" class="btn btn-primary">
-									<Icon name="check" size={14} /> Done, I did this
+									<Icon name="check" size={16} /> Done, I did this
 								</button>
 							</form>
 						</div>
@@ -127,30 +134,40 @@
 					<p class="context">{question.why}</p>
 				{/if}
 
-				<form method="POST" action="?/reply" class="reply">
+				<form method="POST" action="?/reply" class="reply" use:enhance>
 					<input type="hidden" name="from" value={item.from} />
 					<input type="hidden" name="id" value={item.id} />
 					<label>
-						<span class="label">Reply to {item.from || 'the ship'}</span>
+						<span class="field-label">Reply to {item.from || 'the ship'}</span>
 						<textarea
+							class="field"
 							name="text"
 							rows="3"
 							maxlength="4096"
 							placeholder="Write your reply in your own words">{failed?.text ?? ''}</textarea
 						>
 					</label>
-					{#if failed}<p class="error" role="alert">{failed.error}</p>{/if}
-					<button type="submit" class="btn btn-primary">Send reply</button>
+					{#if failed}<p class="callout callout-danger" role="alert">
+							<Icon name="alert" size={16} />{failed.error}
+						</p>{/if}
+					<div class="reply-actions">
+						<button type="submit" class="btn btn-primary"
+							><Icon name="send" size={16} /> Send reply</button
+						>
+					</div>
 				</form>
 
 				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
 			{:else if row.kind === 'approval'}
-				<p class="context">
-					Production approvals are answered in Privateer, where the exact grant or denial is
-					recorded. Quarterdeck only shows what is being asked.
+				<p class="callout">
+					<Icon name="lock" size={16} />
+					<span
+						>Production approvals are answered in Privateer, where the exact grant or denial is
+						recorded. Quarterdeck only shows what is being asked.</span
+					>
 				</p>
 				{#if dl.length > 0}
-					<dl class="facts">
+					<dl class="facts-list">
 						{#each dl as [term, value] (term)}
 							<div>
 								<dt>{term}</dt>
@@ -164,7 +181,7 @@
 			{:else if row.kind === 'notice'}
 				{#if report}
 					<a class="btn btn-primary open-report" href={reportHref}>
-						<Icon name="doc" size={14} /> Open report: {report}
+						<Icon name="doc" size={16} /> Open report: {report}
 					</a>
 				{/if}
 
@@ -174,9 +191,12 @@
 
 				<Dismiss from={item.from} id={item.id} label={dismissText} failure={dismissed} />
 			{:else}
-				<p class="context">
-					Quarterdeck has no action for this yet. Privateer reports it until its owner clears it.
-					{#if typeof item.status === 'string'}Status: {item.status}.{/if}
+				<p class="callout">
+					<Icon name="alert" size={16} />
+					<span>
+						Quarterdeck has no action for this yet. Privateer reports it until its owner clears it.
+						{#if typeof item.status === 'string'}Status: {item.status}.{/if}
+					</span>
 				</p>
 			{/if}
 		</div>
@@ -185,165 +205,164 @@
 
 <style>
 	.row {
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow);
-		overflow: hidden;
+		--tone: var(--sea);
+		--tone-soft: var(--sea-soft);
 		position: relative;
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--elev-1);
+		transition: box-shadow var(--dur-2) var(--ease);
 	}
-	.row::before {
-		content: '';
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: 4px;
-		background: transparent;
+	.row.kind-request {
+		--tone: var(--brass);
+		--tone-soft: var(--brass-soft);
 	}
-	.row.kind-decision::before {
-		background: var(--sea);
+	.row.kind-approval {
+		--tone: var(--ink-2);
+		--tone-soft: var(--well);
 	}
-	.row.kind-request::before {
-		background: var(--brass);
+	.row.kind-blocker {
+		--tone: var(--danger);
+		--tone-soft: var(--danger-soft);
 	}
-	.row.kind-approval::before {
-		background: var(--ink-3);
-	}
-	.row.kind-notice::before {
-		background: var(--sea);
-	}
-	.row.kind-blocker::before {
-		background: var(--danger);
+	.row:hover {
+		box-shadow: var(--elev-2);
 	}
 	.row.open {
-		box-shadow: none;
+		box-shadow: var(--elev-2);
 	}
 
 	.head {
 		display: grid;
-		gap: var(--s-1);
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		gap: var(--s-3);
+		align-items: start;
 		width: 100%;
-		padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 4px);
+		padding: var(--s-4);
 		text-align: start;
 		background: none;
 		border: 0;
+		border-radius: var(--radius-lg);
 		color: inherit;
 		cursor: pointer;
 	}
 	.head:focus-visible {
-		outline: 2px solid var(--sea);
+		outline: 2px solid var(--focus);
 		outline-offset: -2px;
+	}
+	.glyph {
+		display: grid;
+		place-items: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 11px;
+		background: var(--tone-soft);
+		color: var(--tone);
+	}
+	.main {
+		display: grid;
+		gap: 5px;
+		min-width: 0;
 	}
 	.line {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--s-1) var(--s-2);
-		font-size: var(--text-xs);
-		color: var(--ink-3);
+		min-width: 0;
 	}
 	.line.top {
 		justify-content: space-between;
+		flex-wrap: nowrap;
 	}
-	.kind {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		font-weight: 650;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--ink-2);
-	}
-	.flag {
-		padding: 1px 8px;
-		border-radius: 999px;
-		font-weight: 650;
-		font-size: var(--text-xs);
-		border: 1px solid var(--line);
-	}
-	.flag.high {
-		background: var(--danger-soft);
-		color: var(--danger);
-		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-	}
-	.flag.report {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		background: var(--sea-soft);
-		color: var(--sea-strong);
-		border-color: color-mix(in srgb, var(--sea) 35%, transparent);
-	}
-	.flag.hands {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		background: var(--brass-soft);
-		color: var(--brass);
-		border-color: var(--brass-line);
-	}
-	.age {
-		font-variant-numeric: tabular-nums;
-	}
-	.deadline {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		padding: 1px 8px;
-		border-radius: 999px;
-		font-weight: 650;
-		font-variant-numeric: tabular-nums;
-		background: var(--surface-2);
-		color: var(--ink-2);
-		border: 1px solid var(--line);
-	}
-	.deadline-overdue {
-		background: var(--danger-soft);
-		color: var(--danger);
-		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-	}
-	.deadline-soon {
-		background: var(--warn-soft);
-		color: var(--warn);
-		border-color: color-mix(in srgb, var(--warn) 35%, transparent);
-	}
-	.deadline-none {
-		color: var(--ink-3);
-		background: transparent;
-	}
-	.ship {
-		color: var(--ink);
+	.ship-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-weight: 650;
 		font-size: var(--text-sm);
+		color: var(--ink);
 	}
-	.ship :global(.icon) {
-		color: var(--sea);
+	.deadline {
+		flex: none;
+	}
+	.deadline-none {
+		background: transparent;
+		color: var(--ink-3);
+		font-weight: 500;
+		padding: 0;
 	}
 	.summary {
+		display: -webkit-box;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 		font-size: var(--text-base);
 		line-height: 1.4;
 		color: var(--ink);
 		overflow-wrap: anywhere;
+		text-wrap: pretty;
+	}
+	.row.open .summary {
+		display: block;
+		-webkit-line-clamp: unset;
+		line-clamp: unset;
+	}
+	.facts {
+		font-size: var(--text-xs);
+		color: var(--ink-3);
+	}
+	.kind {
+		font-size: var(--text-2xs);
+		font-weight: 650;
+		letter-spacing: var(--track-caps);
+		text-transform: uppercase;
+		color: var(--tone);
+	}
+	.age {
+		font-variant-numeric: tabular-nums;
+	}
+	.age::before {
+		content: '·';
+		margin-right: var(--s-2);
+	}
+	.flag {
+		height: 1.25rem;
+		min-height: 0;
+		font-size: var(--text-2xs);
+	}
+	.chev {
+		align-self: center;
+		color: var(--ink-3);
+		transition: transform var(--dur-2) var(--ease);
+	}
+	.row.open .chev {
+		transform: rotate(180deg);
 	}
 
 	.panel {
 		display: grid;
 		gap: var(--s-4);
-		padding: var(--s-2) var(--s-4) var(--s-4) calc(var(--s-4) + 4px);
+		margin: 0 var(--s-4);
+		padding: var(--s-4) 0 var(--s-4);
 		border-top: 1px solid var(--line);
+		animation: rise var(--dur-3) var(--ease);
 	}
 	.panel :global(.card) {
 		box-shadow: none;
-		border: 0;
 		padding: 0;
 		background: none;
+		border-radius: 0;
 	}
 	.label {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
 		font-weight: 650;
-		letter-spacing: 0.06em;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
 		color: var(--ink-2);
 	}
@@ -351,14 +370,21 @@
 		color: var(--ink-2);
 		font-size: var(--text-sm);
 		overflow-wrap: anywhere;
+		text-wrap: pretty;
+	}
+	.open-report {
+		justify-self: start;
+		max-width: 100%;
+		white-space: normal;
+		text-align: left;
+		line-height: 1.3;
 	}
 	.step {
 		display: grid;
-		gap: var(--s-2);
-		padding: var(--s-3);
+		gap: var(--s-3);
+		padding: var(--s-4);
 		border-radius: var(--radius);
 		background: var(--brass-soft);
-		border: 1px solid var(--brass-line);
 	}
 	.step .label {
 		color: var(--brass);
@@ -367,8 +393,8 @@
 		margin: 0;
 		padding: var(--s-3);
 		border-radius: var(--radius-sm);
-		background: var(--surface);
-		border: 1px solid var(--line);
+		background: var(--surface-raised);
+		box-shadow: inset 0 0 0 1px var(--line);
 		font-family: var(--font-mono);
 		font-size: var(--text-sm);
 		white-space: pre-wrap;
@@ -379,53 +405,41 @@
 		flex-wrap: wrap;
 		gap: var(--s-2);
 		align-items: center;
+		justify-content: space-between;
 	}
 	.step-actions form {
 		margin: 0;
 	}
 	.reply {
 		display: grid;
-		gap: var(--s-2);
+		gap: var(--s-3);
 	}
 	.reply label {
 		display: grid;
-		gap: var(--s-1);
 	}
-	.reply textarea {
-		width: 100%;
-		padding: var(--s-2) var(--s-3);
-		font: inherit;
-		color: var(--ink);
-		background: var(--surface-2);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--radius-sm);
-		resize: vertical;
+	.reply-actions {
+		display: flex;
+		justify-content: flex-end;
 	}
-	.reply textarea:focus-visible {
-		outline: 2px solid var(--sea);
-		outline-offset: 1px;
+	@media (max-width: 36rem) {
+		.reply-actions .btn {
+			flex: 1;
+		}
 	}
-	.reply .btn {
-		justify-self: start;
-	}
-	.error {
-		color: var(--danger);
-		font-size: var(--text-sm);
-	}
-	.facts {
+	.facts-list {
 		display: grid;
 		gap: var(--s-2);
 		margin: 0;
 	}
-	.facts div {
+	.facts-list div {
 		display: grid;
 		gap: 2px;
 	}
-	.facts dt {
+	.facts-list dt {
 		font-size: var(--text-xs);
 		color: var(--ink-3);
 	}
-	.facts dd {
+	.facts-list dd {
 		margin: 0;
 		font-family: var(--font-mono);
 		font-size: var(--text-sm);
