@@ -1,50 +1,21 @@
 /**
- * Where decision mail comes from. CliSource asks a live privateer home;
- * FixtureSource reads JSON files so the portal can be built, tested and
- * demonstrated without a fleet.
+ * Where captain mail comes from. CliSource asks a live privateer home;
+ * FixtureSource reads JSON files in the same shapes, so the portal can be
+ * built, tested and demonstrated without a fleet.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { MailItem } from '#lib/decision.ts';
+import { assemble, type Waiting } from '#lib/shapes.ts';
 import type { MailSendArgs } from './answer.ts';
 import type { Config } from './config.ts';
 import { createRunner, privateerArgv, type ExecFile, type Runner } from './privateer.ts';
 
 export interface Source {
 	readonly mode: 'fixtures' | 'cli';
-	/** Mail owed to the captain: captain.waiting merged with runtime.needs, de-duplicated by id. */
-	waiting(): Promise<MailItem[]>;
+	/** Everything owed to the captain: captain.waiting and runtime.needs, merged. */
+	waiting(): Promise<Waiting>;
 	/** Really send a captain reply. Callers go through `sendReply`, which decides whether to. */
 	send(args: MailSendArgs): Promise<unknown>;
-}
-
-/**
- * Pull the list of mail items out of a command result. The commands return an
- * object wrapping a list; accept the common wrapper names rather than guess one.
- */
-export function extractItems(result: unknown): MailItem[] {
-	const list = Array.isArray(result)
-		? result
-		: typeof result === 'object' && result !== null
-			? ['messages', 'items', 'waiting', 'needs', 'mail']
-					.map((key) => (result as Record<string, unknown>)[key])
-					.find(Array.isArray)
-			: undefined;
-	return (list ?? []).filter(
-		(item): item is MailItem =>
-			typeof item === 'object' && item !== null && typeof (item as MailItem).id === 'string'
-	);
-}
-
-function mergeById(...lists: MailItem[][]): MailItem[] {
-	const byId = new Map<string, MailItem>();
-	for (const list of lists) {
-		for (const item of list) {
-			// Merge so fields only one command reports (e.g. hands_on) survive.
-			byId.set(item.id, { ...item, ...byId.get(item.id) });
-		}
-	}
-	return [...byId.values()];
 }
 
 export class CliSource implements Source {
@@ -61,12 +32,12 @@ export class CliSource implements Source {
 		);
 	}
 
-	async waiting(): Promise<MailItem[]> {
+	async waiting(): Promise<Waiting> {
 		const [waiting, needs] = await Promise.all([
 			this.#run('captain.waiting', {}),
 			this.#run('runtime.needs', {})
 		]);
-		return mergeById(extractItems(waiting), extractItems(needs));
+		return assemble(waiting, needs, Date.now());
 	}
 
 	send(args: MailSendArgs): Promise<unknown> {
@@ -77,24 +48,28 @@ export class CliSource implements Source {
 /** Fixture files, named after the command whose output they stand in for. */
 export const FIXTURE_FILES = ['captain.waiting.json', 'runtime.needs.json'] as const;
 
+/** Keys that are derived when read, never shifted with the fixture clock. */
+const DERIVED_KEYS = new Set(['age_ms', 'waited_ms']);
+
 /**
  * Fixtures are written at a fixed moment (`fixture_now_ms`). Shift every
- * `*_ms` timestamp so the fixture reads as if it were captured `now`: an ask
- * "due in 45m" stays due in 45m, an overdue one stays overdue.
+ * `*_ms` timestamp, at any depth, by the same amount, so the fixture reads as
+ * if it were captured `now`: an ask "due in 45m" stays due in 45m, and an
+ * overdue one stays overdue. Derived ages are recomputed when parsed.
  */
-export function rebaseFixture(items: MailItem[], fixtureNow: number, now: number): MailItem[] {
+export function rebaseFixture(value: unknown, fixtureNow: number, now: number): unknown {
 	const delta = now - fixtureNow;
-	return items.map((item) => {
-		const out: MailItem = { ...item };
-		for (const [key, value] of Object.entries(item)) {
-			if (key.endsWith('_ms') && key !== 'age_ms' && typeof value === 'number') {
-				out[key] = value + delta;
-			}
+	const shift = (node: unknown): unknown => {
+		if (Array.isArray(node)) return node.map(shift);
+		if (typeof node !== 'object' || node === null) return node;
+		const out: Record<string, unknown> = {};
+		for (const [key, child] of Object.entries(node)) {
+			const isTime = key.endsWith('_ms') && !DERIVED_KEYS.has(key) && key !== 'fixture_now_ms';
+			out[key] = isTime && typeof child === 'number' ? child + delta : shift(child);
 		}
-		const asked = out.asked_ms ?? out.created_ms;
-		if (typeof asked === 'number') out.age_ms = now - asked;
 		return out;
-	});
+	};
+	return shift(value);
 }
 
 export class FixtureSource implements Source {
@@ -107,23 +82,24 @@ export class FixtureSource implements Source {
 		this.#now = now;
 	}
 
-	async #read(file: string): Promise<MailItem[]> {
+	/** One fixture file as parsed JSON, or null when it is absent. */
+	async #read(file: string): Promise<unknown> {
 		let text: string;
 		try {
 			text = await readFile(path.resolve(this.#dir, file), 'utf8');
 		} catch (error) {
-			if ((error as { code?: string }).code === 'ENOENT') return [];
+			if ((error as { code?: string }).code === 'ENOENT') return null;
 			throw error;
 		}
 		const json = JSON.parse(text) as { fixture_now_ms?: unknown };
-		const items = extractItems(json);
-		const fixtureNow = typeof json.fixture_now_ms === 'number' ? json.fixture_now_ms : null;
-		return fixtureNow === null ? items : rebaseFixture(items, fixtureNow, this.#now());
+		return typeof json.fixture_now_ms === 'number'
+			? rebaseFixture(json, json.fixture_now_ms, this.#now())
+			: json;
 	}
 
-	async waiting(): Promise<MailItem[]> {
-		const lists = await Promise.all(FIXTURE_FILES.map((file) => this.#read(file)));
-		return mergeById(...lists);
+	async waiting(): Promise<Waiting> {
+		const [captain, needs] = await Promise.all(FIXTURE_FILES.map((file) => this.#read(file)));
+		return assemble(captain, needs, this.#now());
 	}
 
 	send(): Promise<unknown> {

@@ -1,9 +1,10 @@
 /**
- * The running portal's state: configuration, the decision source, and the
- * answers given since the server started. Created on first use so that
+ * The running portal's state: configuration, the source of captain mail, and
+ * the answers given since the server started. Created on first use so that
  * building the app never reads the environment or touches privateer.
  */
 import type { Answered } from '#lib/decision.ts';
+import type { Waiting } from '#lib/shapes.ts';
 import { readConfig, type Config } from './config.ts';
 import { createSource, type Source } from './source.ts';
 
@@ -26,4 +27,29 @@ export function getPortal(): Portal {
 		portal = { config, source: createSource(config), answers: new Map() };
 	}
 	return portal;
+}
+
+/**
+ * How long a read of the captain's items is reused. The layout (nav badge) and
+ * the page both read on every navigation; this keeps that to one round trip.
+ */
+const ITEMS_TTL_MS = 5_000;
+let items: { at: number; value: Promise<Waiting> } | undefined;
+
+/** Everything owed to the captain. `fresh` skips the cache, as an action needs. */
+export function loadItems(fresh = false): Promise<Waiting> {
+	const current = items;
+	if (!fresh && current && Date.now() - current.at <= ITEMS_TTL_MS) return current.value;
+	const value = getPortal().source.waiting();
+	items = { at: Date.now(), value };
+	// A failed read must not be reused for the next five seconds.
+	value.catch(() => {
+		if (items?.value === value) items = undefined;
+	});
+	return value;
+}
+
+/** Forget the cached read, after anything that changes what is owed. */
+export function invalidateItems(): void {
+	items = undefined;
 }
