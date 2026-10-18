@@ -724,10 +724,19 @@ export function displayUrl(raw: unknown): string | null {
 	}
 }
 
-/** An option's value as text. Nested maps and lists are written out as JSON; nothing else is shown. */
+/**
+ * An option's value as text. Nested maps and lists are written out as JSON with
+ * every secret-looking key masked and every URL scrubbed, at any depth, so a
+ * credential nested inside a non-secret option never reaches the page.
+ */
 function scalarText(raw: unknown): string | null {
 	if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
-	if (Array.isArray(raw) || rec(raw)) return JSON.stringify(raw);
+	if (Array.isArray(raw) || rec(raw)) {
+		return JSON.stringify(raw, (key, value) => {
+			if (key !== '' && SECRET_NAME.test(key)) return SET;
+			return typeof value === 'string' ? (displayUrl(value) ?? value) : value;
+		});
+	}
 	return str(raw);
 }
 

@@ -788,6 +788,29 @@ describe('parseShipProfile', () => {
 		expect(JSON.stringify(firstMate)).not.toContain('do-not-show-this');
 	});
 
+	it('masks secret keys and scrubs URLs nested inside a non-secret option', () => {
+		const profile = {
+			first_mate: {
+				harness: 'pi',
+				options: {
+					env: {
+						REGION: 'eu',
+						API_KEY: 'do-not-show-this',
+						nested: [{ session: 'do-not-show-this' }, 'https://u:do-not-show-this@x.test/']
+					}
+				}
+			}
+		};
+		const [env] = parseShipProfile(profile, 'billing').firstMate.options;
+		expect(env.secret).toBe(false);
+		expect(env.value).not.toContain('do-not-show-this');
+		expect(JSON.parse(env.value ?? '')).toEqual({
+			REGION: 'eu',
+			API_KEY: '<set>',
+			nested: [{ session: '<set>' }, 'https://x.test/']
+		});
+	});
+
 	it('keeps credential names only, and hides secret query values and user names in URLs', () => {
 		const { mcpServers } = parseShipProfile(full, 'billing');
 		expect(mcpServers).toEqual([
