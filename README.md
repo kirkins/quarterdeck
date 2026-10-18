@@ -3,12 +3,12 @@
 A web portal for a [Privateer](https://github.com/kirkins/privateer) fleet: where the captain sees what every ship needs and decides.
 
 - **Decisions**: one card per thing the captain must decide, with options, costs and the ship's recommendation.
-- **Triage** (soon): everything owed to the captain, sorted by urgency and age.
+- **Triage**: everything owed to the captain, in one list: decisions, requests, approvals and blocked items, sorted by urgency, then deadline, then age.
 - **Fleet map** (soon): machines, ships and crew, live.
 
 Quarterdeck reads Privateer only through its JSON commands, and answers as the captain. It must never be reachable without authentication.
 
-Status: early development. Decisions are live; Triage and Fleet are placeholders.
+Status: early development. Decisions and Triage are live; Fleet is a placeholder.
 
 | Phone, light                                      | Phone, dark                                     | Desktop                                               |
 | ------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
@@ -51,7 +51,7 @@ All settings come from the environment (see [.env.example](.env.example)). `npm 
 | `QD_FIXTURES_DIR`                 | `fixtures`  | Where the fixture source reads `captain.waiting.json` and `runtime.needs.json`.      |
 | `HOST`, `PORT`                    | `127.0.0.1` | Listen address. `PORT` defaults to 3000 for `npm start`, 5173 for `npm run dev`.     |
 
-The live source runs `captain.waiting` and `runtime.needs`, which are operator commands: the process needs operator rights on that home.
+The live source runs `captain.waiting` and `runtime.needs`. `captain.waiting` is open to the captain and the captain's liaison; `runtime.needs` is an operator command. The process needs one of those rights on that home, or Privateer refuses both.
 
 ## How answering works
 
@@ -90,6 +90,8 @@ Layout:
 - `src/lib/decision.ts`: the decision schema, its validator, and mail → card normalisation.
 - `src/lib/server/privateer.ts`: the CLI runner (`execFile`, argv only) and typed errors.
 - `src/lib/server/source.ts`: `CliSource`, `FixtureSource`, and the send-or-log rule.
+- `src/lib/shapes.ts`: reads the real `captain.waiting` and `runtime.needs` output into one item model.
+- `src/lib/triage.ts`: triage kinds, sections, sort order and filters.
 - `src/lib/server/answer.ts`: builds the reply from the captain's choice.
 - `src/routes/+page.server.ts`: loads cards; the `answer` form action.
 - `fixtures/`: invented ships and asks covering every card variant.

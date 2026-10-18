@@ -31,7 +31,7 @@ A `Source` interface has two implementations: `CliSource` (merges `captain.waiti
 
 Fixture timestamps are rebased to "now" when read (`fixture_now_ms` in each file), so an ask that is "due in 40 minutes" stays that way and an overdue one stays overdue.
 
-The exact wrapper key of the `captain.waiting` / `runtime.needs` results was not available to build against (they are operator-only), so `extractItems` accepts a bare list or a list under `messages`, `items`, `waiting`, `needs` or `mail`. Fixtures use `messages`, like `mail.inbox`.
+The wrapper keys are now known from Privateer's source (see section 11), so the guessing is gone. `captain.waiting` returns `{waiting: [{ship, asked_ms, age_ms, step, mail}], hands_on, now_ms}`, and `runtime.needs` returns `{available, items, reason?}`. `src/lib/shapes.ts` reads exactly those, and fixtures use the same shapes.
 
 ## 6. Sending is opt-in twice
 
@@ -62,3 +62,31 @@ The captain can always answer in their own words, whatever the ship asked for. O
 `free_text_ok` is now only a hint that the ship especially invites a written answer. It changes the row's wording and nothing else. Privateer was asked to drop its gate on text answers, and until it does a live text-only reply can be refused; the card shows that refusal and keeps the text, so nothing is lost silently.
 
 The reply shapes are fixed: an option alone is `{option_id}`; an option with a note is `{option_id, text}`; an own answer is `{text}`, with the text as the body. Every reply carries `task_id` when the ask has one.
+
+## 11. Triage: one item model, read from Privateer's real output
+
+Triage and Decisions read the same data through `loadItems()` (`src/lib/server/app.ts`), so they cannot disagree about what is owed. Both queries are parsed by `src/lib/shapes.ts`; the list is ordered and sectioned by `src/lib/triage.ts`.
+
+**Source of truth** (Privateer's source: `src/captain.rs` `waiting`, `src/needs.rs` `query`, `src/mail.rs` `hands_step`, `send`, `ack`). Command and field names only:
+
+- `captain.waiting` returns `{now_ms, hands_on, waiting}`. Each entry is `{ship, asked_ms, age_ms, step, mail}`. `step` is the exact `payload.needs_hands.step` of a request to the captain, or null. `mail` is the mail record, with `kind` (`request` or `decision`), `request_kind`, `payload`, `urgency`, `deadline_ms` and `created_ms`.
+- `runtime.needs` returns `{available, items, next_after, unknown, reason?}`. Each item has `id`, `source` (`mail`, `job`, `schedule` or `workspace`), `kind` (`decision`, `approval` or `blocker`), `ship`, `task_id`, `correlation` (the mail id, for mail), `question`, `choices`, `artifact`, `environment`, `evidence`, `status`, `summary`, `created_ms` and `actions`. Mail items carry no urgency, deadline or mail kind.
+- Replies are `mail.send` with `kind: reply` and `correlation` set to the ask's id. A reply closes the ask.
+- There is no per-item acknowledgement. `mail.ack` moves a mailbox's read cursor (`through_seq`) and closes nothing, and blocked items offer no action, so Triage has no ack action.
+
+**Merging.** A mail both queries report is one item. `captain.waiting`'s record wins, since it has the kind, payload, urgency and deadline. Ships choose their own mail ids, so items are keyed by sender and id.
+
+**Sections and order.** Urgency high first; then overdue; then the nearest deadline (none last); then the oldest ask; then the id, so ties never depend on Privateer's listing order. "Needs you now" holds high urgency, overdue, and anything due within a day. "Waiting on you" is normal urgency. "When you have a moment" is low urgency. Empty sections are hidden.
+
+**Actions, by kind.**
+
+- A decision opens its existing card in place, and answers through the same action as the Decisions page (`submitAnswer`).
+- A request or question takes a written reply. A needs-hands request shows its step with a copy button and a Done action, which replies "Done." to the asker.
+- An approval is shown read-only. Production approvals need the exact grant or denial, which only Privateer records.
+- A blocked item is shown with its summary and status. Quarterdeck offers nothing on it.
+
+Answering, replying and sending all go through one guard: nothing is sent unless `QD_SOURCE=cli` and `QD_ALLOW_SEND=1`, as for decisions.
+
+**Reads are cached for five seconds** (`loadItems`), so the nav badge in the layout and the page share one round trip. Any answer or reply reads fresh and clears the cache.
+
+**Filters** by ship and kind are chips. The last filter is remembered in `localStorage` (guarded by try/catch). The list refreshes every 60 seconds and on window focus, and shows "Updated Xs ago".

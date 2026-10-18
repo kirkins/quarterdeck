@@ -17,21 +17,22 @@ test('lists decision cards from fixtures, most urgent first', async ({ page }) =
 	);
 
 	const cards = page.locator('[data-card]');
-	await expect(cards).toHaveCount(7);
-	await expect(cards.first()).toContainText('analytics');
+	await expect(cards).toHaveCount(6);
+	// Earliest deadline first: the mobile-app ask was due an hour ago, the billing one 40 minutes ago.
+	await expect(cards.first()).toContainText('mobile-app');
 	await expect(cards.first()).toContainText(/Overdue by/);
-	await expect(cards.nth(1)).toContainText('Needs your hands');
+	await expect(cards.nth(1)).toContainText('billing');
 
-	// The three search-index questions share one card.
-	const group = cards.filter({ hasText: 'search-index' });
-	await expect(group.getByRole('heading', { level: 2 })).toHaveCount(3);
+	// The two analytics questions share one card.
+	const group = cards.filter({ hasText: 'analytics' });
+	await expect(group.getByRole('heading', { level: 2 })).toHaveCount(2);
 
 	// Older choices-only asks still render, with their choices.
 	const legacy = cards.filter({ hasText: 'mobile-app' });
 	await expect(legacy.getByRole('radio')).toHaveCount(2);
 
-	// A plain request is not a decision.
-	await expect(page.getByText('style guide draft')).toHaveCount(0);
+	// A plain request is not a decision; it belongs to Triage.
+	await expect(page.getByText('Can the store listing mention offline mode')).toHaveCount(0);
 
 	// The recommendation is marked, never preselected.
 	const billing = cards.filter({ hasText: 'retry policy' });
@@ -60,18 +61,20 @@ test('answering takes a choice and a confirm, and can be cancelled', async ({ pa
 
 	await expect(card.getByRole('status')).toContainText('Smart retries over 7 days');
 	await expect(card.getByRole('status')).toContainText('Logged, not sent');
-	await expect(page.getByRole('link', { name: /Decisions/ })).toContainText('8');
+	// Seven questions were open (the analytics pair is one card); this one is answered.
+	await expect(page.getByRole('link', { name: /Decisions/ })).toContainText('6');
 	// The answered card sinks to the bottom.
 	await expect(page.locator('[data-card]').last()).toContainText('retry policy');
 });
 
 test('free-text answers and the keyboard work', async ({ page }) => {
 	await page.goto('/');
-	const card = page.locator('[data-card]').filter({ hasText: 'workspaces' });
+	// An ask whose decision payload is malformed is shown from its body, with nothing to pick,
+	// so the answer is written in words straight away.
+	const card = page.locator('[data-card]').filter({ hasText: 'search ranking' });
+	await expect(card.getByText('Which search ranking should docs use?')).toBeVisible();
 
-	await card.getByRole('button', { name: 'Or write my own answer' }).click();
-	await card.getByLabel('Your own answer').fill('Call them “Crews”.');
-	await expect(card.getByText('Reply to docs-site in your own words')).toBeVisible();
+	await card.getByLabel('Your answer').fill('Call them “Crews”.');
 	await card.getByRole('button', { name: 'Send answer' }).click();
 	await expect(card.getByRole('status')).toContainText('Crews');
 
@@ -90,11 +93,11 @@ test('every decision takes the captain’s own answer, with no send until there 
 	page
 }) => {
 	await page.goto('/');
-	const card = page.locator('[data-card]').filter({ hasText: 'analytics' });
+	const card = page.locator('[data-card]').filter({ hasText: 'Which shard count' });
 	const send = card.getByRole('button', { name: 'Send answer' });
 
 	// Options stay primary; the own answer is one row below them.
-	await expect(card.getByRole('radio')).toHaveCount(2);
+	await expect(card.getByRole('radio')).toHaveCount(3);
 	await card.getByRole('button', { name: 'Write my own answer' }).click();
 	await expect(send).toBeHidden();
 
@@ -103,7 +106,7 @@ test('every decision takes the captain’s own answer, with no send until there 
 	await expect(send).toBeHidden();
 
 	await card.getByLabel('Your own answer').fill('Keep 30 days, and say why in the docs.');
-	await expect(card.getByText('Reply to analytics in your own words')).toBeVisible();
+	await expect(card.getByText('Reply to search-index in your own words')).toBeVisible();
 	await send.click();
 
 	await expect(card.getByRole('status')).toContainText('Keep 30 days, and say why in the docs.');

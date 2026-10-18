@@ -10,6 +10,7 @@
 	let { children, data }: LayoutProps = $props();
 
 	const open = $derived(typeof page.data.open === 'number' ? page.data.open : null);
+	const triage = $derived(typeof data.triage === 'number' ? data.triage : null);
 </script>
 
 <svelte:head>
@@ -32,7 +33,15 @@
 						{#if open}<span class="count" aria-label="{open} waiting">{open}</span>{/if}
 					</a>
 				</li>
-				<li><span class="soon" aria-disabled="true">Triage <small>Soon</small></span></li>
+				<li>
+					<a
+						href={resolve('/triage')}
+						aria-current={page.url.pathname.startsWith('/triage') ? 'page' : undefined}
+					>
+						Triage
+						{#if triage}<span class="count" aria-label="{triage} owed to you">{triage}</span>{/if}
+					</a>
+				</li>
 				<li><span class="soon" aria-disabled="true">Fleet <small>Soon</small></span></li>
 			</ul>
 		</nav>

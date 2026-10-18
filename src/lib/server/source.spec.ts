@@ -3,14 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { MailSendArgs } from './answer.ts';
-import {
-	CliSource,
-	FixtureSource,
-	extractItems,
-	rebaseFixture,
-	sendReply,
-	type Source
-} from './source.ts';
+import { CliSource, FixtureSource, rebaseFixture, sendReply, type Source } from './source.ts';
 
 const NOW = 1_800_000_000_000;
 const H = 3_600_000;
@@ -24,40 +17,56 @@ const args: MailSendArgs = {
 	payload: { answer: { option_id: 'yes' } }
 };
 
-describe('extractItems', () => {
-	it('finds the list under the usual wrapper names, or a bare list', () => {
-		const item = { id: 'a', from: 'x', to: 'captain', kind: 'decision' };
-		expect(extractItems({ messages: [item] })).toEqual([item]);
-		expect(extractItems({ items: [item] })).toEqual([item]);
-		expect(extractItems({ waiting: [item] })).toEqual([item]);
-		expect(extractItems([item, null, { no: 'id' }])).toEqual([item]);
-		expect(extractItems({ other: 1 })).toEqual([]);
-		expect(extractItems(null)).toEqual([]);
-	});
-});
-
 describe('CliSource', () => {
-	it('merges captain.waiting and runtime.needs by id', async () => {
+	it('reads both queries in their real shapes and merges them', async () => {
+		const mail = {
+			id: 'a',
+			from: 's',
+			kind: 'request',
+			created_ms: NOW - H,
+			urgency: 'high',
+			deadline_ms: NOW + H,
+			payload: {},
+			body: 'Plug it in?'
+		};
 		const run = vi.fn(async (command: string) =>
 			command === 'captain.waiting'
 				? {
-						messages: [
-							{ id: 'a', from: 's', kind: 'decision' },
-							{ id: 'b', from: 's' }
-						]
+						now_ms: NOW,
+						hands_on: [],
+						waiting: [{ ship: 's', asked_ms: NOW - H, step: 'Plug it in', mail }]
 					}
 				: {
-						messages: [
-							{ id: 'b', from: 's', hands_on: 'Plug it in' },
-							{ id: 'c', from: 't' }
+						available: true,
+						items: [
+							{
+								id: 'o:mail:a',
+								source: 'mail',
+								kind: 'decision',
+								ship: 's',
+								correlation: 'a',
+								created_ms: NOW - H
+							},
+							{
+								id: 'o:job:j',
+								source: 'job',
+								kind: 'blocker',
+								ship: 't',
+								evidence: 'capacity_wait',
+								status: 'queued',
+								created_ms: NOW - 5 * 60_000
+							}
 						]
 					}
 		);
 		const source = new CliSource(run as never);
-		const items = await source.waiting();
+		const { items, unavailable } = await source.waiting();
 		expect(run.mock.calls.map((c) => c[0]).sort()).toEqual(['captain.waiting', 'runtime.needs']);
-		expect(items.map((i) => i.id)).toEqual(['a', 'b', 'c']);
-		expect(items[1].hands_on).toBe('Plug it in');
+		expect(unavailable).toBeNull();
+		expect(items.map((i) => i.id).sort()).toEqual(['a', 'o:job:j']);
+		const a = items.find((i) => i.id === 'a');
+		expect(a?.hands_on).toBe('Plug it in');
+		expect(a?.urgency).toBe('high');
 	});
 
 	it('sends with mail.send', async () => {
@@ -68,41 +77,76 @@ describe('CliSource', () => {
 });
 
 describe('FixtureSource', () => {
-	it('reads both fixture files and shifts times to now', async () => {
+	it('reads both fixture files in the real shapes and shifts times to now', async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'qd-fixtures-'));
 		const T = 1_700_000_000_000;
 		await writeFile(
 			path.join(dir, 'captain.waiting.json'),
 			JSON.stringify({
 				fixture_now_ms: T,
-				messages: [{ id: 'a', from: 's', created_ms: T - H, deadline_ms: T + H, age_ms: 1 }]
+				now_ms: T,
+				hands_on: [],
+				waiting: [
+					{
+						ship: 's',
+						asked_ms: T - H,
+						age_ms: H,
+						step: null,
+						mail: {
+							id: 'a',
+							from: 's',
+							kind: 'decision',
+							created_ms: T - H,
+							deadline_ms: T + H,
+							urgency: 'normal',
+							payload: {}
+						}
+					}
+				]
 			})
 		);
 		await writeFile(
 			path.join(dir, 'runtime.needs.json'),
-			JSON.stringify({ messages: [{ id: 'b', from: 's', created_ms: 5 }] })
+			JSON.stringify({ fixture_now_ms: T, available: true, items: [] })
 		);
-		const items = await new FixtureSource(dir, () => NOW).waiting();
+		const { items, unavailable } = await new FixtureSource(dir, () => NOW).waiting();
+		expect(unavailable).toBeNull();
 		expect(items).toEqual([
-			{ id: 'a', from: 's', created_ms: NOW - H, deadline_ms: NOW + H, age_ms: H },
-			{ id: 'b', from: 's', created_ms: 5 }
+			expect.objectContaining({ id: 'a', asked_ms: NOW - H, deadline_ms: NOW + H, age_ms: H })
 		]);
 	});
 
 	it('treats missing files as empty and never sends', async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'qd-empty-'));
 		const source = new FixtureSource(dir);
-		await expect(source.waiting()).resolves.toEqual([]);
+		await expect(source.waiting()).resolves.toEqual({
+			items: [],
+			unavailable: 'runtime.needs is unavailable'
+		});
 		await expect(source.send()).rejects.toThrow(/never sends/);
 	});
+});
 
-	it('keeps null deadlines null when rebasing', () => {
-		const [item] = rebaseFixture(
-			[{ id: 'x', from: 's', to: 'c', kind: 'decision', deadline_ms: null }],
+describe('rebaseFixture', () => {
+	it('shifts every timestamp at any depth, but not derived ages or the fixture clock', () => {
+		const out = rebaseFixture(
+			{
+				fixture_now_ms: 0,
+				now_ms: 100,
+				age_ms: 7,
+				mail: { created_ms: 10, deadline_ms: null, waited_ms: 3 },
+				list: [{ asked_ms: 1 }]
+			},
 			0,
 			NOW
-		);
-		expect(item.deadline_ms).toBeNull();
+		) as Record<string, unknown>;
+		expect(out).toEqual({
+			fixture_now_ms: 0,
+			now_ms: 100 + NOW,
+			age_ms: 7,
+			mail: { created_ms: 10 + NOW, deadline_ms: null, waited_ms: 3 },
+			list: [{ asked_ms: 1 + NOW }]
+		});
 	});
 });
 
