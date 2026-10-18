@@ -292,12 +292,12 @@ describe('buildCards', () => {
 			NOW
 		);
 		expect(cards.map((c) => c.key)).toEqual([
-			'overdue',
-			'soon-old',
-			'soon-new',
-			'later',
-			'none-old',
-			'none-new'
+			'storefront/overdue',
+			'storefront/soon-old',
+			'storefront/soon-new',
+			'storefront/later',
+			'storefront/none-old',
+			'storefront/none-new'
 		]);
 	});
 
@@ -351,7 +351,7 @@ describe('buildCards', () => {
 			NOW,
 			new Map([[askKey('storefront', 'done'), { at_ms: NOW, sent: false }]])
 		);
-		expect(cards.map((c) => c.key)).toEqual(['open', 'done']);
+		expect(cards.map((c) => c.key)).toEqual(['storefront/open', 'storefront/done']);
 	});
 
 	it('keys asks by sender and id, so one id from two ships is two asks', () => {
@@ -366,5 +366,14 @@ describe('buildCards', () => {
 			dismissed: true
 		});
 		expect(questions.find((q) => q.from === 'billing')?.answered).toBeNull();
+	});
+
+	it('gives each ungrouped ask its own card, even when two ships reuse an id', () => {
+		const cards = buildCards(
+			[mail({ id: 'a', from: 'billing' }), mail({ id: 'a', from: 'storefront' })],
+			NOW
+		);
+		expect(cards.map((c) => c.key).sort()).toEqual(['billing/a', 'storefront/a']);
+		expect(new Set(cards.map((c) => c.key)).size).toBe(cards.length);
 	});
 });

@@ -404,13 +404,14 @@ export function buildCards(
 		const question = toQuestion(item, now);
 		question.answered = answered.get(ask) ?? null;
 		const group = groupOf(item);
-		const key = group ? `${item.from}\u0000${group}` : `id\u0000${item.id}`;
+		// Ships choose their own ids, so an ungrouped ask is keyed by sender and id too.
+		const key = group ? `${item.from}\u0000${group}` : ask;
 		const card = cards.get(key);
 		if (card) {
 			card.questions.push(question);
 		} else {
 			cards.set(key, {
-				key: group ? `${item.from}/${group}` : item.id,
+				key: group ? `${item.from}/${group}` : `${item.from}/${item.id}`,
 				from: item.from,
 				group,
 				questions: [question],
