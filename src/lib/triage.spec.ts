@@ -131,21 +131,21 @@ describe('buildTriage', () => {
 		const { rows, ships } = buildTriage(
 			[
 				item('answered'),
-				item('one', { from: 'storefront' }),
-				item('one', { from: 'storefront' }),
+				item('one', { from: 'chandlery' }),
+				item('one', { from: 'chandlery' }),
 				item('two', { from: 'billing' })
 			],
 			NOW,
 			answered
 		);
 		expect(ids(rows).sort()).toEqual(['one', 'two']);
-		expect(ships).toEqual(['billing', 'storefront']);
+		expect(ships).toEqual(['billing', 'chandlery']);
 	});
 
 	it('keeps an id that another ship answered, and drops a dismissed one', () => {
-		const dismissed = new Map([[askKey('storefront', 'same'), { at_ms: NOW, sent: true }]]);
+		const dismissed = new Map([[askKey('chandlery', 'same'), { at_ms: NOW, sent: true }]]);
 		const { rows } = buildTriage(
-			[item('same', { from: 'storefront' }), item('same', { from: 'billing' })],
+			[item('same', { from: 'chandlery' }), item('same', { from: 'billing' })],
 			NOW,
 			dismissed
 		);
@@ -162,7 +162,7 @@ describe('sections, filters and stored filters', () => {
 	const rows = buildTriage(
 		[
 			item('hi', { urgency: 'high', kind: 'decision' }),
-			item('req', { from: 'storefront' }),
+			item('req', { from: 'chandlery' }),
 			item('quiet', { urgency: 'low' })
 		],
 		NOW
@@ -177,9 +177,9 @@ describe('sections, filters and stored filters', () => {
 	});
 
 	it('filters by ship and by kind together', () => {
-		expect(ids(filterRows(rows, { ship: 'storefront', kind: null }))).toEqual(['req']);
+		expect(ids(filterRows(rows, { ship: 'chandlery', kind: null }))).toEqual(['req']);
 		expect(ids(filterRows(rows, { ship: null, kind: 'decision' }))).toEqual(['hi']);
-		expect(filterRows(rows, { ship: 'storefront', kind: 'decision' })).toEqual([]);
+		expect(filterRows(rows, { ship: 'chandlery', kind: 'decision' })).toEqual([]);
 		expect(filterRows(rows, { ship: null, kind: null })).toHaveLength(3);
 	});
 

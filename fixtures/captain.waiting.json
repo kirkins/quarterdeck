@@ -76,7 +76,7 @@
 					"decision": {
 						"question": "Which retry policy should billing ship for failed renewals?",
 						"why": "About 1 in 30 renewals fail on the first try. Today they are cancelled silently, and the pricing launch is waiting on this choice.",
-						"blocked": ["billing", "storefront", "pricing-launch"],
+						"blocked": ["billing", "chandlery", "pricing-launch"],
 						"options": [
 							{
 								"id": "smart",
@@ -154,13 +154,13 @@
 			}
 		},
 		{
-			"ship": "storefront",
+			"ship": "chandlery",
 			"asked_ms": 1792206400000,
 			"age_ms": 93600000,
 			"step": null,
 			"mail": {
 				"id": "f0004-autumn-hero",
-				"from": "storefront",
+				"from": "chandlery",
 				"to": "captain",
 				"kind": "decision",
 				"request_kind": null,
@@ -175,7 +175,7 @@
 					"decision": {
 						"question": "Which hero should the homepage use for the autumn sale?",
 						"why": "The sale starts Monday. Design finished two heroes and has no strong preference.",
-						"blocked": ["storefront"],
+						"blocked": ["chandlery"],
 						"options": [
 							{
 								"id": "photo",
@@ -403,13 +403,13 @@
 			}
 		},
 		{
-			"ship": "storefront",
+			"ship": "chandlery",
 			"asked_ms": 1792294600000,
 			"age_ms": 5400000,
 			"step": null,
 			"mail": {
 				"id": "f0012-pricing-headline",
-				"from": "storefront",
+				"from": "chandlery",
 				"to": "captain",
 				"kind": "request",
 				"request_kind": null,

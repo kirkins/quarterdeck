@@ -325,7 +325,7 @@ describe('assemble', () => {
 		const captain = {
 			waiting: [
 				entry(mail({ id: 'same', from: 'billing' })),
-				entry(mail({ id: 'same', from: 'storefront' }))
+				entry(mail({ id: 'same', from: 'chandlery' }))
 			]
 		};
 		expect(assemble(captain, null, NOW).items).toHaveLength(2);

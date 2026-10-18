@@ -1,3 +1,7 @@
+<!--
+	The theme: follow the system, or pick light or dark. One button steps
+	through the three; a desktop shows its name beside the icon.
+-->
 <script lang="ts">
 	import Icon from './Icon.svelte';
 
@@ -24,18 +28,31 @@
 	aria-label="Theme: {LABEL[theme]}. Change theme"
 	title="Theme: {LABEL[theme]}"
 >
-	<Icon name={ICON[theme]} />
-	<span class="text">{LABEL[theme]}</span>
+	<Icon name={ICON[theme]} size={20} />
+	<span class="text"><span class="eyebrow">Theme</span> {LABEL[theme]}</span>
 </button>
 
 <style>
 	.toggle {
-		padding: 0 var(--s-3);
-		font-weight: 500;
+		width: var(--tap);
+		padding: 0;
+		color: var(--ink-2);
 	}
-	@media (max-width: 30rem) {
+	.text {
+		display: none;
+	}
+	@media (min-width: 60rem) {
+		.toggle {
+			width: 100%;
+			justify-content: flex-start;
+			gap: var(--s-3);
+			padding: 0 var(--s-2);
+			font-weight: 550;
+		}
 		.text {
-			display: none;
+			display: inline-flex;
+			align-items: baseline;
+			gap: var(--s-2);
 		}
 	}
 </style>

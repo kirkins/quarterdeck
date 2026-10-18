@@ -52,7 +52,7 @@
 					]
 				},
 				{
-					"name": "storefront",
+					"name": "chandlery",
 					"scope": "Catalogue pages, cart and checkout",
 					"presence": "hosted",
 					"open_tasks": 2,
@@ -190,8 +190,8 @@
 			"question": "The nightly rebuild is waiting for disk space."
 		},
 		{
-			"id": "m-storefront-deploy",
-			"ship": "storefront",
+			"id": "m-chandlery-deploy",
+			"ship": "chandlery",
 			"kind": "approval",
 			"source": "mail",
 			"question": "Release the new cart page to all shoppers tonight?"

@@ -51,7 +51,6 @@
 			<Icon name="ship" size={16} />
 			<span class="ship-name">{card.from}</span>
 		</span>
-		<span class="dot" aria-hidden="true">·</span>
 		<span class="age">
 			<span class="visually-hidden">asked</span>
 			<time datetime={isoTime(card.asked_ms)} title={isoTime(card.asked_ms)}
@@ -59,8 +58,12 @@
 			>
 		</span>
 		{#if !done}
-			<span class="deadline deadline-{urgency}">
-				<Icon name={urgency === 'overdue' ? 'alert' : 'clock'} size={14} />
+			<span
+				class="deadline deadline-{urgency} tag"
+				class:tag-danger={urgency === 'overdue'}
+				class:tag-warn={urgency === 'soon'}
+			>
+				<Icon name={urgency === 'overdue' ? 'alert' : 'clock'} size={13} />
 				{#if card.deadline_ms !== null}
 					<time datetime={isoTime(card.deadline_ms)}>{formatDeadline(card.deadline_ms, now)}</time>
 				{:else}
@@ -104,19 +107,12 @@
 		position: relative;
 		display: grid;
 		gap: var(--s-4);
-		padding: var(--s-5) var(--s-4) var(--s-5);
-		border-radius: var(--radius-lg);
+		padding: var(--s-5) var(--s-4);
+		border-radius: var(--radius-xl);
 		background: var(--surface);
-		border: 1px solid var(--line);
-		box-shadow: var(--shadow);
-		overflow: hidden;
-	}
-	.card::before {
-		content: '';
-		position: absolute;
-		inset: 0 auto 0 0;
-		width: 4px;
-		background: var(--edge);
+		box-shadow:
+			inset 3px 0 0 var(--edge),
+			var(--elev-2);
 	}
 	.urgency-overdue {
 		--edge: var(--danger);
@@ -125,12 +121,12 @@
 		--edge: var(--warn);
 	}
 	.card.done {
-		box-shadow: none;
-		background: color-mix(in srgb, var(--surface) 60%, var(--bg));
+		box-shadow: inset 0 0 0 1px var(--line);
+		background: color-mix(in srgb, var(--surface) 50%, transparent);
 	}
 	@media (min-width: 36rem) {
 		.card {
-			padding: var(--s-6);
+			padding: var(--s-6) var(--s-6) var(--s-6) calc(var(--s-6) + 2px);
 		}
 	}
 
@@ -138,7 +134,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--s-1) var(--s-2);
+		gap: var(--s-1) var(--s-3);
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
@@ -152,39 +148,25 @@
 	.ship :global(.icon) {
 		color: var(--sea);
 	}
-	.deadline {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		margin-left: auto;
-		padding: 2px 10px;
-		border-radius: 999px;
-		font-weight: 650;
-		font-size: var(--text-xs);
+	.age {
 		font-variant-numeric: tabular-nums;
-		background: var(--surface-2);
-		color: var(--ink-2);
-		border: 1px solid var(--line);
 	}
-	.deadline-overdue {
-		background: var(--danger-soft);
-		color: var(--danger);
-		border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-	}
-	.deadline-soon {
-		background: var(--warn-soft);
-		color: var(--warn);
-		border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+	.deadline {
+		margin-left: auto;
 	}
 	.deadline-none {
-		color: var(--ink-3);
 		background: transparent;
+		color: var(--ink-3);
+		font-weight: 550;
+	}
+	.deadline-later {
+		background: var(--well);
 	}
 
 	.group {
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
 		font-weight: 650;
-		letter-spacing: 0.06em;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
 		color: var(--sea);
 		margin-top: calc(-1 * var(--s-2));
@@ -199,6 +181,6 @@
 	}
 	.questions > :global(* + *) {
 		padding-top: var(--s-6);
-		border-top: 1px solid var(--line);
+		border-top: 1px dashed var(--line-strong);
 	}
 </style>

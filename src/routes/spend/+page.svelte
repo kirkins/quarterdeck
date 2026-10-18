@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import PageHeader from '#lib/components/PageHeader.svelte';
+	import RefreshButton from '#lib/components/RefreshButton.svelte';
 	import { resolve } from '$app/paths';
 	import { formatUpdated } from '#lib/fleet.ts';
 	import { GROUPING_LABELS, PERIODS, type Period } from '#lib/spend.ts';
@@ -74,57 +77,49 @@
 	<title>Spend · Quarterdeck</title>
 </svelte:head>
 
-<div class="head">
-	<div>
-		<h1>Spend</h1>
+<PageHeader title="Spend">
+	{#snippet summary()}
 		<p class="summary" aria-live="polite">
 			<span>Routes and usage across the fleet</span>
 			{#if loadedAt > 0}<span class="updated">Updated {formatUpdated(loadedAt, now)}</span>{/if}
 		</p>
-	</div>
-	<button
-		type="button"
-		class="btn btn-quiet refresh"
-		onclick={refresh}
-		disabled={refreshing}
-		aria-label="Refresh spend"
-	>
-		<span class:spin={refreshing}><Icon name="refresh" /></span>
-		<span class="refresh-text">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-	</button>
-</div>
+	{/snippet}
+	{#snippet actions()}
+		<RefreshButton label="Refresh spend" {refreshing} onclick={refresh} />
+	{/snippet}
+</PageHeader>
 
 <section class="block" aria-labelledby="routes-title">
-	<h2 id="routes-title">Routes now</h2>
-	<p class="hint">In the order crew try them. Throttled routes come first.</p>
+	<div class="block-head">
+		<h2 id="routes-title" class="display">Routes now</h2>
+		<p class="hint">In the order crew try them. Throttled routes come first.</p>
+	</div>
 
 	{#if routes.status === 'unsupported'}
-		<div class="state quiet">
-			<Icon name="compass" size={28} />
-			<h3>This Privateer does not report routes yet</h3>
+		<EmptyState tone="quiet" level={3} title="This Privateer does not report routes yet">
 			<p><code>fleet.snapshot</code> is not offered here, so route state cannot be shown.</p>
-		</div>
+		</EmptyState>
 	{:else if routes.status === 'error'}
-		<div class="state error" role="alert">
-			<Icon name="alert" size={28} />
-			<h3>Could not read the routes</h3>
+		<EmptyState tone="error" level={3} title="Could not read the routes">
 			<p class="detail">{routes.message}</p>
-		</div>
+		</EmptyState>
 	{:else if routes.rows.length === 0}
 		<p class="none">No routes reported.</p>
 	{:else}
 		{#if routes.notesUnavailable}
-			<p class="notice">Route notes and try order are not offered by this Privateer.</p>
+			<p class="callout notice">
+				<Icon name="alert" size={16} /> Route notes and try order are not offered by this Privateer.
+			</p>
 		{/if}
 		<ol class="routes">
 			{#each routes.rows as row (row.name)}
 				<li class="route" data-route={row.name} data-throttled={row.throttled}>
 					<div class="route-head">
-						<span class="route-name">{row.name}</span>
-						<span class="cost cost-{row.cost}">{costChip[row.cost]}</span>
 						{#if row.tryOrder !== null}
-							<span class="order">Try {row.tryOrder + 1}</span>
+							<span class="order" title="Try order">{row.tryOrder + 1}</span>
 						{/if}
+						<span class="route-name">{row.name}</span>
+						<span class="cost cost-{row.cost} tag">{costChip[row.cost]}</span>
 					</div>
 					{#if row.note}<p class="note">{row.note}</p>{/if}
 					{#if row.harnesses.length > 0 || row.models.length > 0}
@@ -164,12 +159,14 @@
 </section>
 
 <section class="block" aria-labelledby="usage-title">
-	<h2 id="usage-title">Usage</h2>
+	<div class="block-head">
+		<h2 id="usage-title" class="display">Usage</h2>
+	</div>
 
 	<div class="switches">
 		<nav class="switch" aria-label="Period">
 			<span class="switch-label">Period</span>
-			<ul>
+			<ul class="segmented">
 				{#each PERIOD_KEYS as key (key)}
 					<li>
 						<a
@@ -185,7 +182,7 @@
 		</nav>
 		<nav class="switch" aria-label="Group by">
 			<span class="switch-label">Group by</span>
-			<ul>
+			<ul class="segmented">
 				{#each GROUPINGS as key (key)}
 					<li>
 						<a
@@ -202,24 +199,25 @@
 	</div>
 
 	{#if usage.status === 'unsupported'}
-		<div class="state quiet">
-			<Icon name="compass" size={28} />
-			<h3>This Privateer does not report usage yet</h3>
+		<EmptyState
+			tone="quiet"
+			level={3}
+			title="This Privateer does not report usage yet"
+			icon="chart"
+		>
 			<p><code>usage.summary</code> is not offered here, so token totals cannot be shown.</p>
-		</div>
+		</EmptyState>
 	{:else if usage.status === 'error'}
-		<div class="state error" role="alert">
-			<Icon name="alert" size={28} />
-			<h3>Could not read usage</h3>
+		<EmptyState tone="error" level={3} title="Could not read usage">
 			<p class="detail">{usage.message}</p>
-		</div>
+		</EmptyState>
 	{:else if view}
 		<p class="period" aria-live="polite">
 			Tokens for {PERIODS[data.period].long}, {view.jobs} jobs
 		</p>
 
 		<dl class="totals">
-			<div>
+			<div class="total-main">
 				<dt>Total tokens</dt>
 				<dd>{view.labels.total}</dd>
 			</div>
@@ -238,16 +236,23 @@
 		</p>
 
 		{#if view.gaps.length > 0}
-			<p class="gap" role="note">
+			<p class="gap callout callout-warn" role="note">
 				<Icon name="alert" size={16} />
-				{view.gaps.join(', ')}
-				{view.gaps.length === 1 ? 'reports' : 'report'} no usage, so
-				{view.gaps.length === 1 ? 'its' : 'their'} tokens are missing from these numbers.
+				<span>
+					{view.gaps.join(', ')}
+					{view.gaps.length === 1 ? 'reports' : 'report'} no usage, so
+					{view.gaps.length === 1 ? 'its' : 'their'} tokens are missing from these numbers.
+				</span>
 			</p>
 		{/if}
 
 		{#if view.rows.length === 0}
-			<p class="none">No usage in {PERIODS[data.period].long}.</p>
+			<EmptyState
+				tone="quiet"
+				level={3}
+				title="No usage in {PERIODS[data.period].long}"
+				icon="chart"
+			></EmptyState>
 		{:else if bars}
 			<div class="days-scroll" role="region" aria-label="Tokens by day">
 				<ol class="days">
@@ -295,70 +300,26 @@
 </section>
 
 <style>
-	.head {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: var(--s-4);
-		margin-bottom: var(--s-5);
-	}
-	h1 {
-		font-family: var(--font-display);
-		font-size: var(--text-2xl);
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-		font-variation-settings: 'opsz' 72;
-	}
-	h2 {
-		font-family: var(--font-display);
-		font-size: var(--text-lg);
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
-	.summary {
-		margin-top: var(--s-2);
-		color: var(--ink-2);
-		font-size: var(--text-sm);
-	}
-	.summary .updated {
-		color: var(--ink-3);
-	}
-	.summary .updated::before {
-		content: '·';
-		margin: 0 var(--s-3);
-	}
-	.refresh {
-		flex: none;
-	}
-	.spin {
-		display: inline-flex;
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
 	.block {
-		margin-bottom: var(--s-8);
+		margin-bottom: var(--s-12);
+	}
+	.block-head {
+		display: grid;
+		gap: 2px;
+		margin-bottom: var(--s-4);
+	}
+	.block-head h2 {
+		font-size: var(--text-xl);
+		line-height: 1.2;
 	}
 	.hint,
 	.period,
 	.cache,
 	.none,
-	.notice,
 	.budget,
 	.meta {
-		color: var(--ink-2);
 		font-size: var(--text-sm);
-	}
-	.hint {
-		margin: var(--s-1) 0 var(--s-4);
-	}
-	.none {
-		padding: var(--s-4) 0;
+		color: var(--ink-3);
 	}
 	.notice {
 		margin-bottom: var(--s-3);
@@ -368,98 +329,126 @@
 	.routes {
 		display: grid;
 		gap: var(--s-3);
+		align-items: start;
+	}
+	@media (min-width: 60rem) {
+		.routes {
+			grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+		}
 	}
 	.route {
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
+		display: grid;
+		gap: var(--s-2);
 		padding: var(--s-4);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--elev-1);
 	}
 	.route[data-throttled='true'] {
-		border-color: var(--warn);
+		box-shadow:
+			inset 3px 0 0 var(--warn),
+			var(--elev-1);
 	}
 	.route-head {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--s-2) var(--s-3);
-	}
-	.route-name {
-		font-family: var(--font-mono);
-		font-size: var(--text-md);
-		overflow-wrap: anywhere;
-	}
-	.cost {
-		font-size: var(--text-xs);
-		font-weight: 600;
-		padding: 2px var(--s-2);
-		border-radius: 999px;
-		border: 1px solid var(--line-strong);
-		color: var(--ink-2);
-	}
-	.cost-free {
-		background: var(--sea-soft);
-		border-color: var(--sea-soft);
-		color: var(--sea-strong);
-	}
-	.cost-plan {
-		background: var(--brass-soft);
-		border-color: var(--brass-line);
-		color: var(--ink);
-	}
-	.cost-credits {
-		background: var(--navy);
-		border-color: var(--navy);
-		color: var(--navy-ink);
+		gap: var(--s-2);
+		min-width: 0;
 	}
 	.order {
-		margin-left: auto;
-		color: var(--ink-3);
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		background: var(--well);
+		color: var(--ink-2);
 		font-size: var(--text-xs);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.route-name {
+		flex: 1;
+		min-width: 0;
+		font-weight: 650;
+		color: var(--ink);
+		overflow-wrap: anywhere;
+	}
+	.cost-free {
+		background: var(--ok-soft);
+		color: var(--ok);
+	}
+	.cost-plan {
+		background: var(--sea-soft);
+		color: var(--sea-strong);
+	}
+	.cost-credits {
+		background: var(--brass-soft);
+		color: var(--brass);
+	}
+	.cost-unknown {
+		background: var(--well);
+		color: var(--ink-3);
 	}
 	.note {
-		margin-top: var(--s-2);
 		font-size: var(--text-sm);
+		color: var(--ink-2);
+		text-wrap: pretty;
 	}
 	.meta {
-		margin-top: var(--s-1);
-		font-family: var(--font-mono);
 		font-size: var(--text-xs);
+		font-family: var(--font-mono);
 		overflow-wrap: anywhere;
 	}
 	.states {
-		margin-top: var(--s-3);
 		display: grid;
-		gap: var(--s-2);
+		margin-top: var(--s-1);
+		border-top: 1px solid var(--line);
 	}
 	.state-line {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: baseline;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
 		gap: var(--s-1) var(--s-3);
+		padding: var(--s-2) 0;
+		border-bottom: 1px solid var(--line);
 		font-size: var(--text-sm);
 	}
 	.state-line .machine {
+		min-width: 5rem;
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
 		color: var(--ink-2);
-		overflow-wrap: anywhere;
 	}
 	.state-line .kind {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--s-2);
-		white-space: nowrap;
+		gap: 6px;
+		color: var(--ink);
+		font-variant-numeric: tabular-nums;
 	}
 	.state-line .error-detail {
-		grid-column: 1 / -1;
+		flex-basis: 100%;
 		font-size: var(--text-xs);
-		color: var(--ink-2);
+	}
+	.state-line .error-detail summary {
+		color: var(--danger);
+		cursor: pointer;
+		font-weight: 600;
 	}
 	.state-line .error-detail p {
 		margin-top: var(--s-1);
+		padding: var(--s-2) var(--s-3);
+		border-radius: var(--radius-sm);
+		background: var(--well);
+		font-family: var(--font-mono);
+		color: var(--ink-2);
+		overflow-wrap: anywhere;
 	}
 	.dot {
-		width: 9px;
-		height: 9px;
+		width: 7px;
+		height: 7px;
 		border-radius: 50%;
 		background: var(--ok);
 	}
@@ -473,219 +462,207 @@
 		background: var(--ink-3);
 	}
 	.budget {
-		margin-top: var(--s-3);
-		font-style: italic;
+		font-size: var(--text-xs);
 	}
 
 	/* Usage */
 	.switches {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--s-3) var(--s-5);
-		margin-bottom: var(--s-4);
+		gap: var(--s-3) var(--s-6);
+		margin-bottom: var(--s-5);
 	}
 	.switch {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--s-2);
+		display: grid;
+		gap: var(--s-1);
+		min-width: 0;
 	}
 	.switch-label {
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
+		font-weight: 650;
+		letter-spacing: var(--track-caps);
+		text-transform: uppercase;
 		color: var(--ink-3);
 	}
 	.switch ul {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--s-1);
 	}
-	.switch a {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--tap);
-		padding: 0 var(--s-3);
-		border: 1px solid var(--line-strong);
-		border-radius: 999px;
-		color: var(--ink);
-		text-decoration: none;
-		font-size: var(--text-sm);
-	}
-	.switch a[aria-current='true'] {
-		background: var(--sea-soft);
-		border-color: var(--sea);
-		color: var(--sea-ink);
-		font-weight: 600;
+	.period {
+		margin-bottom: var(--s-3);
 	}
 	.totals {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: var(--s-3);
-		margin-top: var(--s-2);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--s-2);
 	}
 	.totals div {
+		display: grid;
+		gap: 2px;
+		padding: var(--s-3) var(--s-4);
+		border-radius: var(--radius-lg);
 		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--radius-sm);
-		padding: var(--s-3);
-		min-width: 0;
+		box-shadow: var(--elev-1);
+	}
+	.totals .total-main {
+		grid-column: 1 / -1;
+		padding: var(--s-4) var(--s-5);
+		background:
+			radial-gradient(120% 140% at 100% 0%, var(--sea-wash), transparent 60%), var(--surface);
+	}
+	@media (min-width: 40rem) {
+		.totals {
+			grid-template-columns: 2fr 1fr 1fr;
+		}
+		.totals .total-main {
+			grid-column: auto;
+		}
 	}
 	.totals dt {
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
+		font-weight: 650;
+		letter-spacing: var(--track-caps);
+		text-transform: uppercase;
 		color: var(--ink-3);
 	}
 	.totals dd {
-		font-family: var(--font-display);
-		font-size: var(--text-lg);
+		font-size: var(--text-xl);
+		font-weight: 650;
+		letter-spacing: -0.02em;
+		color: var(--ink);
 		font-variant-numeric: tabular-nums;
-		overflow-wrap: anywhere;
+	}
+	.totals .total-main dd {
+		font-size: var(--text-2xl);
 	}
 	.cache {
-		margin-top: var(--s-2);
+		margin: var(--s-3) 0 var(--s-5);
+		font-size: var(--text-xs);
 	}
 	.gap {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--s-2);
-		margin: var(--s-3) 0;
-		padding: var(--s-3);
-		border-radius: var(--radius-sm);
-		background: var(--warn-soft);
-		font-size: var(--text-sm);
+		margin-bottom: var(--s-4);
 	}
 	.gap-tag {
 		color: var(--warn);
-		font-weight: 600;
 	}
 
 	.ranked {
 		display: grid;
-		gap: var(--s-3);
+		gap: var(--s-4);
+		padding: var(--s-5);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--elev-1);
 	}
 	.rank {
 		display: grid;
-		gap: var(--s-1);
+		gap: 6px;
 	}
 	.rank-head {
 		display: flex;
 		justify-content: space-between;
+		align-items: baseline;
 		gap: var(--s-3);
-		min-width: 0;
 	}
 	.rank-name {
+		font-weight: 600;
+		color: var(--ink);
 		overflow-wrap: anywhere;
 	}
 	.rank-value {
+		font-weight: 650;
 		font-variant-numeric: tabular-nums;
-		font-weight: 600;
-		white-space: nowrap;
-	}
-	.bar,
-	.day-bar {
-		display: block;
-		background: var(--surface-2);
-		border-radius: 999px;
-		overflow: hidden;
+		color: var(--ink);
 	}
 	.bar {
-		height: 8px;
+		display: block;
+		height: 6px;
+		border-radius: var(--radius-pill);
+		background: var(--well);
+		overflow: hidden;
 	}
-	.bar > span,
-	.day-bar > span {
+	.bar > span {
 		display: block;
 		height: 100%;
-		background: var(--sea);
-		border-radius: 999px;
+		border-radius: inherit;
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--sea) 72%, var(--surface)),
+			var(--sea)
+		);
 	}
 	.rank-meta {
 		font-size: var(--text-xs);
-		color: var(--ink-2);
+		color: var(--ink-3);
+		font-variant-numeric: tabular-nums;
 	}
 
-	/* One row of bars. On a phone it scrolls sideways rather than squeezing 30 days into 343 px. */
 	.days-scroll {
 		overflow-x: auto;
-		padding-bottom: var(--s-2);
+		padding: var(--s-5) var(--s-4) var(--s-4);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		box-shadow: var(--elev-1);
 	}
 	.days {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: 44px;
-		gap: var(--s-1);
-		align-items: end;
-		height: 220px;
+		display: flex;
+		align-items: stretch;
+		gap: var(--s-2);
+		min-width: min-content;
+		height: 13rem;
 	}
 	.day {
+		position: relative;
+		flex: 1 0 2.25rem;
 		display: grid;
-		grid-template-rows: auto 1fr auto auto;
+		grid-template-rows: auto 1fr auto;
 		justify-items: center;
-		min-width: 0;
-		height: 100%;
-		font-size: var(--text-xs);
+		gap: var(--s-1);
 	}
 	.day-value {
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: var(--ink-3);
 		font-variant-numeric: tabular-nums;
-		color: var(--ink-2);
 		white-space: nowrap;
 	}
 	.day-bar {
-		width: 100%;
-		height: 100%;
 		position: relative;
-		align-self: stretch;
+		width: 100%;
+		max-width: 1.75rem;
+		border-radius: 6px 6px 2px 2px;
+		background: var(--well);
+		overflow: hidden;
 	}
 	.day-bar > span {
 		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		border-radius: 4px 4px 0 0;
-	}
-	.day.empty .day-bar {
-		background: repeating-linear-gradient(
-			45deg,
-			var(--surface-2),
-			var(--surface-2) 4px,
-			var(--surface) 4px,
-			var(--surface) 8px
+		inset: auto 0 0 0;
+		border-radius: 6px 6px 2px 2px;
+		background: linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--sea) 72%, var(--surface)),
+			var(--sea)
 		);
 	}
+	.day.empty .day-bar {
+		background: repeating-linear-gradient(-45deg, var(--well) 0 4px, transparent 4px 8px);
+	}
 	.day-label {
+		font-size: var(--text-xs);
 		color: var(--ink-3);
 		white-space: nowrap;
 	}
 	.day-gap {
-		color: var(--warn);
-		font-weight: 600;
-	}
-
-	.state {
+		position: absolute;
+		top: 1rem;
 		display: grid;
-		justify-items: start;
-		gap: var(--s-2);
-		padding: var(--s-5);
-		border-radius: var(--radius);
-		background: var(--surface);
-		border: 1px solid var(--line);
-	}
-	.state.error {
-		border-color: var(--danger);
-	}
-	.state h3 {
-		font-family: var(--font-display);
-		font-size: var(--text-lg);
-	}
-	.detail {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-		overflow-wrap: anywhere;
-	}
-
-	@media (min-width: 720px) {
-		.routes {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-		.days {
-			height: 260px;
-		}
+		place-items: center;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 50%;
+		background: var(--warn-soft);
+		color: var(--warn);
+		font-size: var(--text-2xs);
+		font-weight: 700;
 	}
 </style>

@@ -160,11 +160,12 @@
 			{#if kind !== 'reply'}
 				<p class="marker">
 					<span class="kind kind-{kind}">{FEED_KIND_LABELS[kind]}</span>
-					{#if entry.urgency === 'high'}<span class="urgent-tag">High urgency</span>{/if}
+					{#if entry.urgency === 'high'}<span class="urgent-tag tag tag-danger">High urgency</span
+						>{/if}
 					{#if open}
-						<span class="waiting">Waiting on you</span>
+						<span class="waiting tag tag-brass">Waiting on you</span>
 					{:else if outcome}
-						<span class="outcome">{outcome}</span>
+						<span class="outcome tag tag-ok">{outcome}</span>
 					{/if}
 				</p>
 			{/if}
@@ -173,14 +174,17 @@
 				{#if !expanded}
 					<p class="summary">{question.question}</p>
 					{#if recommended}
-						<p class="recommended">Recommended: <strong>{recommended.label}</strong></p>
+						<p class="recommended">
+							<Icon name="star" size={14} />
+							<span>Recommended: <strong>{recommended.label}</strong></span>
+						</p>
 					{/if}
 					<button
 						type="button"
 						class="btn btn-primary answer-btn"
 						aria-expanded="false"
 						aria-controls={panel}
-						onclick={ontoggle}>Answer</button
+						onclick={ontoggle}>Answer <Icon name="chevron-right" size={16} /></button
 					>
 				{/if}
 
@@ -189,10 +193,10 @@
 					{#if expanded}
 						<button
 							type="button"
-							class="btn btn-quiet collapse"
+							class="btn btn-quiet btn-sm collapse"
 							aria-expanded="true"
 							aria-controls={panel}
-							onclick={ontoggle}>Collapse</button
+							onclick={ontoggle}><Icon name="chevron" size={16} />Collapse</button
 						>
 					{/if}
 					{#if kind === 'decision' || kind === 'request'}
@@ -254,14 +258,13 @@
 	.msg {
 		display: flex;
 		align-items: flex-end;
-		gap: var(--s-2);
+		gap: var(--s-3);
 		list-style: none;
-		margin: 0;
+		margin: 3px 0 0;
 		padding: 0;
-		margin-top: var(--s-1);
 	}
 	.msg.first {
-		margin-top: var(--s-4);
+		margin-top: var(--s-5);
 	}
 	.msg.s2s {
 		justify-content: center;
@@ -279,17 +282,20 @@
 		}
 	}
 
+	/* The ship's monogram: a soft tile in its own hue, drawn from the palette's depth. */
 	.mark {
 		flex: none;
 		display: grid;
 		place-items: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: hsl(var(--hue) 45% 42%);
-		color: #fff;
-		font-weight: 650;
-		font-size: var(--text-sm);
+		width: 2rem;
+		height: 2rem;
+		border-radius: 10px;
+		background: light-dark(hsl(var(--hue) 38% 90%), hsl(var(--hue) 28% 20%));
+		box-shadow: inset 0 0 0 1px light-dark(hsl(var(--hue) 30% 80%), hsl(var(--hue) 30% 30%));
+		color: light-dark(hsl(var(--hue) 48% 28%), hsl(var(--hue) 55% 80%));
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 0.9375rem;
 		user-select: none;
 	}
 	.mark.hidden {
@@ -300,17 +306,14 @@
 		display: grid;
 		gap: var(--s-1);
 		min-width: 0;
-		max-width: min(82%, 36rem);
+		max-width: min(84%, 34rem);
 	}
 	.msg.mine .col {
 		justify-items: end;
 	}
 	.msg.s2s .col {
-		max-width: 80%;
+		max-width: 86%;
 		justify-items: center;
-	}
-	.msg:not(.mine):not(.s2s) .col {
-		padding-left: 0;
 	}
 	.msg.open .col {
 		max-width: 100%;
@@ -328,7 +331,7 @@
 	}
 	.who {
 		font-weight: 650;
-		color: var(--ink-2);
+		color: var(--ink);
 		text-decoration: none;
 	}
 	a.who:hover {
@@ -340,6 +343,10 @@
 	}
 	.machine {
 		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+	}
+	time {
+		font-variant-numeric: tabular-nums;
 	}
 
 	.bubble {
@@ -349,41 +356,51 @@
 		max-width: 100%;
 		padding: var(--s-3) var(--s-4);
 		background: var(--surface);
-		border: 1px solid var(--line);
 		border-radius: var(--radius-lg);
-		border-bottom-left-radius: var(--s-1);
-		box-shadow: var(--shadow);
+		border-bottom-left-radius: 6px;
+		box-shadow: var(--elev-1);
 		overflow-wrap: anywhere;
+		line-height: 1.5;
 	}
 	.msg.mine .bubble {
 		background: var(--sea-soft);
-		border-color: transparent;
+		color: var(--ink);
+		box-shadow: none;
 		border-bottom-left-radius: var(--radius-lg);
-		border-bottom-right-radius: var(--s-1);
+		border-bottom-right-radius: 6px;
 	}
 	.msg.s2s .bubble {
-		background: var(--surface-2);
-		box-shadow: none;
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--line);
+		color: var(--ink-2);
 		font-size: var(--text-sm);
-		padding: var(--s-2) var(--s-3);
-		border-radius: 999px;
+		padding: var(--s-2) var(--s-4);
+		border-radius: var(--radius-lg);
 	}
+	/* What is done recedes: no lift, quieter ink. */
 	.msg.closed .bubble {
-		background: var(--surface-2);
-		box-shadow: none;
+		background: color-mix(in srgb, var(--surface) 55%, transparent);
+		box-shadow: inset 0 0 0 1px var(--line);
 		color: var(--ink-2);
 	}
+	/* What waits on the captain is lifted, with a brass edge. */
 	.msg.open .bubble {
-		border-color: var(--sea);
+		background: var(--surface-raised);
 		box-shadow:
-			0 0 0 1px var(--sea) inset,
-			var(--shadow);
+			inset 3px 0 0 var(--brass-fill),
+			var(--elev-2);
+		border-bottom-left-radius: var(--radius-lg);
 	}
+	/* Open cards share one inset, so a stack of them lines up past the brass edge. */
+	.msg.open .bubble,
 	.bubble.ask {
-		padding: var(--s-4);
+		gap: var(--s-3);
+		padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5);
 	}
-	.bubble.urgent {
-		border-color: var(--warn);
+	.msg.open .bubble.urgent {
+		box-shadow:
+			inset 3px 0 0 var(--danger),
+			var(--elev-2);
 	}
 
 	.marker {
@@ -392,40 +409,40 @@
 		align-items: center;
 		gap: var(--s-1) var(--s-2);
 		margin: 0;
-		font-size: var(--text-xs);
-		color: var(--ink-3);
+		min-height: 1.375rem;
 	}
 	.kind {
+		font-size: var(--text-2xs);
 		font-weight: 650;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: var(--track-caps);
+		color: var(--ink-3);
 	}
 	.kind-needs_hands,
 	.kind-approval {
 		color: var(--brass);
 	}
-	.urgent-tag {
-		color: var(--warn);
-		font-weight: 650;
-	}
 	.waiting {
 		margin-left: auto;
-		padding: 1px 8px;
-		border-radius: 999px;
-		background: var(--sea);
-		color: var(--sea-ink);
-		font-weight: 650;
 	}
 	.outcome {
-		margin-left: auto;
-		color: var(--ok);
-		font-weight: 650;
+		height: auto;
+		min-height: 1.375rem;
+		padding: 3px var(--s-2);
+		line-height: 1.35;
+		white-space: normal;
+	}
+	.waiting::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--brass-fill);
 	}
 
 	.body {
 		margin: 0;
 		white-space: pre-wrap;
-		line-height: 1.5;
 	}
 	.body a,
 	.quote {
@@ -437,16 +454,19 @@
 		text-align: start;
 		padding: var(--s-1) var(--s-2);
 		border: 0;
-		border-inline-start: 3px solid var(--sea);
-		border-radius: var(--radius-sm);
-		background: transparent;
-		color: var(--ink-3);
+		border-inline-start: 2px solid var(--sea);
+		border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+		background: color-mix(in srgb, var(--surface) 60%, transparent);
+		color: var(--ink-2);
 		font: inherit;
 		font-size: var(--text-xs);
 		cursor: pointer;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.quote:hover {
+		color: var(--ink);
 	}
 	.note {
 		margin: 0;
@@ -457,16 +477,28 @@
 	.hands {
 		display: flex;
 		gap: var(--s-3);
-		padding: var(--s-3);
-		border-radius: var(--radius-sm);
+		padding: var(--s-3) var(--s-4);
+		border-radius: var(--radius);
 		background: var(--brass-soft);
-		border: 1px solid var(--brass-line);
+	}
+	.hands > :global(.icon) {
+		color: var(--brass);
+		margin-top: 2px;
+	}
+	.hands strong {
+		display: block;
+		font-size: var(--text-sm);
+		color: var(--brass);
 	}
 	.hands p {
 		margin: var(--s-1) 0 0;
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+		white-space: pre-wrap;
 	}
 	.hands-actions {
 		margin-top: var(--s-2);
+		margin-left: calc(-1 * var(--s-3));
 	}
 
 	.summary {
@@ -476,22 +508,43 @@
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 		margin: 0;
-		line-height: 1.5;
+		font-size: var(--text-md);
+		font-weight: 500;
+		line-height: 1.45;
+		color: var(--ink);
 		white-space: pre-wrap;
+		text-wrap: pretty;
 	}
 	.recommended {
+		display: flex;
+		align-items: center;
+		gap: var(--s-2);
 		margin: 0;
 		font-size: var(--text-sm);
 		color: var(--ink-2);
 	}
+	.recommended > :global(.icon) {
+		color: var(--brass);
+	}
 	.answer-btn {
 		justify-self: start;
+		margin-top: var(--s-1);
+		padding-right: var(--s-3);
+	}
+	.ask-panel {
+		display: grid;
+		gap: var(--s-3);
+		animation: rise var(--dur-3) var(--ease);
 	}
 	.ask-panel[hidden] {
 		display: none;
 	}
 	.collapse {
 		justify-self: end;
+		margin: calc(-1 * var(--s-3)) calc(-1 * var(--s-2)) calc(-1 * var(--s-2)) 0;
+	}
+	.collapse :global(.icon) {
+		transform: rotate(180deg);
 	}
 
 	.report {
@@ -504,5 +557,9 @@
 		min-height: var(--tap);
 		color: var(--sea-strong);
 		font-weight: 600;
+		text-decoration: none;
+	}
+	.open-report:hover {
+		text-decoration: underline;
 	}
 </style>

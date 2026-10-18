@@ -148,8 +148,8 @@
 	{/if}
 
 	{#if question.hands_on}
-		<div class="hands" role="note">
-			<Icon name="hand" size={20} />
+		<div class="hands callout callout-brass" role="note">
+			<Icon name="hand" size={18} />
 			<div>
 				<strong>Needs your hands</strong>
 				<p>{question.hands_on}</p>
@@ -178,7 +178,7 @@
 	{#if question.answered}
 		{@const a = question.answered}
 		<div class="done" role="status">
-			<Icon name="check" size={20} />
+			<span class="done-mark"><Icon name="check" size={16} stroke={2.25} /></span>
 			<div>
 				{#if a.dismissed}
 					<p>
@@ -294,6 +294,7 @@
 				<div class="compose">
 					<label class="text-label" for="{uid}-text">{textLabel}</label>
 					<textarea
+						class="field"
 						id="{uid}-text"
 						name="text"
 						rows="2"
@@ -326,6 +327,7 @@
 							class="btn btn-primary"
 							disabled={pending || (enhanced && !ready)}
 						>
+							<Icon name="send" size={16} />
 							{pending ? 'Sending…' : 'Send answer'}
 						</button>
 					</div>
@@ -333,7 +335,9 @@
 			{/if}
 
 			{#if shownError}
-				<p class="error" role="alert"><Icon name="alert" size={16} />{shownError}</p>
+				<p class="callout callout-danger" role="alert">
+					<Icon name="alert" size={16} />{shownError}
+				</p>
 			{/if}
 		</form>
 
@@ -355,15 +359,16 @@
 		display: flex;
 		justify-content: space-between;
 		gap: var(--s-3);
-		font-size: var(--text-xs);
+		font-size: var(--text-2xs);
 		font-weight: 650;
-		letter-spacing: 0.06em;
+		letter-spacing: var(--track-caps);
 		text-transform: uppercase;
 		color: var(--ink-3);
 	}
 	.due {
 		letter-spacing: 0;
 		text-transform: none;
+		font-size: var(--text-xs);
 		font-weight: 600;
 	}
 	.due-overdue {
@@ -375,11 +380,12 @@
 
 	h2 {
 		font-family: var(--font-display);
+		font-optical-sizing: auto;
 		font-size: var(--text-xl);
-		font-weight: 600;
-		line-height: 1.25;
-		letter-spacing: -0.012em;
-		font-variation-settings: 'opsz' 36;
+		font-weight: 560;
+		line-height: 1.22;
+		letter-spacing: -0.015em;
+		color: var(--ink);
 		text-wrap: balance;
 	}
 	h2.sub {
@@ -406,26 +412,12 @@
 		text-decoration: underline;
 	}
 
-	.hands {
-		display: flex;
-		gap: var(--s-3);
-		padding: var(--s-3) var(--s-4);
-		border-radius: var(--radius);
-		background: var(--warn-soft);
-		color: var(--ink);
-		border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
-	}
-	.hands :global(.icon) {
-		color: var(--warn);
-		margin-top: 2px;
+	.hands > :global(.icon) {
+		color: var(--brass);
 	}
 	.hands strong {
 		display: block;
-		font-size: var(--text-sm);
-		color: var(--warn);
-	}
-	.hands p {
-		font-size: var(--text-sm);
+		color: var(--brass);
 	}
 
 	.format-note {
@@ -463,27 +455,32 @@
 		align-items: start;
 		padding: var(--s-3) var(--s-4);
 		min-height: var(--tap);
-		border: 1px solid var(--line-strong);
+		border: 0;
 		border-radius: var(--radius);
-		background: var(--surface);
+		background: var(--surface-raised);
+		box-shadow: inset 0 0 0 1px var(--line-strong);
 		cursor: pointer;
 		transition:
-			border-color 120ms var(--ease),
-			background-color 120ms var(--ease),
-			box-shadow 120ms var(--ease);
+			background-color var(--dur-1) var(--ease),
+			box-shadow var(--dur-1) var(--ease),
+			transform var(--dur-1) var(--ease);
 		-webkit-tap-highlight-color: transparent;
 	}
 	.option:hover {
-		border-color: color-mix(in srgb, var(--sea) 55%, var(--line-strong));
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sea) 60%, var(--line-strong));
+	}
+	.option:active {
+		transform: scale(0.995);
 	}
 	.option.recommended {
-		border-color: var(--brass-line);
-		background: linear-gradient(90deg, var(--brass-soft), var(--surface) 70%);
+		background: linear-gradient(100deg, var(--brass-soft), var(--surface-raised) 75%);
+		box-shadow: inset 0 0 0 1px var(--brass-line);
 	}
 	.option:has(input:checked) {
-		border-color: var(--sea);
 		background: var(--sea-soft);
-		box-shadow: inset 0 0 0 1px var(--sea);
+		box-shadow:
+			inset 0 0 0 2px var(--sea),
+			0 4px 14px -6px color-mix(in srgb, var(--sea) 45%, transparent);
 	}
 	.option:has(input:focus-visible) {
 		outline: 2px solid var(--focus);
@@ -501,16 +498,23 @@
 	}
 	.option.own {
 		grid-template-columns: 1fr;
-		border-style: dashed;
 		background: transparent;
+		box-shadow: none;
+		outline: 1.5px dashed var(--line-strong);
+		outline-offset: -1.5px;
 	}
 	.option.own:hover {
-		border-style: dashed;
+		outline-color: var(--ink-3);
+		background: var(--sea-wash);
+	}
+	.option.own:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
 	}
 	.option.own.open {
-		border-style: solid;
-		border-color: var(--sea);
+		outline: 0;
 		background: var(--sea-soft);
+		box-shadow: inset 0 0 0 2px var(--sea);
 	}
 	.option.own:disabled {
 		cursor: progress;
@@ -527,17 +531,19 @@
 		height: 20px;
 		margin-top: 1px;
 		border-radius: 50%;
-		border: 2px solid var(--line-strong);
-		background: var(--surface);
-		transition: border-color 120ms var(--ease);
+		background: var(--surface-raised);
+		box-shadow: inset 0 0 0 1.5px var(--line-input);
+		transition:
+			box-shadow var(--dur-1) var(--ease),
+			background-color var(--dur-1) var(--ease);
 	}
 	.option:has(input:checked) .radio {
-		border: 6px solid var(--sea);
 		background: var(--sea-ink);
+		box-shadow: inset 0 0 0 6px var(--sea);
 	}
 	.option-body {
 		display: grid;
-		gap: 2px;
+		gap: 3px;
 		min-width: 0;
 	}
 	.option-head {
@@ -547,22 +553,23 @@
 		gap: var(--s-1) var(--s-2);
 	}
 	.option-label {
-		font-weight: 650;
+		font-weight: 620;
 		line-height: 1.35;
+		color: var(--ink);
 	}
 	.badge {
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		padding: 1px 8px 1px 6px;
-		border-radius: 999px;
-		font-size: 0.6875rem;
+		height: 1.25rem;
+		padding: 0 8px 0 6px;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-2xs);
 		font-weight: 700;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: var(--brass);
-		background: var(--brass-soft);
-		border: 1px solid var(--brass-line);
+		color: var(--brass-ink);
+		background: var(--brass-fill);
 	}
 	.what {
 		font-size: var(--text-sm);
@@ -577,13 +584,16 @@
 		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--ink);
+		font-variant-numeric: tabular-nums;
 	}
 	.cost :global(.icon) {
 		color: var(--ink-3);
 	}
 
 	.compose {
+		display: grid;
 		gap: var(--s-1);
+		animation: rise var(--dur-2) var(--ease);
 	}
 	.text-label {
 		font-size: var(--text-sm);
@@ -591,35 +601,26 @@
 		color: var(--ink-2);
 	}
 	textarea {
-		width: 100%;
 		min-height: 2.75rem;
-		padding: var(--s-2) var(--s-3);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--radius);
-		background: var(--surface);
-		resize: vertical;
-		font-size: var(--text-md);
-		line-height: 1.4;
-	}
-	textarea::placeholder {
-		color: var(--ink-3);
-	}
-	textarea:focus-visible {
-		outline-offset: 0;
-		border-color: var(--focus);
 	}
 
+	/* The confirm step. On a phone it stays above the tab bar while the card scrolls. */
 	.confirm {
+		position: sticky;
+		bottom: calc(var(--dock) + var(--s-2));
+		z-index: 5;
+		display: grid;
 		gap: var(--s-3);
 		padding: var(--s-3);
-		border-radius: var(--radius);
-		background: var(--surface-2);
-		border: 1px solid var(--line);
-		animation: rise 160ms var(--ease);
+		border-radius: var(--radius-lg);
+		background: var(--surface-raised);
+		box-shadow: var(--elev-3);
+		animation: rise var(--dur-2) var(--ease);
 	}
 	.confirm-summary {
 		font-size: var(--text-sm);
 		color: var(--ink-2);
+		padding: 0 var(--s-1);
 	}
 	.confirm-summary strong {
 		color: var(--ink);
@@ -631,7 +632,6 @@
 	}
 	.confirm-actions .btn-primary {
 		flex: 1;
-		max-width: 14rem;
 	}
 	@media (min-width: 36rem) {
 		.confirm {
@@ -642,24 +642,6 @@
 			flex: none;
 		}
 	}
-	@keyframes rise {
-		from {
-			opacity: 0;
-			transform: translateY(4px);
-		}
-	}
-
-	.error {
-		display: flex;
-		gap: var(--s-2);
-		align-items: center;
-		padding: var(--s-2) var(--s-3);
-		border-radius: var(--radius-sm);
-		background: var(--danger-soft);
-		color: var(--danger);
-		font-size: var(--text-sm);
-		font-weight: 600;
-	}
 
 	.done {
 		display: flex;
@@ -668,11 +650,17 @@
 		padding: var(--s-3) var(--s-4);
 		border-radius: var(--radius);
 		background: var(--ok-soft);
-		border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+		animation: rise var(--dur-3) var(--ease);
 	}
-	.done :global(.icon) {
-		color: var(--ok);
-		margin-top: 2px;
+	.done-mark {
+		display: grid;
+		place-items: center;
+		flex: none;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 50%;
+		background: var(--ok);
+		color: var(--ok-soft);
 	}
 	.done-text {
 		color: var(--ink-2);

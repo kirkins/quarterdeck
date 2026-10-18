@@ -75,7 +75,7 @@ describe('the fixture feed', () => {
 		advance(10_000);
 		const poll = ok(await source.feed({ limit: 50, include_ship_mail: false, after: newest }));
 		expect(poll.entries.map((e) => e.body)).toEqual(
-			expect.arrayContaining(['Storefront smoke test passed on the new build.'])
+			expect.arrayContaining(['Chandlery smoke test passed on the new build.'])
 		);
 		expect(poll.entries.every((e) => (e.created_ms ?? 0) > newest)).toBe(true);
 	});

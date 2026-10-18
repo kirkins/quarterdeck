@@ -19,7 +19,13 @@
 	}
 </script>
 
-<button type="button" class="btn btn-quiet" onclick={copy}>
-	<Icon name="link" size={14} />
+<button type="button" class="btn btn-quiet btn-sm copy" class:copied onclick={copy}>
+	<Icon name={copied ? 'check' : 'copy'} size={15} />
 	{copied ? 'Copied' : 'Copy step'}
 </button>
+
+<style>
+	.copied {
+		color: var(--ok);
+	}
+</style>

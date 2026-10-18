@@ -20,16 +20,29 @@
 	}: { from: string; id: string; label: string; failure?: Failure | null } = $props();
 
 	const detail = $derived(dismissDetail(label));
+	let pending = $state(false);
 </script>
 
 <details class="dismiss" open={failure !== null}>
-	<summary class="btn btn-quiet">{label}</summary>
-	<form method="POST" action="?/dismiss" class="confirm" use:enhance>
+	<summary class="btn btn-quiet btn-sm">{label}</summary>
+	<form
+		method="POST"
+		action="?/dismiss"
+		class="confirm"
+		use:enhance={() => {
+			pending = true;
+			return async ({ update }) => {
+				pending = false;
+				await update();
+			};
+		}}
+	>
 		<input type="hidden" name="from" value={from} />
 		<input type="hidden" name="id" value={id} />
 		<label>
-			<span class="label">Note (optional)</span>
+			<span class="field-label">Note (optional)</span>
 			<textarea
+				class="field"
 				name="note"
 				rows="2"
 				maxlength="2000"
@@ -37,11 +50,11 @@
 			>
 		</label>
 		<p class="detail">{detail}</p>
-		{#if failure}<p class="error" role="alert">
+		{#if failure}<p class="callout callout-danger" role="alert">
 				<Icon name="alert" size={16} />{failure.error}
 			</p>{/if}
 		<div class="actions">
-			<button type="submit" class="btn btn-primary">{label}</button>
+			<button type="submit" class="btn btn-primary" disabled={pending}>{label}</button>
 		</div>
 	</form>
 </details>
@@ -51,63 +64,44 @@
 		display: grid;
 		gap: var(--s-2);
 		justify-items: start;
+		width: 100%;
 	}
 	summary {
 		list-style: none;
-		cursor: pointer;
+		margin-left: calc(-1 * var(--s-2));
+		color: var(--ink-3);
 	}
 	summary::-webkit-details-marker {
 		display: none;
 	}
+	.dismiss[open] summary {
+		color: var(--ink);
+	}
 	.confirm {
 		display: grid;
-		gap: var(--s-2);
+		gap: var(--s-3);
 		width: 100%;
-		padding: var(--s-3);
+		padding: var(--s-4);
 		border-radius: var(--radius);
 		background: var(--surface-2);
-		border: 1px solid var(--line);
+		box-shadow: inset 0 0 0 1px var(--line);
+		animation: rise var(--dur-3) var(--ease);
 	}
 	.confirm label {
 		display: grid;
-		gap: var(--s-1);
-	}
-	.confirm textarea {
-		width: 100%;
-		padding: var(--s-2) var(--s-3);
-		font: inherit;
-		color: var(--ink);
-		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--radius-sm);
-		resize: vertical;
-	}
-	.confirm textarea:focus-visible {
-		outline: 2px solid var(--sea);
-		outline-offset: 1px;
-	}
-	.label {
-		font-size: var(--text-xs);
-		font-weight: 650;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--ink-2);
 	}
 	.detail {
 		margin: 0;
 		font-size: var(--text-sm);
 		color: var(--ink-2);
 	}
-	.error {
-		display: flex;
-		align-items: center;
-		gap: var(--s-2);
-		margin: 0;
-		color: var(--danger);
-		font-size: var(--text-sm);
-	}
 	.actions {
 		display: flex;
 		justify-content: flex-end;
+	}
+	@media (max-width: 36rem) {
+		.actions .btn {
+			flex: 1;
+		}
 	}
 </style>

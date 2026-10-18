@@ -85,15 +85,15 @@ describe('parseFeed', () => {
 	it('fills what is missing and drops what cannot be keyed', () => {
 		const page = parseFeed({
 			entries: [
-				{ id: 'x', from: 'storefront', to: 'captain' },
-				{ from: 'storefront' },
+				{ id: 'x', from: 'chandlery', to: 'captain' },
+				{ from: 'chandlery' },
 				{ id: 'y' },
 				'not a message'
 			]
 		});
 		expect(page.entries).toHaveLength(1);
 		expect(page.entries[0]).toMatchObject({
-			ship: 'storefront',
+			ship: 'chandlery',
 			kind: 'request',
 			urgency: 'normal',
 			created_ms: null,
