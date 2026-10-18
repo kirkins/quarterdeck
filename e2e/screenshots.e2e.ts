@@ -234,3 +234,83 @@ test.describe('spend desktop', () => {
 		await page.screenshot({ path: `${dir}/spend-desktop.png` });
 	});
 });
+
+/** The report reader: a Markdown report with two comments, then the comments sheet or side panel. */
+const REPORT = `/report/${encodeURIComponent('archive-sync\u0000f0010-archive-review')}`;
+
+async function openReport(page: Page, theme: 'light' | 'dark') {
+	await page.context().addCookies([
+		{
+			name: 'qd_theme',
+			value: theme,
+			url: test.info().project.use.baseURL ?? 'http://127.0.0.1:4173'
+		}
+	]);
+	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+	await page.goto(REPORT);
+	await expect(
+		page.getByRole('heading', { level: 1, name: 'Archive migration: review' })
+	).toBeVisible();
+	await page.evaluate(() => document.fonts.ready);
+}
+
+/** Comment on a passage from the frame, as the captain does. */
+async function comment(page: Page, text: string, words: string) {
+	// On a phone the comments sheet may cover the report: close it while the passage is chosen.
+	const toggle = page.getByRole('button', { name: /Comments/ });
+	if ((await toggle.isVisible()) && (await toggle.getAttribute('aria-expanded')) === 'true') {
+		await toggle.click();
+	}
+	const handle = await page.locator('iframe.frame').elementHandle();
+	const frame = await handle?.contentFrame();
+	if (!frame) throw new Error('no report frame');
+	await frame.evaluate((needle) => {
+		const p = [...document.querySelectorAll('p, li')].find((el) =>
+			el.textContent?.includes(needle)
+		);
+		p?.scrollIntoView({ block: 'center' });
+		const range = document.createRange();
+		range.selectNodeContents(p as Node);
+		const selection = getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+	}, text);
+	await frame.getByRole('button', { name: 'Comment', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Your comment' }).fill(words);
+	await page.getByRole('button', { name: 'Save comment' }).click();
+}
+
+test.describe('report phone', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true
+	});
+
+	for (const theme of ['light', 'dark'] as const) {
+		test(`report with comments, ${theme}`, async ({ page }) => {
+			await openReport(page, theme);
+			await comment(page, 'The cold tier moved', 'Keep the old bucket read-only for 30 days.');
+			await comment(
+				page,
+				'Do the 2019 exports',
+				'Yes, re-encrypt them before retiring the bucket.'
+			);
+			await expect(page.locator('.notes.open')).toBeVisible();
+			await page.screenshot({ path: `${dir}/report-phone-${theme}.png` });
+		});
+	}
+});
+
+test.describe('report desktop', () => {
+	test.use({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 1 });
+
+	test('report with the comments column', async ({ page }) => {
+		await openReport(page, 'light');
+		await comment(page, 'The cold tier moved', 'Keep the old bucket read-only for 30 days.');
+		await comment(page, 'Do the 2019 exports', 'Yes, re-encrypt them before retiring the bucket.');
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/report-desktop.png` });
+	});
+});
