@@ -68,7 +68,7 @@ test('grouping by ship ranks ships, and by day draws the day chart', async ({ pa
 	await openSpend(page, '?period=30d&group=route');
 	await expect(page.locator('ol.ranked li.rank')).toHaveCount(3);
 
-	await page.getByRole('link', { name: 'Ship' }).click();
+	await page.getByRole('link', { name: 'Ship', exact: true }).click();
 	await expect(page).toHaveURL(/group=ship$/);
 	const ships = await page
 		.locator('ol.ranked li.rank')
@@ -78,7 +78,7 @@ test('grouping by ship ranks ships, and by day draws the day chart', async ({ pa
 	// The ranked list is largest first; billing is among the largest ships in the fixture.
 	expect(ships.indexOf('billing')).toBeLessThan(ships.indexOf('docs-site'));
 
-	await page.getByRole('link', { name: 'Day' }).click();
+	await page.getByRole('link', { name: 'Day', exact: true }).click();
 	await expect(page.locator('ol.days')).toBeVisible();
 	await expect(page.locator('ol.days li.day')).toHaveCount(30);
 	await expect(page.locator('ol.ranked')).toHaveCount(0);
