@@ -46,9 +46,21 @@ function urgencyOf(value: unknown): string {
 
 /** A mail need's mail kind: its own `kind` when that is a mail kind, else decision or approval. */
 function mailKindOf(need: Rec): string {
+	// Privateer names a mail need's message kind in mail_kind (request or decision);
+	// its kind field means approval, decision or blocker. Older Privateer sent only kind.
+	const mailKind = str(need.mail_kind);
+	if (mailKind === 'request' || mailKind === 'decision') return mailKind;
 	const kind = str(need.kind);
 	if (kind === 'request' || kind === 'notice' || kind === 'report') return kind;
 	return kind === 'approval' ? 'approval' : 'decision';
+}
+
+/** A needs_hands mark as its step: {step}, a bare string, or true with no step. */
+function handsStep(value: unknown): string | null {
+	if (typeof value === 'string') return str(value);
+	const step = str(rec(value)?.step);
+	if (step) return step;
+	return value === true || rec(value) ? 'Needs your hands; see the message.' : null;
 }
 
 function list(value: unknown): unknown[] {
@@ -145,7 +157,7 @@ export function parseRuntimeNeeds(result: unknown, now: number): Waiting {
 				correlation: id,
 				state: 'open',
 				...timing,
-				hands_on: null,
+				hands_on: handsStep(need.needs_hands),
 				actions: strings(need.actions)
 			});
 		} else if (need.source === 'job' || need.source === 'schedule' || need.source === 'workspace') {
