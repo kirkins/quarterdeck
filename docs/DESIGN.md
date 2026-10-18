@@ -45,7 +45,7 @@ Every text and background pair used in the components meets WCAG AA (4.5:1) in b
 One `<nav aria-label="Sections">`, drawn two ways:
 
 - **Phone** (under 60 rem): a tab bar fixed to the bottom with Feed, Triage, Decisions, Fleet and Spend. Five destinations fit at 320 px, so there is no "More" menu and nothing is hidden. The top bar holds only the mark, the theme button and, when answers are not sent, the fixture or dry-run notice; it scrolls away.
-- **Desktop**: a quiet sidebar with the same links, the notice and a three-way theme control at the foot.
+- **Desktop**: a quiet sidebar with the same links, the notice and the theme button (system, light, dark) at the foot.
 
 Badges show what waits on the captain: a brass count on Triage, a brass dot on Feed (the same items, so the number is not repeated), and a neutral count on Decisions while it is open. `--dock` holds the tab bar's height, so floating things (toasts, the "new messages" pill, the report's comment sheet, the confirm bar) sit above it on a phone and at the bottom on a desktop.
 
