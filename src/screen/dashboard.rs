@@ -1,10 +1,12 @@
-use data::config::Position;
+use data::captain::Item;
+use data::config::{Position, Source};
 use data::dashboard::{Axis, Layout, View};
 use iced::widget::pane_grid::{self, PaneGrid};
 use iced::widget::{button, column, container, row, scrollable, space};
 use iced::{Alignment, Length, Padding};
 
 use crate::appearance::theme;
+use crate::connection::{self, Connection};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -18,12 +20,14 @@ pub enum Message {
     Close(pane_grid::Pane),
     ToggleMaximize(pane_grid::Pane),
     OpenSettings,
+    Refresh,
 }
 
 /// What the app must do after an update.
 pub enum Event {
     LayoutChanged,
     OpenSettings,
+    Refresh,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -111,15 +115,17 @@ impl Dashboard {
                 None
             }
             Message::OpenSettings => Some(Event::OpenSettings),
+            Message::Refresh => Some(Event::Refresh),
         }
     }
 
     pub fn view<'a>(
         &'a self,
         config: &'a data::Config,
+        connection: &'a Connection,
     ) -> Element<'a, Message> {
-        let sidebar = self.sidebar(config);
-        let panes = self.panes();
+        let sidebar = self.sidebar(config, connection);
+        let panes = self.panes(connection);
 
         let content: Element<'a, Message> = match config.sidebar.position {
             Position::Left => row![sidebar, panes].into(),
@@ -133,7 +139,13 @@ impl Dashboard {
             .into()
     }
 
-    fn sidebar<'a>(&'a self, config: &'a data::Config) -> Element<'a, Message> {
+    fn sidebar<'a>(
+        &'a self,
+        config: &'a data::Config,
+        connection: &'a Connection,
+    ) -> Element<'a, Message> {
+        let waiting =
+            connection.waiting.as_ref().map_or(0, |w| w.waiting.len());
         let focused = self
             .focus
             .and_then(|pane| self.panes.get(pane))
@@ -143,23 +155,29 @@ impl Dashboard {
             let is_open = self.panes.iter().any(|(_, pane)| pane.view == view);
             let is_focused = focused == Some(view);
 
-            button(
-                row![
-                    section_icon(view).style(theme::text::secondary),
-                    text(view.title()),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            )
-            .width(Length::Fill)
-            .padding([5, 8])
-            .style(move |theme, status| {
-                theme::button::sidebar_buffer(
-                    theme, status, is_focused, is_open,
-                )
-            })
-            .on_press(Message::Open(view))
-            .into()
+            let mut label = row![
+                section_icon(view).style(theme::text::secondary),
+                text(view.title()).width(Length::Fill),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center);
+            if view == View::Triage && waiting > 0 {
+                label = label.push(
+                    text(waiting.to_string())
+                        .style(theme::text::highlight_indicator),
+                );
+            }
+
+            button(label)
+                .width(Length::Fill)
+                .padding([5, 8])
+                .style(move |theme, status| {
+                    theme::button::sidebar_buffer(
+                        theme, status, is_focused, is_open,
+                    )
+                })
+                .on_press(Message::Open(view))
+                .into()
         });
 
         let settings = button(
@@ -190,6 +208,7 @@ impl Dashboard {
                 scrollable(Column::with_children(sections).spacing(2))
                     .style(theme::scrollable::hidden)
                     .height(Length::Fill),
+                status(connection),
                 settings,
             ]
             .spacing(8),
@@ -200,7 +219,7 @@ impl Dashboard {
         .into()
     }
 
-    fn panes(&self) -> Element<'_, Message> {
+    fn panes<'a>(&'a self, connection: &'a Connection) -> Element<'a, Message> {
         let count = self.panes.len();
         let maximized = self.panes.maximized().is_some();
 
@@ -244,7 +263,12 @@ impl Dashboard {
                 ));
             }
 
-            pane_grid::Content::new(placeholder(pane.view))
+            let body = match pane.view {
+                View::Triage => triage(connection),
+                view => placeholder(view),
+            };
+
+            pane_grid::Content::new(body)
                 .title_bar(
                     pane_grid::TitleBar::new(title)
                         .controls(pane_grid::Controls::new(controls))
@@ -289,8 +313,7 @@ fn placeholder<'a>(view: View) -> Element<'a, Message> {
             text(view.title()).size(18).font(font::MONO_BOLD.clone()),
             text(view.summary()).style(theme::text::secondary),
             space().height(4),
-            text("Not connected to Privateer yet.")
-                .style(theme::text::tertiary),
+            text("Not built yet.").style(theme::text::tertiary),
         ]
         .spacing(6)
         .max_width(420),
@@ -300,13 +323,167 @@ fn placeholder<'a>(view: View) -> Element<'a, Message> {
     .into()
 }
 
+/// Whether Privateer answered, in one line above Settings. Pressing it asks
+/// again now.
+fn status(connection: &Connection) -> Element<'_, Message> {
+    let (glyph, line, style): (_, String, fn(&crate::Theme) -> _) =
+        match (&connection.error, connection.source()) {
+            (Some(data::privateer::Error::NotConfigured(_)), _) => (
+                icon::error(),
+                "Privateer not set up".into(),
+                theme::text::error,
+            ),
+            (Some(_), _) => {
+                (icon::error(), "Privateer failed".into(), theme::text::error)
+            }
+            (None, Source::Fixtures) => (
+                icon::dot(),
+                "Fixtures: invented data".into(),
+                theme::text::tertiary,
+            ),
+            (None, Source::Cli) => match connection.checked_ms {
+                Some(at) => (
+                    icon::dot(),
+                    format!("Privateer, {}", ago(connection::now_ms() - at)),
+                    theme::text::success,
+                ),
+                None => (
+                    icon::dot(),
+                    "Asking Privateer".into(),
+                    theme::text::tertiary,
+                ),
+            },
+        };
+
+    let tip = connection
+        .error
+        .as_ref()
+        .map_or_else(|| "Check now".to_owned(), ToString::to_string);
+
+    iced::widget::tooltip(
+        button(
+            row![glyph.style(style), text(line).style(theme::text::secondary)]
+                .spacing(8)
+                .align_y(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .padding([4, 8])
+        .style(theme::button::bare)
+        .on_press(Message::Refresh),
+        container(text(tip).style(theme::text::secondary))
+            .padding([4, 8])
+            .max_width(360)
+            .style(theme::container::tooltip),
+        iced::widget::tooltip::Position::Top,
+    )
+    .into()
+}
+
+/// What waits on the captain, as a plain list until the Triage view is
+/// built: hands-on asks marked, the ship, the ask, and how long ago.
+fn triage(connection: &Connection) -> Element<'_, Message> {
+    let Some(waiting) = &connection.waiting else {
+        let message = match &connection.error {
+            Some(error) => error.to_string(),
+            None if connection.is_loading() => "Asking Privateer...".into(),
+            None => "Not asked yet.".into(),
+        };
+        return container(text(message).style(if connection.error.is_some() {
+            theme::text::error
+        } else {
+            theme::text::secondary
+        }))
+        .padding(16)
+        .center(Length::Fill)
+        .max_width(480)
+        .into();
+    };
+
+    if waiting.waiting.is_empty() {
+        return container(
+            text("Nothing waits on you.").style(theme::text::secondary),
+        )
+        .center(Length::Fill)
+        .into();
+    }
+
+    let summary = format!(
+        "{} waiting, {} need your hands",
+        waiting.waiting.len(),
+        waiting.hands_on.len()
+    );
+    let mut list = Column::new().spacing(2).push(
+        text(summary)
+            .style(theme::text::secondary)
+            .font(font::MONO_BOLD.clone()),
+    );
+    if let Some(error) = &connection.error {
+        list = list.push(
+            text(format!("Showing the last answer: {error}"))
+                .style(theme::text::error),
+        );
+    }
+    for item in waiting.waiting.iter().rev() {
+        list = list.push(row_for(item));
+    }
+
+    scrollable(container(list.spacing(12)).padding(12))
+        .height(Length::Fill)
+        .into()
+}
+
+fn row_for(item: &Item) -> Element<'_, Message> {
+    let kind = if item.step.is_some() {
+        text("needs your hands").style(theme::text::error)
+    } else {
+        text(item.mail.kind.as_str()).style(theme::text::tertiary)
+    };
+
+    column![
+        row![
+            text(item.ship.as_str())
+                .style(move |theme| theme::text::seeded(theme, &item.ship)),
+            kind,
+            space().width(Length::Fill),
+            text(ago(item.age_ms)).style(theme::text::tertiary),
+        ]
+        .spacing(8),
+        text(preview(&item.mail.body, 180)),
+    ]
+    .spacing(2)
+    .into()
+}
+
+/// The start of a message, on one line, cut at a word near `limit`
+/// characters.
+fn preview(body: &str, limit: usize) -> String {
+    let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= limit {
+        return flat;
+    }
+    let cut: String = flat.chars().take(limit).collect();
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
+    format!("{cut}…")
+}
+
+/// A rough age: "now", "12m", "3h", "2d".
+fn ago(ms: i64) -> String {
+    let minutes = ms.max(0) / 60_000;
+    match minutes {
+        0 => "now".into(),
+        1..60 => format!("{minutes}m"),
+        60..1440 => format!("{}h", minutes / 60),
+        _ => format!("{}d", minutes / 1440),
+    }
+}
+
 fn section_icon<'a>(view: View) -> crate::widget::Text<'a> {
     match view {
         View::Triage => icon::bell(),
         View::Feed => icon::mail_alt(),
         View::Ships => icon::people(),
         View::Fleet => icon::globe(),
-        View::Spend => icon::highlights(),
+        View::Spend => icon::certificate(),
         View::Reports => icon::book(),
     }
 }

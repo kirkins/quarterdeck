@@ -2,7 +2,7 @@
 
 A native desktop app for the captain of a [Privateer](https://github.com/kirkins/privateer) fleet: see what every ship needs, and decide. It runs on your own machine, as you, and talks to Privateer through its JSON commands.
 
-Status: the shell. A window with a sidebar of the captain's six views (Triage, Feed, Ships, Fleet, Spend, Reports), panes you can split, drag, resize and maximize, themes, and a settings window. The views are placeholders until the Privateer client lands.
+Status: early. A window with a sidebar of the captain's six views (Triage, Feed, Ships, Fleet, Spend, Reports), panes you can split, drag, resize and maximize, themes, and a settings window. Quarterdeck asks Privateer what waits on you every few seconds: the sidebar shows whether it answered, and Triage lists the open asks. The other views are placeholders.
 
 The earlier SvelteKit web portal is archived on the [`archive/sveltekit`](https://github.com/kirkins/quarterdeck/tree/archive/sveltekit) branch (tag `sveltekit-final`). Its [design](https://github.com/kirkins/quarterdeck/blob/archive/sveltekit/docs/DESIGN.md) and [decisions](https://github.com/kirkins/quarterdeck/blob/archive/sveltekit/docs/DECISIONS.md) are the spec this app is catching up to.
 
@@ -32,7 +32,15 @@ weight = "normal"
 [sidebar]
 position = "left"                             # or "right"
 width = 220
+
+[privateer]
+home = "~/ships/workstation/.privateer"       # any Privateer home on this machine
+bin = "privateer"                             # a path, or a name on PATH
+source = "cli"                                # or "fixtures" for invented data
+poll_seconds = 15                             # at least 5
 ```
+
+Quarterdeck runs `privateer --home HOME COMMAND --json ARGS` as the captain: it clears `PRIVATEER_ACTOR`, `PRIVATEER_ROLE` and `PRIVATEER_HOME`, so starting it from a ship's shell does not make it act as that ship. Each command runs in its own process group, with a time limit and an output limit, and is stopped with everything it started when it runs over. When `privateer machine captain` keeps the captain's desk on another machine, Privateer answers the captain's commands from there (Privateer PR #251).
 
 Themes are Halloy themes: `.toml` files in `themes/` beside the config. The settings window picks the theme and sidebar side and writes them back to `config.toml`, keeping the rest of the file and its comments. The window position and the pane layout are saved in the data directory (`~/.local/share/quarterdeck`).
 
@@ -49,6 +57,9 @@ Layout:
 - `src/main.rs`: the app: windows, messages, saving on close.
 - `src/screen/dashboard.rs`: the sidebar and the pane grid.
 - `src/screen/settings.rs`: the settings window.
+- `src/connection.rs`: polling Privateer, and what it last answered.
+- `data/src/privateer.rs`: running the privateer binary. `data/src/captain.rs`: what `captain.waiting` returns.
+- `fixtures/`: invented data for `source = "fixtures"`.
 - `src/appearance/`, `src/widget/`, `src/font.rs`, `src/icon.rs`, `src/window.rs`: the theme, widgets, fonts and window handling, from Halloy.
 - `data/`: config, themes, the saved layout and window, with no UI.
 

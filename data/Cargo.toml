@@ -11,6 +11,7 @@ derive_more = { version = "2.0.1", features = ["try_from"] }
 dirs-next = "2.0.0"
 display-info = "0.5.7"
 iced_core = "0.15.0-dev"
+libc = "0.2"
 log = { workspace = true }
 palette = { workspace = true }
 rand = { workspace = true }
@@ -20,7 +21,7 @@ seahash = "4.1.0"
 serde_json = { workspace = true }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "process", "io-util", "time", "macros"] }
 toml = { workspace = true }
 toml_edit = { workspace = true }
 

@@ -1,0 +1,527 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"now_ms": 1792300000000,
+	"hands_on": [
+		{
+			"ship": "status-page",
+			"asked_ms": 1792299100000,
+			"age_ms": 900000,
+			"step": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it.",
+			"mail": {
+				"id": "f0002-status-move",
+				"from": "status-page",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "status-move",
+				"correlation": null,
+				"created_ms": 1792299100000,
+				"urgency": "high",
+				"deadline_ms": 1792302400000,
+				"state": "open",
+				"body": "Move the status page to the new host tonight?",
+				"payload": {
+					"needs_hands": {
+						"step": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it."
+					}
+				}
+			}
+		},
+		{
+			"ship": "search-index",
+			"asked_ms": 1792297000000,
+			"age_ms": 3000000,
+			"step": "Run `search-index reindex --shard all --confirm` from the ops shell, then paste the last line of its output here.",
+			"mail": {
+				"id": "f0003-reindex-hands",
+				"from": "search-index",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "search-reindex",
+				"correlation": null,
+				"created_ms": 1792297000000,
+				"urgency": "normal",
+				"deadline_ms": 1792310800000,
+				"state": "open",
+				"body": "Rebuild the search index on the new cluster?",
+				"payload": {
+					"needs_hands": {
+						"step": "Run `search-index reindex --shard all --confirm` from the ops shell, then paste the last line of its output here."
+					}
+				}
+			}
+		}
+	],
+	"waiting": [
+		{
+			"ship": "billing",
+			"asked_ms": 1792289200000,
+			"age_ms": 10800000,
+			"step": null,
+			"mail": {
+				"id": "f0001-billing-retry",
+				"from": "billing",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "billing-retries",
+				"correlation": null,
+				"created_ms": 1792289200000,
+				"urgency": "high",
+				"deadline_ms": 1792297600000,
+				"state": "open",
+				"body": "Which retry policy should billing ship for failed renewals?",
+				"payload": {
+					"decision": {
+						"question": "Which retry policy should billing ship for failed renewals?",
+						"why": "About 1 in 30 renewals fail on the first try. Today they are cancelled silently, and the pricing launch is waiting on this choice.",
+						"blocked": ["billing", "chandlery", "pricing-launch"],
+						"options": [
+							{
+								"id": "smart",
+								"label": "Smart retries over 7 days",
+								"what_happens": "Retry a failed card up to 4 times over a week, timed around likely paydays. Customers get one friendly reminder email.",
+								"cost": "~$40/mo in processor fees",
+								"recommended": true
+							},
+							{
+								"id": "fixed",
+								"label": "Retry 3 times, a day apart",
+								"what_happens": "Simple and predictable. Recovers less revenue, but there is nothing new to monitor.",
+								"cost": "No extra cost"
+							},
+							{
+								"id": "none",
+								"label": "No automatic retries",
+								"what_happens": "Failed payments go straight to a reminder email and a manual review queue.",
+								"cost": "~2h a week of support time"
+							}
+						],
+						"free_text_ok": false
+					}
+				}
+			}
+		},
+		{
+			"ship": "status-page",
+			"asked_ms": 1792299100000,
+			"age_ms": 900000,
+			"step": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it.",
+			"mail": {
+				"id": "f0002-status-move",
+				"from": "status-page",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "status-move",
+				"correlation": null,
+				"created_ms": 1792299100000,
+				"urgency": "high",
+				"deadline_ms": 1792302400000,
+				"state": "open",
+				"body": "Move the status page to the new host tonight?",
+				"payload": {
+					"needs_hands": {
+						"step": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it."
+					}
+				}
+			}
+		},
+		{
+			"ship": "search-index",
+			"asked_ms": 1792297000000,
+			"age_ms": 3000000,
+			"step": "Run `search-index reindex --shard all --confirm` from the ops shell, then paste the last line of its output here.",
+			"mail": {
+				"id": "f0003-reindex-hands",
+				"from": "search-index",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "search-reindex",
+				"correlation": null,
+				"created_ms": 1792297000000,
+				"urgency": "normal",
+				"deadline_ms": 1792310800000,
+				"state": "open",
+				"body": "Rebuild the search index on the new cluster?",
+				"payload": {
+					"needs_hands": {
+						"step": "Run `search-index reindex --shard all --confirm` from the ops shell, then paste the last line of its output here."
+					}
+				}
+			}
+		},
+		{
+			"ship": "chandlery",
+			"asked_ms": 1792206400000,
+			"age_ms": 93600000,
+			"step": null,
+			"mail": {
+				"id": "f0004-autumn-hero",
+				"from": "chandlery",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "autumn-sale",
+				"correlation": null,
+				"created_ms": 1792206400000,
+				"urgency": "normal",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "Which hero should the homepage use for the autumn sale?",
+				"payload": {
+					"decision": {
+						"question": "Which hero should the homepage use for the autumn sale?",
+						"why": "The sale starts Monday. Design finished two heroes and has no strong preference.",
+						"blocked": ["chandlery"],
+						"options": [
+							{
+								"id": "photo",
+								"label": "Product photo in use",
+								"what_happens": "A warm photo of the product on a kitchen table. Tested best last spring.",
+								"cost": "$120 stock licence",
+								"recommended": true
+							},
+							{
+								"id": "illustration",
+								"label": "New illustration",
+								"what_happens": "Commissioned art. Fresh look, but it has not been tested with customers.",
+								"cost": "$900 one-off"
+							}
+						],
+						"free_text_ok": false
+					}
+				}
+			}
+		},
+		{
+			"ship": "analytics",
+			"asked_ms": 1791954400000,
+			"age_ms": 345600000,
+			"step": null,
+			"mail": {
+				"id": "f0005-click-retention",
+				"from": "analytics",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "click-retention",
+				"correlation": null,
+				"created_ms": 1791954400000,
+				"urgency": "low",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "Keep raw click events for 90 days or 30?",
+				"payload": {
+					"decision": {
+						"question": "Keep raw click events for 90 days or 30?",
+						"blocked": ["analytics"],
+						"options": [
+							{
+								"id": "ninety",
+								"label": "Keep 90 days",
+								"what_happens": "Longer funnel analysis is possible. Storage grows about a third.",
+								"cost": "~$60/mo storage"
+							},
+							{
+								"id": "thirty",
+								"label": "Keep 30 days",
+								"what_happens": "Cheaper. Quarter-over-quarter comparisons need the aggregates instead.",
+								"recommended": true
+							}
+						],
+						"free_text_ok": false,
+						"group": "analytics-setup"
+					}
+				}
+			}
+		},
+		{
+			"ship": "analytics",
+			"asked_ms": 1792127200000,
+			"age_ms": 172800000,
+			"step": null,
+			"mail": {
+				"id": "f0006-churn-owner",
+				"from": "analytics",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "churn-report",
+				"correlation": null,
+				"created_ms": 1792127200000,
+				"urgency": "low",
+				"deadline_ms": 1792732000000,
+				"state": "open",
+				"body": "Which dashboard owns the weekly churn report?",
+				"payload": {
+					"decision": {
+						"question": "Which dashboard owns the weekly churn report?",
+						"why": "Two teams read it and neither has been named as owner since the reorg.",
+						"options": [
+							{
+								"id": "growth",
+								"label": "Growth",
+								"what_happens": "Growth reads it every Monday and acts on it first."
+							},
+							{
+								"id": "finance",
+								"label": "Finance",
+								"what_happens": "Finance reconciles it against revenue each month."
+							},
+							{
+								"id": "shared",
+								"label": "Shared, with Growth as the contact",
+								"what_happens": "Both teams see it. Growth answers questions."
+							}
+						],
+						"free_text_ok": false,
+						"group": "analytics-setup"
+					}
+				}
+			}
+		},
+		{
+			"ship": "mobile-app",
+			"asked_ms": 1792282000000,
+			"age_ms": 18000000,
+			"step": null,
+			"mail": {
+				"id": "f0007-onboarding-android",
+				"from": "mobile-app",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "onboarding-v2",
+				"correlation": null,
+				"created_ms": 1792282000000,
+				"urgency": "normal",
+				"deadline_ms": 1792296400000,
+				"state": "open",
+				"body": "Ship the new onboarding on Android first, or wait for both platforms?",
+				"payload": {
+					"choices": ["Android first", "Wait for both platforms"]
+				}
+			}
+		},
+		{
+			"ship": "mobile-app",
+			"asked_ms": 1792299280000,
+			"age_ms": 720000,
+			"step": null,
+			"mail": {
+				"id": "f0008-listing-offline",
+				"from": "mobile-app",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "store-listing",
+				"correlation": null,
+				"created_ms": 1792299280000,
+				"urgency": "normal",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "Can the store listing mention offline mode before review?",
+				"payload": {}
+			}
+		},
+		{
+			"ship": "docs-site",
+			"asked_ms": 1792127200000,
+			"age_ms": 172800000,
+			"step": null,
+			"mail": {
+				"id": "f0009-v2-archive",
+				"from": "docs-site",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "api-v2-archive",
+				"correlation": null,
+				"created_ms": 1792127200000,
+				"urgency": "normal",
+				"deadline_ms": 1792472800000,
+				"state": "open",
+				"body": "Can the v2 API pages be archived before the November release?",
+				"payload": {}
+			}
+		},
+		{
+			"ship": "docs-site",
+			"asked_ms": 1792213600000,
+			"age_ms": 86400000,
+			"step": null,
+			"mail": {
+				"id": "f0010-ranking-invalid",
+				"from": "docs-site",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "docs-search",
+				"correlation": null,
+				"created_ms": 1792213600000,
+				"urgency": "normal",
+				"deadline_ms": 1792372000000,
+				"state": "open",
+				"body": "Which search ranking should docs use?",
+				"payload": {
+					"decision": {
+						"question": "Which search ranking should docs use?",
+						"options": [
+							{
+								"id": "bm25",
+								"label": "BM25",
+								"what_happens": "The standard text ranking."
+							}
+						],
+						"free_text_ok": false
+					}
+				}
+			}
+		},
+		{
+			"ship": "billing",
+			"asked_ms": 1792127200000,
+			"age_ms": 172800000,
+			"step": null,
+			"mail": {
+				"id": "f0011-invoice-template",
+				"from": "billing",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "invoice-template",
+				"correlation": null,
+				"created_ms": 1792127200000,
+				"urgency": "low",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "Is the old invoice template still needed for the audit?",
+				"payload": {}
+			}
+		},
+		{
+			"ship": "chandlery",
+			"asked_ms": 1792294600000,
+			"age_ms": 5400000,
+			"step": null,
+			"mail": {
+				"id": "f0012-pricing-headline",
+				"from": "chandlery",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "pricing-copy",
+				"correlation": null,
+				"created_ms": 1792294600000,
+				"urgency": "high",
+				"deadline_ms": 1792314400000,
+				"state": "open",
+				"body": "Approve the revised headline for the pricing page?",
+				"payload": {}
+			}
+		},
+		{
+			"ship": "search-index",
+			"asked_ms": 1792274800000,
+			"age_ms": 25200000,
+			"step": null,
+			"mail": {
+				"id": "f0013-shard-count",
+				"from": "search-index",
+				"to": "captain",
+				"kind": "decision",
+				"request_kind": null,
+				"task_id": "index-shards",
+				"correlation": null,
+				"created_ms": 1792274800000,
+				"urgency": "normal",
+				"deadline_ms": 1792372000000,
+				"state": "open",
+				"body": "Which shard count should the new index use?",
+				"payload": {
+					"decision": {
+						"question": "Which shard count should the new index use?",
+						"why": "The corpus doubles next quarter. The count is hard to change once data is written.",
+						"options": [
+							{
+								"id": "four",
+								"label": "Four shards",
+								"what_happens": "Simplest. Enough for today's corpus, not for next quarter."
+							},
+							{
+								"id": "eight",
+								"label": "Eight shards",
+								"what_happens": "Room for the doubling. Slightly more memory at idle.",
+								"cost": "~$30/mo",
+								"recommended": true
+							},
+							{
+								"id": "twelve",
+								"label": "Twelve shards",
+								"what_happens": "Headroom for two years. Costs more at idle.",
+								"cost": "~$55/mo"
+							}
+						],
+						"free_text_ok": false
+					}
+				}
+			}
+		},
+		{
+			"ship": "metrics-rollup",
+			"asked_ms": 1792296000000,
+			"age_ms": 4000000,
+			"step": null,
+			"mail": {
+				"id": "f0011-rollup-report",
+				"from": "metrics-rollup",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "rollup-audit",
+				"correlation": null,
+				"created_ms": 1792296000000,
+				"urgency": "normal",
+				"deadline_ms": 1792330000000,
+				"state": "open",
+				"body": "The rollup audit is attached. Mark the series to keep.",
+				"payload": {
+					"report": {
+						"title": "Rollup audit",
+						"format": "html",
+						"report_id": "rollup-audit-7",
+						"bytes": 1200
+					}
+				}
+			}
+		},
+		{
+			"ship": "ops",
+			"asked_ms": 1792298200000,
+			"age_ms": 1800000,
+			"step": "Rotate the staging token in the vault, then paste the new one into the ship’s config.",
+			"mail": {
+				"id": "f0015-staging-token",
+				"from": "ops",
+				"to": "captain",
+				"kind": "request",
+				"request_kind": null,
+				"task_id": "staging-rotate",
+				"correlation": null,
+				"created_ms": 1792298200000,
+				"urgency": "normal",
+				"deadline_ms": null,
+				"state": "open",
+				"body": "The staging token expires on Friday. Rotate it?",
+				"payload": {
+					"needs_hands": {
+						"step": "Rotate the staging token in the vault, then paste the new one into the ship’s config."
+					}
+				}
+			}
+		}
+	]
+}

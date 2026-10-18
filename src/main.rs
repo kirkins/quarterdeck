@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod appearance;
+mod connection;
 mod font;
 mod icon;
 mod screen;
@@ -13,6 +14,7 @@ use iced::widget::{column, container};
 use iced::{Length, Subscription, Task};
 
 use self::appearance::{Theme, theme};
+use self::connection::Connection;
 use self::screen::{dashboard, settings};
 use self::widget::{Element, text};
 
@@ -120,6 +122,7 @@ struct Quarterdeck {
     main_window: window::Window,
     settings_window: Option<window::Id>,
     dashboard: dashboard::Dashboard,
+    connection: Connection,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +134,7 @@ enum Message {
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
+    Connection(connection::Message),
 }
 
 impl Quarterdeck {
@@ -178,6 +182,9 @@ impl Quarterdeck {
             open_main_window.discard()
         };
 
+        let mut connection = Connection::new(&config.privateer);
+        let first_poll = connection.poll();
+
         (
             Quarterdeck {
                 config,
@@ -187,8 +194,9 @@ impl Quarterdeck {
                 main_window: window,
                 settings_window: None,
                 dashboard: dashboard::Dashboard::new(&dashboard_load),
+                connection,
             },
-            open,
+            Task::batch([open, first_poll.map(Message::Connection)]),
         )
     }
 
@@ -214,8 +222,14 @@ impl Quarterdeck {
             {
                 Some(dashboard::Event::LayoutChanged) => self.save_layout(),
                 Some(dashboard::Event::OpenSettings) => self.open_settings(),
+                Some(dashboard::Event::Refresh) => {
+                    self.connection.poll().map(Message::Connection)
+                }
                 None => Task::none(),
             },
+            Message::Settings(settings::Message::Reload) => {
+                Task::perform(Config::load(), Message::ConfigReloaded)
+            }
             Message::Settings(settings::Message::Edit(edit)) => Task::perform(
                 async move {
                     Config::apply(edit).await?;
@@ -228,7 +242,12 @@ impl Quarterdeck {
                 self.config_error = None;
                 self.theme =
                     self.mode.theme(&self.config.appearance.selected).into();
-                Task::none()
+                self.connection
+                    .configure(&self.config.privateer)
+                    .map(Message::Connection)
+            }
+            Message::Connection(message) => {
+                self.connection.update(message).map(Message::Connection)
             }
             Message::ConfigReloaded(Err(error)) => {
                 log::error!("config: {error}");
@@ -332,8 +351,10 @@ impl Quarterdeck {
             return settings::view(&self.config).map(Message::Settings);
         }
 
-        let dashboard =
-            self.dashboard.view(&self.config).map(Message::Dashboard);
+        let dashboard = self
+            .dashboard
+            .view(&self.config, &self.connection)
+            .map(Message::Dashboard);
 
         let content: Element<'_, Message> = match &self.config_error {
             Some(error) => column![
@@ -362,6 +383,8 @@ impl Quarterdeck {
         Subscription::batch([
             window::events().map(|(id, event)| Message::Window(id, event)),
             appearance::subscription().map(Message::AppearanceChanged),
+            iced::time::every(self.connection.poll_every())
+                .map(|_| Message::Connection(connection::Message::Poll)),
         ])
     }
 }

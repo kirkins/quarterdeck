@@ -36,6 +36,7 @@ fern = "0.7.1"
 futures = { workspace = true }
 log = { workspace = true }
 nucleo-matcher = "0.3.1"
+serde_json = { workspace = true }
 mundy = { version = "0.1.9", default-features = false, features = [
     "color-scheme",
     "tokio",

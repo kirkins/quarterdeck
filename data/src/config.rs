@@ -16,6 +16,42 @@ pub struct Config {
     pub font: Font,
     pub scale_factor: ScaleFactor,
     pub sidebar: Sidebar,
+    pub privateer: Privateer,
+}
+
+/// How Quarterdeck reaches Privateer.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Privateer {
+    pub source: Source,
+    /// The privateer binary: a path, or a name found on `PATH`.
+    pub bin: PathBuf,
+    /// The Privateer home the captain's commands run in, such as a ship's
+    /// `.privateer` folder. `~` is the home directory.
+    pub home: Option<PathBuf>,
+    /// How often to ask Privateer what is waiting, in seconds.
+    pub poll_seconds: u64,
+}
+
+impl Default for Privateer {
+    fn default() -> Self {
+        Self {
+            source: Source::Cli,
+            bin: PathBuf::from("privateer"),
+            home: None,
+            poll_seconds: 15,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Source {
+    /// Run the privateer binary.
+    #[default]
+    Cli,
+    /// Invented data bundled with Quarterdeck, for development.
+    Fixtures,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -110,6 +146,7 @@ struct File {
     font: Font,
     scale_factor: ScaleFactor,
     sidebar: Sidebar,
+    privateer: Privateer,
 }
 
 impl Config {
@@ -145,7 +182,20 @@ impl Config {
             font: file.font,
             scale_factor: file.scale_factor,
             sidebar: file.sidebar,
+            privateer: Privateer {
+                bin: expand_home(file.privateer.bin),
+                home: file.privateer.home.map(expand_home),
+                ..file.privateer
+            },
         })
+    }
+}
+
+/// `~/x` is `x` in the user's home directory.
+fn expand_home(path: PathBuf) -> PathBuf {
+    match (path.strip_prefix("~"), dirs_next::home_dir()) {
+        (Ok(rest), Some(home)) => home.join(rest),
+        _ => path,
     }
 }
 

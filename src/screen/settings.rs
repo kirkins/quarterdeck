@@ -1,4 +1,4 @@
-use data::config::{Edit, Position};
+use data::config::{Edit, Position, Source};
 use data::environment;
 use iced::widget::{button, column, container, row, scrollable};
 use iced::{Alignment, Length};
@@ -10,6 +10,7 @@ use crate::widget::{Column, Element, text};
 #[derive(Debug, Clone)]
 pub enum Message {
     Edit(Edit),
+    Reload,
 }
 
 /// The settings window. It holds no state of its own: it shows the config
@@ -91,6 +92,7 @@ pub fn view(config: &data::Config) -> Element<'_, Message> {
             .spacing(4)
             .into(),
         ),
+        section("Privateer", privateer(&config.privateer)),
         text(format!(
             "{} {} · config {}",
             environment::APP_NAME,
@@ -120,5 +122,45 @@ fn section<'a>(
         body,
     ]
     .spacing(8)
+    .into()
+}
+
+/// Where Quarterdeck reads the fleet from. Set by hand in config.toml.
+fn privateer(config: &data::config::Privateer) -> Element<'_, Message> {
+    let row = |label: &'static str, value: String| {
+        row![
+            text(label).width(90).style(theme::text::secondary),
+            text(value),
+        ]
+        .spacing(8)
+    };
+
+    column![
+        row(
+            "Source",
+            match config.source {
+                Source::Cli => "the privateer binary".into(),
+                Source::Fixtures => "fixtures (invented data)".into(),
+            },
+        ),
+        row("Binary", config.bin.display().to_string()),
+        row(
+            "Home",
+            config.home.as_ref().map_or_else(
+                || "not set".into(),
+                |home| home.display().to_string(),
+            ),
+        ),
+        row("Checks", format!("every {}s", config.poll_seconds.max(5))),
+        text("Change these under [privateer] in config.toml, then reload.",)
+            .style(theme::text::tertiary),
+        button(text("Reload config.toml"))
+            .padding([5, 12])
+            .style(|theme, status| theme::button::secondary(
+                theme, status, false
+            ))
+            .on_press(Message::Reload),
+    ]
+    .spacing(6)
     .into()
 }
