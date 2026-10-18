@@ -5,7 +5,8 @@
 import type { Answered, Question } from '#lib/decision.ts';
 
 /** Longest free-text answer or note we will send. */
-export const MAX_TEXT = 2000;
+/** Privateer accepts answer text up to 4096 characters (PR 219). */
+export const MAX_TEXT = 4096;
 
 export interface AnswerInput {
 	option_id?: string | null;
