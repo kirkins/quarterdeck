@@ -269,7 +269,10 @@ export interface FleetShip {
 	jobs_total: number;
 }
 
-/** Allowance numbers are as Privateer reports them, with no unit it names. */
+/**
+ * A route's allowance. `window_used` and `week_used` are shares of the window and
+ * the week, from 0 to 1 (Privateer's utilization, as its design reports it).
+ */
 export interface FleetAllowance {
 	shape: string | null;
 	window_ends_ms: number | null;
@@ -308,7 +311,12 @@ export interface FleetMachine {
 	changed_ms: number | null;
 	/** True when this read did not resend the machine's ships and routes. */
 	unchanged: boolean;
+	/** True when the section was bounded: some ships, tasks or jobs were dropped to fit. */
 	truncated: boolean;
+	/** This machine is the captain's desk: the one that collects captain mail. */
+	desk: boolean;
+	/** Null when Privateer could not read the stow state. */
+	stowed: boolean | null;
 	/** Things Privateer could not check, e.g. `answered:<ship>`. */
 	unknown: string[];
 	routes: FleetRoute[];
@@ -374,6 +382,47 @@ export function mergeSnapshot(
 	return { ...next, machines };
 }
 
+/**
+ * A fixture answered as Privateer answers a `since` read: a machine whose changed_ms
+ * equals its token comes back unchanged, with no routes, and its ships are left out
+ * with it. Needs stay in full. Lets a fixture stand in for the real `since` read.
+ */
+export function sinceFixture(raw: unknown, since: SinceToken): unknown {
+	const root = rec(raw);
+	if (!root) return raw;
+	const unchanged = new Set<string>();
+	const machines = list(root.machines).map((entry) => {
+		const machine = rec(entry);
+		const name = str(machine?.name);
+		const token = name === null ? undefined : since[name];
+		if (!machine || !name || token === undefined || token !== machine.changed_ms) return entry;
+		unchanged.add(name);
+		return { ...machine, unchanged: true, routes: [] };
+	});
+	return {
+		...root,
+		machines,
+		ships: list(root.ships).filter((entry) => !unchanged.has(str(rec(entry)?.machine) ?? ''))
+	};
+}
+
+/**
+ * A machine read as truncated with no ships in it keeps the ships held for it, so a
+ * read that bounded them all away does not show the machine empty. Its `truncated`
+ * flag stays, and the view says the read is partial.
+ */
+export function keepTruncated(held: FleetSnapshot | null, next: FleetSnapshot): FleetSnapshot {
+	if (!held) return next;
+	return {
+		...next,
+		machines: next.machines.map((machine) => {
+			if (!machine.truncated || machine.ships.length > 0) return machine;
+			const before = held.machines.find((m) => m.name === machine.name);
+			return before ? { ...machine, ships: before.ships } : machine;
+		})
+	};
+}
+
 /** Read `fleet.snapshot` tolerantly: missing fields become null, empty or zero; extras are ignored. */
 export function parseSnapshot(result: unknown): FleetSnapshot {
 	const root = rec(result);
@@ -413,6 +462,8 @@ function parseMachine(name: string, machine: Rec, ships: FleetShip[]): FleetMach
 		changed_ms: num(machine.changed_ms),
 		unchanged: machine.unchanged === true,
 		truncated: machine.truncated === true,
+		desk: machine.desk === true,
+		stowed: typeof machine.stowed === 'boolean' ? machine.stowed : null,
 		unknown: strings(machine.unknown),
 		routes: list(machine.routes).flatMap((raw) => {
 			const route = rec(raw);

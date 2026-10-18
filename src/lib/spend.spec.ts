@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseSnapshot, type RoutesConfig, type UsageSummary } from './shapes.ts';
 import {
+	parseSnapshot,
+	type FleetAllowance,
+	type RoutesConfig,
+	type UsageSummary
+} from './shapes.ts';
+import {
+	allowanceLabel,
 	buildRoutes,
 	buildUsage,
 	costClass,
@@ -121,10 +127,74 @@ describe('buildRoutes', () => {
 				kind: 'backing_off',
 				label: 'backing off, back in 9m',
 				clearsAt: NOW + 9 * MIN,
-				lastError: null
+				lastError: null,
+				identity: null,
+				allowance: null
 			},
-			{ machine: 'boreas', kind: 'available', label: 'available', clearsAt: null, lastError: null }
+			{
+				machine: 'boreas',
+				kind: 'available',
+				label: 'available',
+				clearsAt: null,
+				lastError: null,
+				identity: null,
+				allowance: null
+			}
 		]);
+	});
+
+	it('names the route Privateer reports, and shows an allowance as shares of its window and week', () => {
+		const fleet = snapshot([
+			{
+				name: 'boreas',
+				routes: [
+					route({
+						name: 'plan-main',
+						route: 'tidewater large',
+						cost: 'plan',
+						allowance: {
+							shape: 'rolling',
+							window_ends_ms: NOW + 2 * HOUR,
+							weekly_ends_ms: NOW + 3 * HOUR * 24,
+							window_used: 0.4,
+							week_used: 0.875,
+							last_used_ms: NOW - MIN
+						}
+					})
+				]
+			}
+		]);
+		const row = buildRoutes(fleet, config, NOW).find((r) => r.name === 'plan-main');
+		expect(row?.states[0].identity).toBe('tidewater large');
+		expect(row?.states[0].allowance).toContain('allowance: window 40% used, resets in ');
+		expect(row?.states[0].allowance).toContain(' · week 88% used, resets in ');
+		// The allowance is shown on the machine, so the row keeps no plan-not-reported note.
+		expect(row?.budget).toBeNull();
+	});
+
+	it('says the plan allowance is not reported when no machine reports one', () => {
+		const fleet = snapshot([
+			{ name: 'boreas', routes: [route({ name: 'plan-main', cost: 'plan' })] }
+		]);
+		const row = buildRoutes(fleet, config, NOW).find((r) => r.name === 'plan-main');
+		expect(row?.budget).toBe('Plan allowance: not reported');
+	});
+
+	it('reads an allowance as a share from 0 to 1, and leaves it out when no share is reported', () => {
+		const none: FleetAllowance = {
+			shape: null,
+			window_ends_ms: null,
+			weekly_ends_ms: null,
+			window_used: null,
+			week_used: null,
+			last_used_ms: null
+		};
+		expect(allowanceLabel(none, NOW)).toBeNull();
+		expect(allowanceLabel({ ...none, week_used: 1 }, NOW)).toBe('allowance: week 100% used');
+		// An end time already past is not a reset to count down to.
+		expect(allowanceLabel({ ...none, window_used: 0.1, window_ends_ms: NOW - MIN }, NOW)).toBe(
+			'allowance: window 10% used'
+		);
 	});
 
 	it('shows a capped route as resetting, from until_ms', () => {

@@ -304,6 +304,8 @@ describe('fleet snapshot', () => {
 						changed_ms: 7,
 						unchanged: false,
 						truncated: false,
+						desk: false,
+						stowed: null,
 						unknown: [],
 						routes: [],
 						ships: []
@@ -418,6 +420,26 @@ describe('fleet snapshot', () => {
 		if (read.status !== 'ok') return;
 		expect(read.snapshot.machines.map((m) => m.name)).toEqual(['atlas', 'boreas', 'calypso']);
 		expect(read.snapshot.generated_ms).toBe(NOW);
+	});
+
+	it('answers a repeat read as since: its machines keep their change times, and an unchanged one stays held', async () => {
+		let at = NOW;
+		const source = new FixtureSource('fixtures', () => at);
+		const first = await source.snapshot();
+		at += 15_000;
+		const second = await source.snapshot();
+		expect(first.status).toBe('ok');
+		expect(second.status).toBe('ok');
+		if (first.status !== 'ok' || second.status !== 'ok') return;
+		// The times are pinned to the first read, so the change times hold between reads.
+		expect(second.snapshot.machines.map((m) => m.changed_ms)).toEqual(
+			first.snapshot.machines.map((m) => m.changed_ms)
+		);
+		const atlas = second.snapshot.machines.find((m) => m.name === 'atlas');
+		expect(atlas?.unchanged).toBe(true);
+		expect(atlas?.ships.map((s) => s.name)).toEqual(['billing', 'chandlery', 'docs-site']);
+		expect(atlas?.routes.map((r) => r.name)).toEqual(['free-pool', 'plan-main']);
+		expect(second.snapshot.needs).toHaveLength(3);
 	});
 
 	it('reports an absent fixture as unsupported', async () => {

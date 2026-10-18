@@ -38,7 +38,13 @@ test('routes show the throttled one first, with its relative time', async ({ pag
 		/capped, resets in \d+h/
 	);
 	await expect(plan.locator('.state-line[data-machine="atlas"] .kind')).toContainText('available');
-	await expect(plan.locator('.budget')).toHaveText('Plan allowance: not reported');
+	// boreas reports the plan's allowance, so the row shows its shares instead of "not reported".
+	await expect(plan.locator('.budget')).toHaveCount(0);
+	const boreas = plan.locator('.state-line[data-machine="boreas"]');
+	await expect(boreas.locator('.allowance')).toHaveText(
+		/^allowance: window 40% used, resets in \S+ · week 87% used, resets in \S+$/
+	);
+	await expect(boreas.locator('.identity')).toHaveText('route tidewater large');
 
 	const credits = page.locator('li.route[data-route="credits-reserve"]');
 	await expect(credits.locator('.budget')).toHaveText('Credit balance: not reported');

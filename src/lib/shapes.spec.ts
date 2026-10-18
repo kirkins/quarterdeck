@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
 	assemble,
+	keepTruncated,
 	mergeSnapshot,
+	sinceFixture,
 	sinceOf,
 	parseCaptainWaiting,
 	parseRoutesShow,
@@ -702,6 +704,76 @@ describe('sinceOf and mergeSnapshot (fleet.snapshot since)', () => {
 		const merged = mergeSnapshot(held, next);
 		expect(merged?.machines[0].ships).toEqual([]);
 		expect(merged?.machines[0].routes).toEqual([]);
+	});
+
+	it('answers a fixture as Privateer answers since: unchanged machines lose their ships and routes, needs stay', () => {
+		const fixture = {
+			machines: [
+				{ name: 'atlas', changed_ms: 100, routes: [{ name: 'plan-main' }] },
+				{ name: 'boreas', changed_ms: 250, routes: [] }
+			],
+			ships: [
+				{ name: 'billing', machine: 'atlas' },
+				{ name: 'search', machine: 'boreas' }
+			],
+			needs: [{ id: 'n1', ship: 'billing', machine: 'atlas' }]
+		};
+		const answered = sinceFixture(fixture, { atlas: 100, boreas: 200 }) as typeof fixture & {
+			machines: Record<string, unknown>[];
+		};
+		expect(answered.machines[0]).toEqual({
+			name: 'atlas',
+			changed_ms: 100,
+			unchanged: true,
+			routes: []
+		});
+		expect(answered.machines[1]).toEqual(fixture.machines[1]);
+		expect(answered.ships.map((s) => s.name)).toEqual(['search']);
+		expect(answered.needs).toEqual(fixture.needs);
+		// A machine with no token held is not unchanged, nor is one whose token moved on.
+		expect(sinceFixture(fixture, { atlas: 99 })).toMatchObject({
+			machines: [{ name: 'atlas', changed_ms: 100 }, { name: 'boreas' }]
+		});
+		expect(sinceFixture(fixture, {})).toEqual(fixture);
+	});
+
+	it('keeps the held ships of a truncated machine that came back with none', () => {
+		const held = read(
+			[{ name: 'atlas', reachable: true, changed_ms: 100 }],
+			[{ name: 'billing', machine: 'atlas', presence: 'hosted' }]
+		);
+		const next = read([{ name: 'atlas', reachable: true, changed_ms: 150, truncated: true }]);
+		const kept = keepTruncated(held, next);
+		expect(kept.machines[0].truncated).toBe(true);
+		expect(kept.machines[0].ships.map((s) => s.name)).toEqual(['billing']);
+	});
+
+	it('takes a truncated machine as sent when it still has ships, and a full one as sent', () => {
+		const held = read(
+			[{ name: 'atlas', reachable: true, changed_ms: 100 }],
+			[{ name: 'billing', machine: 'atlas', presence: 'hosted' }]
+		);
+		const partial = read(
+			[{ name: 'atlas', reachable: true, changed_ms: 150, truncated: true }],
+			[{ name: 'search', machine: 'atlas', presence: 'asleep' }]
+		);
+		expect(keepTruncated(held, partial).machines[0].ships.map((s) => s.name)).toEqual(['search']);
+		const full = read([{ name: 'atlas', reachable: true, changed_ms: 150 }]);
+		expect(keepTruncated(held, full).machines[0].ships).toEqual([]);
+		expect(
+			keepTruncated(null, read([{ name: 'atlas', truncated: true }])).machines[0].ships
+		).toEqual([]);
+	});
+
+	it('reads a desk and a stow state, with the stow left unknown when Privateer does not say', () => {
+		const parsed = read([
+			{ name: 'atlas', desk: true, stowed: true },
+			{ name: 'boreas', desk: false, stowed: 'yes' }
+		]);
+		expect(parsed.machines.map((m) => [m.desk, m.stowed])).toEqual([
+			[true, true],
+			[false, null]
+		]);
 	});
 });
 

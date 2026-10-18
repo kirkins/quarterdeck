@@ -56,10 +56,43 @@ test('a parked crew shows what it waits on, and an orphaned crew is a problem', 
 	const parked = page.locator('[data-ship="chandlery"] .job[data-state="parked"]');
 	await expect(parked).toContainText('Stock badges on product cards');
 	await expect(parked.locator('.tag.waits')).toContainText('waiting on job-store-11');
+	await expect(parked.locator('.wait-detail')).toHaveText(
+		'waiting for the cart layout to land · behind job-store-11 on chandlery'
+	);
 
 	const orphaned = page.locator('[data-ship="analytics"] .job[data-state="orphaned"]');
 	await expect(orphaned).toContainText('orphaned');
 	await expect(orphaned).toHaveClass(/orphaned/);
+});
+
+test("the captain's desk and a stowed machine are badged, and a stowed one says new jobs are held", async ({
+	page
+}) => {
+	await openFleet(page);
+
+	const atlas = page.locator('section.machine', { has: page.getByText('atlas', { exact: true }) });
+	await expect(atlas.locator('.role', { hasText: "captain's desk" })).toHaveCount(1);
+	await expect(atlas.locator('.role', { hasText: 'stowed' })).toHaveCount(0);
+
+	const boreas = page.locator('section.machine', {
+		has: page.getByText('boreas', { exact: true })
+	});
+	await expect(boreas.locator('.role', { hasText: 'stowed' })).toHaveCount(1);
+	await expect(boreas.locator('.role', { hasText: "captain's desk" })).toHaveCount(0);
+	await expect(boreas).toContainText('new jobs are held on this machine');
+});
+
+test('a refresh that finds a machine unchanged keeps its ships and routes', async ({ page }) => {
+	await openFleet(page);
+	const atlas = page.locator('section.machine', { has: page.getByText('atlas', { exact: true }) });
+	await expect(atlas.locator('[data-ship="billing"]')).toHaveCount(1);
+	await expect(atlas).toContainText('free-pool');
+
+	await page.getByRole('button', { name: 'Refresh fleet' }).click();
+	await expect(page.getByRole('button', { name: 'Refresh fleet' })).toBeEnabled();
+	await expect(atlas.locator('[data-ship="billing"] .job')).toHaveCount(2);
+	await expect(atlas.locator('[data-ship="chandlery"]')).toHaveCount(1);
+	await expect(atlas).toContainText('free-pool');
 });
 
 test('a ship with unknown presence is not counted as awake', async ({ page }) => {

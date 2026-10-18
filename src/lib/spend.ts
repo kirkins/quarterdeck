@@ -6,6 +6,7 @@
 import { formatSpan } from '#lib/time.ts';
 import { addUsage, GROUPINGS, type Grouping } from '#lib/usage.ts';
 import type {
+	FleetAllowance,
 	FleetSnapshot,
 	RouteConfig,
 	RoutesConfig,
@@ -84,6 +85,10 @@ export interface RouteStateView {
 	/** Absolute time the route clears, for a title attribute; null when it is not known. */
 	clearsAt: number | null;
 	lastError: string | null;
+	/** The model route Privateer names for this route, as its identity; null when not reported. */
+	identity: string | null;
+	/** "allowance: window 40% used · week 87% used"; null when no share is reported. */
+	allowance: string | null;
 }
 
 export interface RouteRow {
@@ -111,6 +116,24 @@ function describe(
 	if (kind === 'available' || kind === 'idle' || until === null || until <= now) return pretty;
 	const verb = kind === 'capped' ? 'resets' : 'back';
 	return `${pretty}, ${verb} in ${formatSpan(until - now)}`;
+}
+
+/**
+ * A route's allowance on one machine. Its shares are fractions from 0 to 1, shown as
+ * percents; a window or week that has an end time says when it resets.
+ */
+export function allowanceLabel(allowance: FleetAllowance, now: number): string | null {
+	const parts: string[] = [];
+	const windows = [
+		['window', allowance.window_used, allowance.window_ends_ms],
+		['week', allowance.week_used, allowance.weekly_ends_ms]
+	] as const;
+	for (const [window, used, ends] of windows) {
+		if (used === null) continue;
+		const reset = ends !== null && ends > now ? `, resets in ${formatSpan(ends - now)}` : '';
+		parts.push(`${window} ${Math.round(used * 100)}% used${reset}`);
+	}
+	return parts.length > 0 ? `allowance: ${parts.join(' · ')}` : null;
 }
 
 function stateKind(state: string | null): RouteStateView['kind'] {
@@ -169,6 +192,7 @@ export function buildRoutes(
 			const until = route.until_ms;
 			if (kind === 'backing_off' || kind === 'capped') row.throttled = true;
 			if (route.allowance) allowanceReported.add(route.name);
+			const allowance = route.allowance ? allowanceLabel(route.allowance, now) : null;
 			// A route's cost comes from the fleet when routes.show is not offered.
 			if (row.cost === 'unknown') {
 				row.cost = costClass(route.cost);
@@ -179,7 +203,9 @@ export function buildRoutes(
 				kind,
 				label: describe(route.state, until, now, kind),
 				clearsAt: until !== null && until > now ? until : null,
-				lastError: route.error
+				lastError: route.error,
+				identity: route.route,
+				allowance
 			});
 		}
 	}
@@ -188,7 +214,7 @@ export function buildRoutes(
 	for (const route of config?.routes ?? []) rowFor(route.name);
 
 	for (const row of byName.values()) {
-		// Privateer's allowance numbers carry no unit it names, so they are not shown as a budget.
+		// A plan with no allowance reported says so; one with an allowance shows it on each machine.
 		if (row.cost === 'plan' && !allowanceReported.has(row.name))
 			row.budget = 'Plan allowance: not reported';
 		if (row.cost === 'credits') row.budget = 'Credit balance: not reported';
