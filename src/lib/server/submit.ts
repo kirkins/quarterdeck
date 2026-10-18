@@ -5,7 +5,8 @@
  * the two pages cannot disagree about what an action does.
  */
 import { askKey, toQuestion, type Answered, type MailItem } from '#lib/decision.ts';
-import { buildReply, type AnswerInput } from './answer.ts';
+import { reportOf, type Annotation } from '#lib/report.ts';
+import { buildReply, type AnswerInput, type ReplyArgs } from './answer.ts';
 import { getPortal, invalidateItems, loadItems } from './app.ts';
 import { buildDismiss } from './dismiss.ts';
 import { sendDismiss, sendReply } from './source.ts';
@@ -123,6 +124,44 @@ export function submitDismiss(
 		return {
 			record: { dismissed: true, ...(built.note && { text: built.note }) },
 			run: () => sendDismiss(source, config, built.args)
+		};
+	});
+}
+
+/** The comments on one report, and an optional note, sent as one reply. */
+export interface ReportInput {
+	annotations: Annotation[];
+	note: string | null;
+}
+
+/**
+ * Send a report's comments as one `captain.reply`. The body names how many
+ * comments there are and carries the captain's note, if any. A report can be
+ * sent once: its record in the answers map is what says so.
+ */
+export function submitAnnotations(
+	ref: AskRef,
+	input: ReportInput,
+	refuse: Refuse
+): Promise<SubmitResult> {
+	const { source, answers, config } = getPortal();
+	return act(ref, refuse, (item) => {
+		const key = askKey(item.from, item.id);
+		if (answers.has(key)) return { error: 'This ask has already been answered or dismissed.' };
+		const reported = reportOf(item.payload);
+		if (!reported || !reported.ok) return { error: 'This ask has no report to comment on.' };
+		const { annotations, note } = input;
+		if (annotations.length === 0 && !note) {
+			return { error: 'Add a comment or a note first.' };
+		}
+		const count = annotations.length;
+		const summary =
+			count === 0 ? '' : `${count} comment${count === 1 ? '' : 's'} on ${reported.value.title}`;
+		const body = [summary, note ?? ''].filter((part) => part !== '').join('\n\n');
+		const args: ReplyArgs = { id: item.id, body, payload: { annotations } };
+		return {
+			record: { text: body },
+			run: () => sendReply(source, config, args)
 		};
 	});
 }

@@ -8,6 +8,7 @@ import {
 	CliSource,
 	FixtureSource,
 	isUnknownCommand,
+	parseFetched,
 	rebaseFixture,
 	sendDismiss,
 	sendReply,
@@ -168,7 +169,8 @@ describe('sendReply', () => {
 			write: vi.fn(async () => ({ id: 'r' })),
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
-			usage: vi.fn()
+			usage: vi.fn(),
+			report: vi.fn()
 		};
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
@@ -220,7 +222,8 @@ describe('sendDismiss', () => {
 			write: vi.fn(),
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
-			usage: vi.fn()
+			usage: vi.fn(),
+			report: vi.fn()
 		};
 		const log = vi.fn();
 		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
@@ -236,7 +239,8 @@ describe('sendDismiss', () => {
 			write: vi.fn(async () => ({ ok: true })),
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
-			usage: vi.fn()
+			usage: vi.fn(),
+			report: vi.fn()
 		};
 		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
 			sent: true,
@@ -428,5 +432,46 @@ describe('spend reads (routes.show, usage.summary)', () => {
 		expect(await source.usage({ since_ms: NOW, group_by: 'route' })).toEqual({
 			status: 'unsupported'
 		});
+	});
+});
+
+describe('reports by id', () => {
+	it('reads report.get at the top level or under report, and checks its format and size', () => {
+		expect(parseFetched({ format: 'html', content: '<p>x</p>' }, 'r')).toEqual({
+			format: 'html',
+			content: '<p>x</p>'
+		});
+		expect(parseFetched({ ok: true, report: { format: 'markdown', content: '# x' } }, 'r')).toEqual(
+			{
+				format: 'markdown',
+				content: '# x'
+			}
+		);
+		expect(() => parseFetched({ format: 'pdf', content: 'x' }, 'r')).toThrow(/format/);
+		expect(() => parseFetched({ format: 'html' }, 'r')).toThrow(/content/);
+		expect(() =>
+			parseFetched({ format: 'html', content: 'a'.repeat(256 * 1024 + 1) }, 'r')
+		).toThrow(/larger/);
+	});
+
+	it('CliSource asks report.get for the id', async () => {
+		const run = vi.fn(async () => ({ format: 'markdown', content: 'x' }));
+		const source = new CliSource(run as never);
+		await expect(source.report('r-7')).resolves.toEqual({ format: 'markdown', content: 'x' });
+		expect(run).toHaveBeenCalledWith('report.get', { id: 'r-7' });
+	});
+
+	it('FixtureSource reads the report from the fixtures, and says when it is missing', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'qd-report-'));
+		await writeFile(
+			path.join(dir, 'report.get.json'),
+			JSON.stringify({ reports: { 'r-7': { format: 'html', content: '<h1>Audit</h1>' } } })
+		);
+		const source = new FixtureSource(dir, () => NOW);
+		await expect(source.report('r-7')).resolves.toEqual({
+			format: 'html',
+			content: '<h1>Audit</h1>'
+		});
+		await expect(source.report('nope')).rejects.toThrow(/not in the fixtures/);
 	});
 });

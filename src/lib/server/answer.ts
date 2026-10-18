@@ -3,6 +3,7 @@
  * The ask's id is the only routing; Privateer finds the ask and its ship.
  */
 import type { Answered, Question } from '#lib/decision.ts';
+import type { Annotation } from '#lib/report.ts';
 
 /** Longest free-text answer or note we will send. */
 /** Privateer accepts answer text up to 4096 characters (PR 219). */
@@ -18,11 +19,11 @@ export interface ReplyAnswer {
 	text?: string;
 }
 
-/** Arguments for `privateer captain.reply`. */
+/** Arguments for `privateer captain.reply`: an answer to a decision, or a report's comments. */
 export interface ReplyArgs {
 	id: string;
 	body: string;
-	payload: { answer: ReplyAnswer };
+	payload: { answer?: ReplyAnswer; annotations?: Annotation[] };
 }
 
 export type BuildResult =

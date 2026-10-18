@@ -5,6 +5,7 @@
  * This module is shared by server and browser code, so it must stay free of
  * Node APIs.
  */
+import { reportOf } from '#lib/report.ts';
 
 /** Limits from the agreed schema. */
 export const LIMITS = {
@@ -216,6 +217,8 @@ export interface Answered {
 
 /** One thing the captain can answer: one mail item. */
 export interface Question {
+	/** The title of the report this ask carries (payload.report), or null. */
+	report: string | null;
 	/** The asking mail's id; the reply's correlation. */
 	id: string;
 	from: string;
@@ -306,6 +309,12 @@ export function splitBody(body: string | null | undefined): {
 }
 
 /** Turn one mail item into a question, never throwing on malformed input. */
+/** The title of a payload's report, when it has a valid one. */
+export function reportTitle(payload: unknown): string | null {
+	const reported = reportOf(payload);
+	return reported?.ok ? reported.value.title : null;
+}
+
 export function toQuestion(item: MailItem, now: number): Question {
 	const payload = isRecord(item.payload) ? item.payload : {};
 	const asked_ms =
@@ -317,7 +326,8 @@ export function toQuestion(item: MailItem, now: number): Question {
 		hands_on: handsOnText(item.hands_on),
 		deadline_ms: typeof item.deadline_ms === 'number' ? item.deadline_ms : null,
 		asked_ms,
-		answered: null
+		answered: null,
+		report: reportTitle(item.payload)
 	};
 
 	if ('decision' in payload) {
