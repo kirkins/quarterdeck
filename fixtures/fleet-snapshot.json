@@ -8,13 +8,20 @@
 			"changed_ms": 1792299996000,
 			"routes": [
 				{
-					"name": "primary",
-					"state": "available"
+					"name": "free-pool",
+					"harness": "tidewater",
+					"model": "small-free",
+					"cost": "free",
+					"state": "backing_off",
+					"until_ms": 1792300540000,
+					"last_error": "Upstream answered 429: too many requests this minute"
 				},
 				{
-					"name": "overflow",
-					"state": "backing_off",
-					"until_ms": 1792300540000
+					"name": "plan-main",
+					"harness": "tidewater",
+					"model": "large",
+					"cost": "plan",
+					"state": "available"
 				}
 			],
 			"ships": [
@@ -76,7 +83,20 @@
 			"changed_ms": 1792299990000,
 			"routes": [
 				{
-					"name": "primary",
+					"name": "plan-main",
+					"harness": "tidewater",
+					"model": "large",
+					"cost": "plan",
+					"state": "capped",
+					"until_ms": 1792307800000,
+					"resets_at": 1792307800000,
+					"last_error": "Weekly allowance used; shared with the captain"
+				},
+				{
+					"name": "credits-reserve",
+					"harness": "ferry",
+					"model": "large",
+					"cost": "credits",
 					"state": "available"
 				}
 			],

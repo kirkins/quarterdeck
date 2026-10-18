@@ -5,7 +5,18 @@
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { assemble, parseSnapshot, type FleetSnapshot, type Waiting } from '#lib/shapes.ts';
+import {
+	assemble,
+	parseRoutesShow,
+	parseSnapshot,
+	parseUsageRecords,
+	parseUsageSummary,
+	type FleetSnapshot,
+	type RoutesConfig,
+	type UsageSummary,
+	type Waiting
+} from '#lib/shapes.ts';
+import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
 import type { ReplyArgs } from './answer.ts';
 import type { Config } from './config.ts';
 import type { DismissArgs } from './dismiss.ts';
@@ -32,6 +43,10 @@ export interface Source {
 	write(command: WriteCommand, args: ReplyArgs | DismissArgs): Promise<unknown>;
 	/** The fleet across machines (`fleet.snapshot`), read-only. */
 	snapshot(): Promise<FleetRead>;
+	/** Each route's configuration and try order (`routes.show`), read-only. */
+	routesShow(): Promise<Read<RoutesConfig>>;
+	/** Token totals across the fleet for a period (`usage.summary`), read-only. */
+	usage(query: UsageQuery): Promise<Read<UsageSummary>>;
 }
 
 /**
@@ -39,6 +54,9 @@ export interface Source {
  * is a state to show calmly, not an error.
  */
 export type FleetRead = { status: 'ok'; snapshot: FleetSnapshot } | { status: 'unsupported' };
+
+/** A read that an older Privateer may not offer, the same way as FleetRead. */
+export type Read<T> = { status: 'ok'; value: T } | { status: 'unsupported' };
 
 /**
  * An older Privateer refuses a command it does not know. Its CLI says so on
@@ -94,11 +112,34 @@ export class CliSource implements Source {
 			throw error;
 		}
 	}
+
+	async routesShow(): Promise<Read<RoutesConfig>> {
+		try {
+			return { status: 'ok', value: parseRoutesShow(await this.#run('routes.show', {})) };
+		} catch (error) {
+			if (isUnknownCommand(error)) return { status: 'unsupported' };
+			throw error;
+		}
+	}
+
+	async usage(query: UsageQuery): Promise<Read<UsageSummary>> {
+		try {
+			return {
+				status: 'ok',
+				value: parseUsageSummary(await this.#run('usage.summary', { ...query }))
+			};
+		} catch (error) {
+			if (isUnknownCommand(error)) return { status: 'unsupported' };
+			throw error;
+		}
+	}
 }
 
 /** Fixture files, named after the command whose output they stand in for. */
 export const FIXTURE_FILES = ['captain.waiting.json', 'runtime.needs.json'] as const;
 export const FLEET_FIXTURE = 'fleet-snapshot.json';
+export const ROUTES_FIXTURE = 'routes-show.json';
+export const USAGE_FIXTURE = 'usage-records.json';
 
 /** Keys that are derived when read, never shifted with the fixture clock. */
 const DERIVED_KEYS = new Set(['age_ms', 'waited_ms']);
@@ -116,7 +157,10 @@ export function rebaseFixture(value: unknown, fixtureNow: number, now: number): 
 		if (typeof node !== 'object' || node === null) return node;
 		const out: Record<string, unknown> = {};
 		for (const [key, child] of Object.entries(node)) {
-			const isTime = key.endsWith('_ms') && !DERIVED_KEYS.has(key) && key !== 'fixture_now_ms';
+			const isTime =
+				(key.endsWith('_ms') || key === 'resets_at') &&
+				!DERIVED_KEYS.has(key) &&
+				key !== 'fixture_now_ms';
 			out[key] = isTime && typeof child === 'number' ? child + delta : shift(child);
 		}
 		return out;
@@ -163,6 +207,18 @@ export class FixtureSource implements Source {
 		return raw === null
 			? { status: 'unsupported' }
 			: { status: 'ok', snapshot: parseSnapshot(raw) };
+	}
+
+	async routesShow(): Promise<Read<RoutesConfig>> {
+		const raw = await this.#read(ROUTES_FIXTURE);
+		return raw === null ? { status: 'unsupported' } : { status: 'ok', value: parseRoutesShow(raw) };
+	}
+
+	/** Records are grouped here, the way usage.summary would group them live. */
+	async usage(query: UsageQuery): Promise<Read<UsageSummary>> {
+		const raw = await this.#read(USAGE_FIXTURE);
+		if (raw === null) return { status: 'unsupported' };
+		return { status: 'ok', value: summarizeRecords(parseUsageRecords(raw), query) };
 	}
 }
 

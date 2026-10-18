@@ -180,12 +180,50 @@ describe('formatUpdated', () => {
 
 describe('routeLabel', () => {
 	it('shows the state, and how long until a backing-off route clears', () => {
-		expect(routeLabel({ name: 'primary', state: 'available', until_ms: null }, NOW)).toBe(
-			'available'
-		);
 		expect(
-			routeLabel({ name: 'overflow', state: 'backing_off', until_ms: NOW + 9 * MIN }, NOW)
+			routeLabel(
+				{
+					name: 'primary',
+					harness: null,
+					model: null,
+					cost: null,
+					state: 'available',
+					until_ms: null,
+					resets_at: null,
+					last_error: null
+				},
+				NOW
+			)
+		).toBe('available');
+		expect(
+			routeLabel(
+				{
+					name: 'overflow',
+					harness: null,
+					model: null,
+					cost: null,
+					state: 'backing_off',
+					until_ms: NOW + 9 * MIN,
+					resets_at: null,
+					last_error: null
+				},
+				NOW
+			)
 		).toBe('backing off · 9m left');
-		expect(routeLabel({ name: 'x', state: 'capped', until_ms: NOW - MIN }, NOW)).toBe('capped');
+		expect(
+			routeLabel(
+				{
+					name: 'x',
+					harness: null,
+					model: null,
+					cost: null,
+					state: 'capped',
+					until_ms: NOW - MIN,
+					resets_at: null,
+					last_error: null
+				},
+				NOW
+			)
+		).toBe('capped');
 	});
 });

@@ -1,0 +1,29 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"routes": {
+		"free-pool": {
+			"cost": "free",
+			"note": "Small free model pool. Good for scouting and summaries; first to back off.",
+			"options": ["--small"],
+			"manifest": "routes/free-pool.toml"
+		},
+		"plan-main": {
+			"cost": "plan",
+			"note": "Main subscription plan. Its weekly allowance is shared with the captain’s own use.",
+			"options": ["--large"],
+			"manifest": "routes/plan-main.toml",
+			"allowance_resets_utc": "Mon 00:00"
+		},
+		"credits-reserve": {
+			"cost": "credits",
+			"note": "Prepaid credits. Used only when the plans are capped.",
+			"options": ["--large"],
+			"manifest": "routes/credits-reserve.toml"
+		}
+	},
+	"order": {
+		"crew": ["free-pool", "plan-main", "credits-reserve"],
+		"errand": ["free-pool", "credits-reserve"],
+		"first_mate": ["plan-main", "free-pool"]
+	}
+}

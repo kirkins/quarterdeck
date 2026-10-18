@@ -50,6 +50,14 @@
 						Fleet
 					</a>
 				</li>
+				<li>
+					<a
+						href={resolve('/spend')}
+						aria-current={page.url.pathname.startsWith('/spend') ? 'page' : undefined}
+					>
+						Spend
+					</a>
+				</li>
 			</ul>
 		</nav>
 		<div class="tools">
