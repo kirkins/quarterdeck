@@ -116,6 +116,29 @@ describe('parseRuntimeNeeds', () => {
 		});
 	});
 
+	it('takes the message kind from mail_kind, and the step from needs_hands', () => {
+		const need = (extra: Record<string, unknown>) => ({
+			id: 'o:mail:m-9',
+			source: 'mail',
+			mail_id: 'm-9',
+			kind: 'decision',
+			ship: 'billing',
+			question: 'Rotate the key?',
+			...extra
+		});
+		const read = (extra: Record<string, unknown>) =>
+			parseRuntimeNeeds({ available: true, items: [need(extra)] }, NOW).items[0];
+
+		expect(read({ mail_kind: 'request' }).kind).toBe('request');
+		expect(read({ mail_kind: 'decision' }).kind).toBe('decision');
+		expect(read({}).kind).toBe('decision');
+		expect(read({ needs_hands: { step: 'run rotate-key' } }).hands_on).toBe('run rotate-key');
+		expect(read({ needs_hands: 'run rotate-key' }).hands_on).toBe('run rotate-key');
+		expect(read({ needs_hands: true }).hands_on).toBe('Needs your hands; see the message.');
+		expect(read({ needs_hands: null }).hands_on).toBeNull();
+		expect(read({}).hands_on).toBeNull();
+	});
+
 	it('reads urgency, deadline, asked time and mail id that Privateer now sends', () => {
 		const { items } = parseRuntimeNeeds(
 			{

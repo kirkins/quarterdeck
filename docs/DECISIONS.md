@@ -110,7 +110,7 @@ Wording comes from one module (`src/lib/dismiss.ts`): **Dismiss** for requests, 
 
 Privateer finds the open ask across this machine's homes, and over the gateway for linked machines. So the portal needs only one `--home` (any) and the item id. The earlier question of a per-home `--home` or `captain.relay` is answered: neither is needed here. Live answering and dismissing stay off until Privateer's commands land.
 
-**Still open for Privateer:** a mail need's `kind` in runtime.needs may now be `request`, `notice` or `report` as well as `decision` and `approval`. Quarterdeck reads it that way until Privateer confirms the names.
+**Confirmed by Privateer (its PR 231):** a mail need's message kind is in `mail_kind` (`request` or `decision`); `kind` keeps meaning `approval`, `decision` or `blocker`. Mail needs also carry `needs_hands`, read as the hands-on step. `captain.reply {id, body?, payload?}` and `captain.dismiss {id, note?}` exist as built here, operator-only, with `id` an exact id or a unique prefix of at least four characters; reply refuses production approvals. Older Privateer without `mail_kind` still falls back to `kind`.
 
 **Newer runtime.needs fields are optional.** `urgency`, `deadline_ms`, `asked_ms` and `mail_id` are read when present. Older Privateer sends none of them, so those asks sort as normal urgency with no deadline, and captain.waiting still supplies them when it lists the same ask.
 
