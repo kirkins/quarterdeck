@@ -88,6 +88,9 @@ pub struct Connection {
 pub struct Screen {
     pub ship: String,
     pub revision: u64,
+    /// The screen as read, to tell whether it changed: some hosts report
+    /// no revision.
+    pub raw: String,
     pub agent_status: String,
     pub lines: Vec<Vec<data::ansi::Run>>,
     /// Why there is no screen: no live session, or an older Privateer.
@@ -315,30 +318,31 @@ impl Connection {
                 let screen = match result {
                     Ok(read) => {
                         let revision = read["revision"].as_u64().unwrap_or(0);
-                        // An unchanged screen is not drawn again.
+                        let raw = read["text"].as_str().unwrap_or_default();
+                        let status =
+                            read["agent_status"].as_str().unwrap_or("unknown");
+                        // An unchanged screen is not read into lines again.
                         if let Some(current) = &self.screen
                             && current.ship == ship
                             && current.error.is_none()
-                            && current.revision == revision
+                            && current.raw == raw
+                            && current.agent_status == status
                         {
                             return Task::none();
                         }
                         Screen {
                             ship,
                             revision,
-                            agent_status: read["agent_status"]
-                                .as_str()
-                                .unwrap_or("unknown")
-                                .to_owned(),
-                            lines: data::ansi::parse(
-                                read["text"].as_str().unwrap_or_default(),
-                            ),
+                            raw: raw.to_owned(),
+                            agent_status: status.to_owned(),
+                            lines: data::ansi::parse(raw),
                             error: None,
                         }
                     }
                     Err(error) => Screen {
                         ship,
                         revision: 0,
+                        raw: String::new(),
                         agent_status: "unknown".into(),
                         lines: Vec::new(),
                         error: Some(match &error {
