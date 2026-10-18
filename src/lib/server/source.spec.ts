@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { MailSendArgs } from './answer.ts';
+import type { ReplyArgs } from './answer.ts';
 import { buildDismiss } from './dismiss.ts';
 import {
 	CliSource,
@@ -16,11 +16,8 @@ import {
 const NOW = 1_800_000_000_000;
 const H = 3_600_000;
 
-const args: MailSendArgs = {
-	from: 'captain',
-	to: 'billing',
-	kind: 'reply',
-	correlation: 'mail-1',
+const args: ReplyArgs = {
+	id: 'mail-1',
 	body: 'Yes',
 	payload: { answer: { option_id: 'yes' } }
 };
@@ -77,11 +74,11 @@ describe('CliSource', () => {
 		expect(a?.urgency).toBe('high');
 	});
 
-	it('writes mail.send and captain.dismiss through the one write path', async () => {
+	it('writes captain.reply and captain.dismiss through the one write path', async () => {
 		const run = vi.fn(async () => ({ id: 'reply-1' }));
 		const source = new CliSource(run as never);
-		await source.write('mail.send', args);
-		expect(run).toHaveBeenLastCalledWith('mail.send', args);
+		await source.write('captain.reply', args);
+		expect(run).toHaveBeenLastCalledWith('captain.reply', args);
 		await source.write('captain.dismiss', { id: 'a', note: 'Not needed' });
 		expect(run).toHaveBeenLastCalledWith('captain.dismiss', { id: 'a', note: 'Not needed' });
 	});
@@ -172,12 +169,12 @@ describe('sendReply', () => {
 		const log = vi.fn();
 		await expect(sendReply(s, config, args, log)).resolves.toEqual({ sent: false });
 		expect(s.write).not.toHaveBeenCalled();
-		expect(log.mock.calls[0][0]).toContain(`mail.send ${JSON.stringify(args)}`);
+		expect(log.mock.calls[0][0]).toContain(`captain.reply ${JSON.stringify(args)}`);
 		expect(JSON.parse(log.mock.calls[1][0].replace('[quarterdeck] would run: ', ''))).toEqual([
 			'/opt/privateer',
 			'--home',
 			'/srv/home',
-			'mail.send',
+			'captain.reply',
 			'--json',
 			JSON.stringify(args)
 		]);
@@ -199,7 +196,7 @@ describe('sendReply', () => {
 			sent: true,
 			result: { id: 'r' }
 		});
-		expect(s.write).toHaveBeenCalledWith('mail.send', args);
+		expect(s.write).toHaveBeenCalledWith('captain.reply', args);
 	});
 });
 

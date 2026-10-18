@@ -6,13 +6,13 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assemble, type Waiting } from '#lib/shapes.ts';
-import type { MailSendArgs } from './answer.ts';
+import type { ReplyArgs } from './answer.ts';
 import type { Config } from './config.ts';
 import type { DismissArgs } from './dismiss.ts';
 import { createRunner, privateerArgv, type ExecFile, type Runner } from './privateer.ts';
 
 /** The privateer commands Quarterdeck writes. Everything else is a read. */
-export type WriteCommand = 'mail.send' | 'captain.dismiss';
+export type WriteCommand = 'captain.reply' | 'captain.dismiss';
 
 export interface Source {
 	readonly mode: 'fixtures' | 'cli';
@@ -22,7 +22,7 @@ export interface Source {
 	 * Really run a write. Callers go through `sendWrite`, which decides whether to.
 	 * This is the only place privateer is written to.
 	 */
-	write(command: WriteCommand, args: MailSendArgs | DismissArgs): Promise<unknown>;
+	write(command: WriteCommand, args: ReplyArgs | DismissArgs): Promise<unknown>;
 }
 
 export class CliSource implements Source {
@@ -48,11 +48,11 @@ export class CliSource implements Source {
 	}
 
 	/**
-	 * The one function that writes to privateer. Where a write goes (which
-	 * --home, or captain.relay for an ask in another fleet home) is an open
-	 * question to Privateer; see docs/DECISIONS.md section 12 before changing it.
+	 * The one function that writes to privateer. Both commands take the ask's
+	 * item id and nothing else for routing: Privateer finds the ask across this
+	 * machine's homes and linked machines. See docs/DECISIONS.md section 12.
 	 */
-	write(command: WriteCommand, args: MailSendArgs | DismissArgs): Promise<unknown> {
+	write(command: WriteCommand, args: ReplyArgs | DismissArgs): Promise<unknown> {
 		return this.#run(command, { ...args });
 	}
 }
@@ -139,7 +139,7 @@ export async function sendWrite(
 	source: Source,
 	config: Pick<Config, 'allowSend' | 'privateerBin' | 'privateerHome'>,
 	command: WriteCommand,
-	args: MailSendArgs | DismissArgs,
+	args: ReplyArgs | DismissArgs,
 	log: (message: string) => void = console.info
 ): Promise<SendOutcome> {
 	if (source.mode === 'cli' && config.allowSend) {
@@ -156,14 +156,14 @@ export async function sendWrite(
 	return { sent: false };
 }
 
-/** Send a captain reply (`mail.send`). */
+/** Send a captain reply (`captain.reply`). */
 export function sendReply(
 	source: Source,
 	config: Pick<Config, 'allowSend' | 'privateerBin' | 'privateerHome'>,
-	args: MailSendArgs,
+	args: ReplyArgs,
 	log?: (message: string) => void
 ): Promise<SendOutcome> {
-	return sendWrite(source, config, 'mail.send', args, log);
+	return sendWrite(source, config, 'captain.reply', args, log);
 }
 
 /** Close an ask without a reply (`captain.dismiss`). */

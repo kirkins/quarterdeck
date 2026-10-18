@@ -57,23 +57,21 @@ The live source runs `captain.waiting` and `runtime.needs`. `captain.waiting` is
 
 Each card shows the question, why it matters, who is blocked, the options (what happens, cost, and the ship's recommendation, marked but never preselected), the deadline and the asking ship. Answering is two deliberate steps: pick an option, or choose **Write my own answer** and say it in your own words (always available, whatever the ship asked for). Add a note under a chosen option if you want, then press **Send answer**. **Cancel** or Escape backs out.
 
-The answer is a captain `mail.send`:
+The answer is a `captain.reply`, keyed by the ask's item id. Privateer finds the ask and its ship; Quarterdeck sends no `from`, `to`, `correlation` or `task_id`:
 
 ```json
 {
-	"from": "captain",
-	"to": "<asking ship>",
-	"kind": "reply",
-	"correlation": "<decision mail id>",
+	"id": "<item id of the ask>",
 	"body": "<chosen label> — <note>",
-	"payload": { "answer": { "option_id": "<id>", "text": "<note>" } },
-	"task_id": "<task of the ask, if any>"
+	"payload": { "answer": { "option_id": "<id>", "text": "<note>" } }
 }
 ```
 
-`text` alone is always accepted: the captain can answer any decision in their own words. `free_text_ok` on a decision is only a hint that the ship especially invites one. `task_id` is included only when the ask has one. Older asks that only carry `payload.choices` are shown as simpler cards and answered with `payload.answer.text`.
+`text` alone is always accepted: the captain can answer any decision in their own words. `free_text_ok` on a decision is only a hint that the ship especially invites one. Older asks that only carry `payload.choices` are shown as simpler cards and answered with `payload.answer.text`.
 
-In fixture mode, or without `QD_ALLOW_SEND=1`, the server logs the exact `mail.send` arguments and argv instead of running them, and marks the card answered in memory.
+Dismissing an ask is `captain.dismiss {id, note?}`. Live answering stays off until Privateer's `captain.reply` and `captain.dismiss` land.
+
+In fixture mode, or without `QD_ALLOW_SEND=1`, the server logs the exact `captain.reply` or `captain.dismiss` arguments and argv instead of running them, and marks the card answered in memory.
 
 ## Develop
 

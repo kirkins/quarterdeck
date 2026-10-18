@@ -35,7 +35,7 @@ The wrapper keys are now known from Privateer's source (see section 11), so the 
 
 ## 6. Sending is opt-in twice
 
-An answer is only really sent when `QD_SOURCE=cli` **and** `QD_ALLOW_SEND=1`. Otherwise the server logs the exact `mail.send` arguments and the argv it would run, and records the answer in memory so the card shows as answered. Tests pin `QD_SOURCE=fixtures` and `QD_ALLOW_SEND=0`.
+An answer is only really sent when `QD_SOURCE=cli` **and** `QD_ALLOW_SEND=1`. Otherwise the server logs the exact `captain.reply` or `captain.dismiss` arguments and the argv it would run, and records the answer in memory so the card shows as answered. Tests pin `QD_SOURCE=fixtures` and `QD_ALLOW_SEND=0`.
 
 ## 7. Answering: choose, then confirm
 
@@ -61,7 +61,7 @@ The captain can always answer in their own words, whatever the ship asked for. O
 
 `free_text_ok` is now only a hint that the ship especially invites a written answer. It changes the row's wording and nothing else. Privateer was asked to drop its gate on text answers, and until it does a live text-only reply can be refused; the card shows that refusal and keeps the text, so nothing is lost silently.
 
-The reply shapes are fixed: an option alone is `{option_id}`; an option with a note is `{option_id, text}`; an own answer is `{text}`, with the text as the body. Every reply carries `task_id` when the ask has one.
+The reply shapes are fixed: an option alone is `{option_id}`; an option with a note is `{option_id, text}`; an own answer is `{text}`, with the text as the body. The reply is `captain.reply {id, body, payload}` and carries no `task_id` (see section 12).
 
 ## 11. Triage: one item model, read from Privateer's real output
 
@@ -71,7 +71,7 @@ Triage and Decisions read the same data through `loadItems()` (`src/lib/server/a
 
 - `captain.waiting` returns `{now_ms, hands_on, waiting}`. Each entry is `{ship, asked_ms, age_ms, step, mail}`. `step` is the exact `payload.needs_hands.step` of a request to the captain, or null. `mail` is the mail record, with `kind` (`request` or `decision`), `request_kind`, `payload`, `urgency`, `deadline_ms` and `created_ms`.
 - `runtime.needs` returns `{available, items, next_after, unknown, reason?}`. Each item has `id`, `source` (`mail`, `job`, `schedule` or `workspace`), `kind` (`decision`, `approval` or `blocker`), `ship`, `task_id`, `correlation` (the mail id, for mail), `question`, `choices`, `artifact`, `environment`, `evidence`, `status`, `summary`, `created_ms` and `actions`. Mail items carry no urgency, deadline or mail kind.
-- Replies are `mail.send` with `kind: reply` and `correlation` set to the ask's id. A reply closes the ask.
+- Replies are `captain.reply {id, body, payload}`, keyed by the ask's id (see section 12). A reply closes the ask.
 - There is no per-item acknowledgement. `mail.ack` moves a mailbox's read cursor (`through_seq`) and closes nothing, and blocked items offer no action, so Triage has no ack action.
 
 **Merging.** A mail both queries report is one item. `captain.waiting`'s record wins, since it has the kind, payload, urgency and deadline. Ships choose their own mail ids, so items are keyed by sender and id.
@@ -99,10 +99,15 @@ Wording comes from one module (`src/lib/dismiss.ts`): **Dismiss** for requests, 
 
 **One key for an ask.** A ship picks its own mail ids, so an id alone is not unique. `askKey(from, id)` in `src/lib/decision.ts` is the key everywhere: the answered and dismissed map, the card and row dedup, the open row on Triage, the forms (they post `from` and `id`), and the lookup in `submit.ts`. An id that two ships both use is two asks.
 
-**One write path.** Every privateer write goes through `CliSource.write` in `src/lib/server/source.ts`, and the send guard (`sendWrite`) sits in front of it: nothing is written unless `QD_SOURCE=cli` and `QD_ALLOW_SEND=1`. Open questions for Privateer, deliberately not guessed here:
+**One write path.** Every privateer write goes through `CliSource.write` in `src/lib/server/source.ts`, and the send guard (`sendWrite`) sits in front of it: nothing is written unless `QD_SOURCE=cli` and `QD_ALLOW_SEND=1`.
 
-- Whether a reply or dismiss for an ask in another fleet home needs a different `--home`, or `captain.relay`. If so, change it in `CliSource.write` and nowhere else.
-- `captain.dismiss` takes only `id`. Since ids are only unique per ship, should it also carry `from`?
-- A mail need's `kind` in runtime.needs may now be `request`, `notice` or `report` as well as `decision` and `approval`. Quarterdeck reads it that way until Privateer's PR lands and confirms the names.
+**Agreed with Privateer (not built there yet).** Privateer adds two operator-only commands, and Quarterdeck builds against their names:
+
+- `captain.reply {id, body?, payload?}` answers an ask. `payload.answer` is the answer as before. Quarterdeck sends no `from`, `to`, `correlation` or `task_id`: a reply links through the ask's id, and a task id only means something in its own home.
+- `captain.dismiss {id, note?}` closes an ask without a reply. It takes the same route as `captain.reply`, and it takes no `from` either.
+
+Privateer finds the open ask across this machine's homes, and over the gateway for linked machines. So the portal needs only one `--home` (any) and the item id. The earlier question of a per-home `--home` or `captain.relay` is answered: neither is needed here. Live answering and dismissing stay off until Privateer's commands land.
+
+**Still open for Privateer:** a mail need's `kind` in runtime.needs may now be `request`, `notice` or `report` as well as `decision` and `approval`. Quarterdeck reads it that way until Privateer confirms the names.
 
 **Newer runtime.needs fields are optional.** `urgency`, `deadline_ms`, `asked_ms` and `mail_id` are read when present. Older Privateer sends none of them, so those asks sort as normal urgency with no deadline, and captain.waiting still supplies them when it lists the same ask.

@@ -1,6 +1,6 @@
 /**
- * Builds the captain's reply to a decision: a `mail.send` of kind "reply",
- * correlated to the asking mail and addressed to the asking ship.
+ * Builds the captain's reply to a decision: `captain.reply {id, body, payload}`.
+ * The ask's id is the only routing; Privateer finds the ask and its ship.
  */
 import type { Answered, Question } from '#lib/decision.ts';
 
@@ -17,19 +17,15 @@ export interface ReplyAnswer {
 	text?: string;
 }
 
-/** Arguments for `privateer mail.send`. */
-export interface MailSendArgs {
-	from: 'captain';
-	to: string;
-	kind: 'reply';
-	correlation: string;
+/** Arguments for `privateer captain.reply`. */
+export interface ReplyArgs {
+	id: string;
 	body: string;
 	payload: { answer: ReplyAnswer };
-	task_id?: string;
 }
 
 export type BuildResult =
-	| { ok: true; args: MailSendArgs; answered: Omit<Answered, 'at_ms' | 'sent'> }
+	| { ok: true; args: ReplyArgs; answered: Omit<Answered, 'at_ms' | 'sent'> }
 	| { ok: false; error: string };
 
 /**
@@ -64,15 +60,7 @@ export function buildReply(question: Question, input: AnswerInput): BuildResult 
 			? { ...(option && { option_id: option.id }), ...(text && { text }) }
 			: { text: body };
 
-	const args: MailSendArgs = {
-		from: 'captain',
-		to: question.from,
-		kind: 'reply',
-		correlation: question.id,
-		body,
-		payload: { answer }
-	};
-	if (question.task_id) args.task_id = question.task_id;
+	const args: ReplyArgs = { id: question.id, body, payload: { answer } };
 
 	return {
 		ok: true,
