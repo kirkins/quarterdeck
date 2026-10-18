@@ -26,7 +26,7 @@ test('lists everything owed in sections, most urgent first', async ({ page }) =>
 	const headings = page.locator('section.section h2');
 	await expect(headings).toHaveCount(3);
 	await expect(headings.nth(0)).toContainText('Needs you now');
-	await expect(headings.nth(1)).toContainText('Waiting on you');
+	await expect(headings.nth(1)).toContainText('Next up');
 	await expect(headings.nth(2)).toContainText('When you have a moment');
 
 	// Urgency high comes first in "Needs you now", whenever there is any high-urgency ask left.

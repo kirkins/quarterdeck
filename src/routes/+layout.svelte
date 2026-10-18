@@ -32,6 +32,9 @@
 
 	const open = $derived(typeof page.data.open === 'number' ? page.data.open : null);
 	const triage = $derived(typeof data.triage === 'number' ? data.triage : null);
+	const waiting = $derived(typeof data.waiting === 'number' ? data.waiting : 0);
+	/** The Feed's dot says what waits on the captain, and how many notices are unread. */
+	const feedCount = $derived(`${waiting} waiting on you, ${(triage ?? 0) - waiting} unread`);
 	const wide = $derived(WIDE.some((p) => page.url.pathname.startsWith(p)));
 	/** The login page stands alone: no navigation, nothing read from the fleet. */
 	const bare = $derived(page.route.id === '/login');
@@ -88,7 +91,7 @@
 								>
 								<span class="tab-label">{s.label}</span>
 								{#if s.path === '/feed' && triage}
-									<span class="dot" aria-label="{triage} waiting on you"></span>
+									<span class="dot" aria-label={feedCount}></span>
 								{:else if s.path === '/triage' && triage}
 									<span class="count count-brass" aria-label="{triage} owed to you">{triage}</span>
 								{:else if s.path === '/decisions' && open}

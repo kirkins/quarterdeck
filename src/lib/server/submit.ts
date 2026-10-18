@@ -6,7 +6,7 @@
  */
 import { askKey, toQuestion, type Answered, type MailItem } from '#lib/decision.ts';
 import { MAX_LIMIT as FIND_LIMIT } from '#lib/feed.ts';
-import { reportOf, type Annotation } from '#lib/report.ts';
+import { commentCount, reportOf, type Annotation } from '#lib/report.ts';
 import type { FeedEntry } from '#lib/shapes.ts';
 import { buildReply, type AnswerInput, type ReplyArgs } from './answer.ts';
 import { getPortal, invalidateItems, loadItems } from './app.ts';
@@ -186,8 +186,7 @@ export function submitAnnotations(
 			return { error: 'Add a comment or a note first.' };
 		}
 		const count = annotations.length;
-		const summary =
-			count === 0 ? '' : `${count} comment${count === 1 ? '' : 's'} on ${reported.value.title}`;
+		const summary = count === 0 ? '' : `${commentCount(count)} on ${reported.value.title}`;
 		const body = [summary, note ?? ''].filter((part) => part !== '').join('\n\n');
 		const args: ReplyArgs = { id: item.id, body, payload: { annotations } };
 		return {

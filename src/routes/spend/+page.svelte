@@ -217,7 +217,9 @@
 			<p class="callout callout-warn partial" data-machine={machine.name} role="note">
 				<Icon name="alert" size={16} />
 				<span>
-					{#if machine.included}
+					{#if machine.stale}
+						Partial: {machine.name}: {machine.problem} ({machine.asOf}).
+					{:else if machine.included}
 						Partial: {machine.name} only partly counted ({machine.problem}).
 					{:else}
 						Partial: {machine.name} not included ({machine.problem}{machine.asOf
@@ -258,6 +260,7 @@
 					<li data-machine={machine.name} data-included={machine.included}>
 						<span class="machine-name">{machine.name}</span>
 						{#if machine.asOf}<span class="machine-asof">{machine.asOf}</span>{/if}
+						{#if machine.stale}<span class="gap-tag">not up to date</span>{/if}
 						{#if !machine.included}<span class="gap-tag">not reached</span>{/if}
 					</li>
 				{/each}

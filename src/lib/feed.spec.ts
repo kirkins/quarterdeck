@@ -9,6 +9,7 @@ import {
 	applyLocalAnswers,
 	atBottom,
 	buildRows,
+	captainNoteOf,
 	commentsOf,
 	closedAtOf,
 	dayLabel,
@@ -691,5 +692,44 @@ describe('commentsOf', () => {
 		const plain = entry({ from: CAPTAIN, id: 'r-3', kind: 'reply', payload: {} });
 		const ship = entry({ from: 'analytics', id: 'a-9', payload: { annotations: [note] } });
 		expect(commentsOf([ask, plain, ship]).size).toBe(0);
+	});
+});
+
+describe('captainNoteOf', () => {
+	const note = { anchor: { quote: 'Audit' }, comment: 'Keep this' };
+	const reply = (body: string | null, annotations: unknown[] = [note]) =>
+		entry({
+			from: CAPTAIN,
+			to: 'analytics',
+			id: 'r-1',
+			kind: 'reply',
+			correlation: 'a-1',
+			body,
+			payload: { annotations }
+		});
+
+	it("is the captain's note past the generated comments line", () => {
+		expect(captainNoteOf(reply('1 comment on Audit\n\nCheck the totals again.'))).toBe(
+			'Check the totals again.'
+		);
+	});
+
+	it('is null when the body is only the generated line', () => {
+		expect(captainNoteOf(reply('2 comments on Audit', [note, note]))).toBeNull();
+	});
+
+	it('is null for an empty body', () => {
+		expect(captainNoteOf(reply(''))).toBeNull();
+		expect(captainNoteOf(reply(null))).toBeNull();
+	});
+
+	it('keeps a note that is several paragraphs long, as written', () => {
+		expect(captainNoteOf(reply('1 comment on Audit\n\nFirst.\n\nSecond.'))).toBe(
+			'First.\n\nSecond.'
+		);
+	});
+
+	it('keeps a body that does not open with the generated line, all of it', () => {
+		expect(captainNoteOf(reply('Thanks, both points stand.'))).toBe('Thanks, both points stand.');
 	});
 });

@@ -11,7 +11,7 @@ import {
 	type CardOption,
 	type MailItem
 } from '#lib/decision.ts';
-import { reportOf } from '#lib/report.ts';
+import { commentCount, reportOf } from '#lib/report.ts';
 import { formatAge } from '#lib/time.ts';
 import type { FeedEntry } from '#lib/shapes.ts';
 
@@ -571,10 +571,26 @@ export function commentsOf(entries: readonly FeedEntry[]): Map<string, string> {
 		const title =
 			titles.get(entryKey(entry)) ??
 			(entry.correlation ? titles.get(askKey(entry.to, entry.correlation)) : undefined);
-		const count = `${annotations.length} comment${annotations.length === 1 ? '' : 's'}`;
+		const count = commentCount(annotations.length);
 		out.set(entryKey(entry), title ? `${count} on ${title}` : count);
 	}
 	return out;
+}
+
+/**
+ * The captain's own note on a reply or notice that carries comments: its body
+ * past the "N comments on <title>" line the send path puts first. Null when
+ * there is no note. A body without that line is all note.
+ */
+export function captainNoteOf(entry: FeedEntry): string | null {
+	const body = entry.body?.trim() ?? '';
+	const annotations = entry.payload?.annotations;
+	const count = Array.isArray(annotations) ? annotations.length : 0;
+	const summary = `${commentCount(count)} on `;
+	if (!body.startsWith(summary)) return body || null;
+	const gap = body.indexOf('\n\n');
+	const note = gap === -1 ? '' : body.slice(gap + 2).trim();
+	return note || null;
 }
 
 /** A ship's mark: its initial and a colour that is the same for that name everywhere. */

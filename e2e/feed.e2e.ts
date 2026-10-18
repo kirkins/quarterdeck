@@ -13,12 +13,18 @@ async function openFeed(page: Page) {
 	await expect(page.getByRole('heading', { level: 1, name: 'Feed' })).toBeVisible();
 }
 
-/** Load older pages, as a captain scrolling up would, until the message is on the page. */
+/**
+ * Load older pages, as a captain scrolling up would, until the message is on the page.
+ * Each click waits for more messages to render. Waiting for a response registered
+ * before the click can hang: a page a scroll already asked for may land first.
+ */
 async function reveal(page: Page, message: Locator) {
 	for (let i = 0; i < 4 && (await message.count()) === 0; i++) {
-		const loaded = page.waitForResponse((r) => r.url().includes('/feed/data'));
+		const before = await page.locator('li.msg').count();
 		await page.getByRole('button', { name: 'Load older messages' }).click();
-		await loaded;
+		await expect
+			.poll(() => page.locator('li.msg').count(), { timeout: 10_000 })
+			.toBeGreaterThan(before);
 	}
 	await expect(message).toBeAttached();
 }
@@ -244,8 +250,10 @@ test('a captain reply with comments says how many, and the report it answers is 
 	const reply = page.locator('li.msg[data-entry="c-701"]');
 	await reveal(page, reply);
 	await expect(reply.locator('.comments')).toHaveText('2 comments on Onboarding guide, draft 2');
-	// The comments line stands for the body, which only repeats it.
-	await expect(reply.locator('.body')).toHaveCount(0);
+	// Under the comments line, the captain's own note shows; the summary line does not repeat.
+	await expect(reply.locator('.body')).toHaveText(
+		'Two changes before the tag, both in the comments.'
+	);
 
 	const report = page.locator('li.msg[data-entry="d-701"]');
 	await expect(

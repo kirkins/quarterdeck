@@ -14,14 +14,19 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	};
 	// The login page is the only page a visitor without a session reaches. It
 	// reads nothing from Privateer, not even the badge's count.
-	if (locals.auth === 'signed-out') return { ...base, triage: null };
+	if (locals.auth === 'signed-out') return { ...base, triage: null, waiting: null };
 	// The nav badge. If Privateer cannot be read, the badge is simply absent.
 	let triage: number | null;
+	let waiting: number | null;
 	try {
 		const { items } = await loadItems();
-		triage = buildTriage(items, Date.now(), answers).rows.length;
+		const { rows } = buildTriage(items, Date.now(), answers);
+		triage = rows.length;
+		// Notices and reports are unread, not waiting: the feed counts them the same way.
+		waiting = rows.filter((row) => row.kind !== 'notice').length;
 	} catch {
 		triage = null;
+		waiting = null;
 	}
-	return { ...base, triage };
+	return { ...base, triage, waiting };
 };

@@ -72,6 +72,11 @@ export function byteLength(value: string): number {
  * Read `payload.report`. Null when the item has no report at all; an error
  * when it has one that breaks the agreed shape or limits.
  */
+/** "1 comment" or "2 comments". The summary line a reply opens with starts with it. */
+export function commentCount(count: number): string {
+	return `${count} comment${count === 1 ? '' : 's'}`;
+}
+
 export function reportOf(payload: unknown): Checked<ReportRef> | null {
 	const raw = rec(rec(payload)?.report);
 	if (!raw) return null;
