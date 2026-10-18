@@ -42,7 +42,14 @@
 						{#if triage}<span class="count" aria-label="{triage} owed to you">{triage}</span>{/if}
 					</a>
 				</li>
-				<li><span class="soon" aria-disabled="true">Fleet <small>Soon</small></span></li>
+				<li>
+					<a
+						href={resolve('/fleet')}
+						aria-current={page.url.pathname.startsWith('/fleet') ? 'page' : undefined}
+					>
+						Fleet
+					</a>
+				</li>
 			</ul>
 		</nav>
 		<div class="tools">
@@ -134,8 +141,7 @@
 		gap: var(--s-1);
 		padding: 0 var(--s-2);
 	}
-	nav a,
-	nav .soon {
+	nav a {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
@@ -160,19 +166,6 @@
 		height: 2px;
 		border-radius: 2px;
 		background: var(--sea);
-	}
-	nav .soon {
-		color: var(--ink-3);
-		cursor: default;
-	}
-	nav small {
-		font-size: 0.6875rem;
-		font-weight: 600;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		padding: 1px 6px;
-		border-radius: 999px;
-		border: 1px solid var(--line-strong);
 	}
 	.count {
 		min-width: 1.5rem;
@@ -199,8 +192,7 @@
 		nav ul {
 			padding: 0;
 		}
-		nav a,
-		nav .soon {
+		nav a {
 			min-height: 64px;
 		}
 	}

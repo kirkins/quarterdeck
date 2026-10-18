@@ -186,3 +186,126 @@ export function assemble(captainWaiting: unknown, runtimeNeeds: unknown, now: nu
 	}
 	return { items: [...byKey.values()], unavailable: needs.unavailable };
 }
+
+/*
+ * The fleet map (PROVISIONAL). Privateer's `fleet.snapshot` is not out yet; this
+ * is the shape we build against, from its description. Every field is optional
+ * and extra fields are ignored, so a real snapshot that is richer still parses,
+ * and a poorer one renders with gaps rather than failing. Adjust it here, in
+ * parseSnapshot alone, when the Privateer PR lands. See docs/DECISIONS.md.
+ */
+
+/** A running crew job: a task's worker, with what it is doing now. */
+export interface FleetJob {
+	id: string;
+	task_id: string | null;
+	task_title: string | null;
+	/** The last crew.report line. */
+	doing_now: string | null;
+	started_ms: number | null;
+	heavy: boolean;
+	/** Why the job is not moving, e.g. "waiting for capacity". */
+	waits: string | null;
+}
+
+export interface FleetShip {
+	name: string;
+	scope: string | null;
+	/** "hosted", "asleep", or another presence Privateer reports. */
+	presence: string | null;
+	open_tasks: number;
+	jobs: FleetJob[];
+}
+
+export interface FleetRoute {
+	name: string;
+	state: string | null;
+	until_ms: number | null;
+}
+
+export interface FleetMachine {
+	name: string;
+	reachable: boolean;
+	/** When this machine's state last changed, as Privateer observed it. */
+	changed_ms: number | null;
+	ships: FleetShip[];
+	routes: FleetRoute[];
+}
+
+/** An item needing the captain, from runtime.needs, with the ship it belongs to. */
+export interface FleetNeed {
+	id: string;
+	ship: string;
+	kind: string | null;
+}
+
+export interface FleetSnapshot {
+	generated_ms: number | null;
+	machines: FleetMachine[];
+	needs: FleetNeed[];
+}
+
+/** Read `fleet.snapshot` tolerantly: missing fields become null, empty or zero; extras are ignored. */
+export function parseSnapshot(result: unknown): FleetSnapshot {
+	const root = rec(result);
+	return {
+		generated_ms: num(root?.generated_ms),
+		machines: list(root?.machines).flatMap((raw) => {
+			const machine = rec(raw);
+			const name = str(machine?.name);
+			return machine && name ? [parseMachine(name, machine)] : [];
+		}),
+		needs: list(root?.needs).flatMap((raw) => {
+			const need = rec(raw);
+			const id = str(need?.id);
+			const ship = str(need?.ship);
+			return need && id && ship ? [{ id, ship, kind: str(need.kind) }] : [];
+		})
+	};
+}
+
+function parseMachine(name: string, machine: Rec): FleetMachine {
+	return {
+		name,
+		reachable: machine.reachable === true,
+		changed_ms: num(machine.changed_ms),
+		ships: list(machine.ships).flatMap((raw) => {
+			const ship = rec(raw);
+			const shipName = str(ship?.name);
+			return ship && shipName ? [parseShip(shipName, ship)] : [];
+		}),
+		routes: list(machine.routes).flatMap((raw) => {
+			const route = rec(raw);
+			const routeName = str(route?.name);
+			return route && routeName
+				? [{ name: routeName, state: str(route.state), until_ms: num(route.until_ms) }]
+				: [];
+		})
+	};
+}
+
+function parseShip(name: string, ship: Rec): FleetShip {
+	return {
+		name,
+		scope: str(ship.scope),
+		presence: str(ship.presence),
+		open_tasks: num(ship.open_tasks) ?? 0,
+		jobs: list(ship.jobs).flatMap((raw) => {
+			const job = rec(raw);
+			const id = str(job?.id);
+			return job && id
+				? [
+						{
+							id,
+							task_id: str(job.task_id),
+							task_title: str(job.task_title),
+							doing_now: str(job.doing_now),
+							started_ms: num(job.started_ms),
+							heavy: job.heavy === true,
+							waits: str(job.waits)
+						}
+					]
+				: [];
+		})
+	};
+}

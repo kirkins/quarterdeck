@@ -5,11 +5,18 @@
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { assemble, type Waiting } from '#lib/shapes.ts';
+import { assemble, parseSnapshot, type FleetSnapshot, type Waiting } from '#lib/shapes.ts';
 import type { ReplyArgs } from './answer.ts';
 import type { Config } from './config.ts';
 import type { DismissArgs } from './dismiss.ts';
-import { createRunner, privateerArgv, type ExecFile, type Runner } from './privateer.ts';
+import {
+	createRunner,
+	PrivateerCommandError,
+	PrivateerExecError,
+	privateerArgv,
+	type ExecFile,
+	type Runner
+} from './privateer.ts';
 
 /** The privateer commands Quarterdeck writes. Everything else is a read. */
 export type WriteCommand = 'captain.reply' | 'captain.dismiss';
@@ -23,6 +30,29 @@ export interface Source {
 	 * This is the only place privateer is written to.
 	 */
 	write(command: WriteCommand, args: ReplyArgs | DismissArgs): Promise<unknown>;
+	/** The fleet across machines (`fleet.snapshot`), read-only. */
+	snapshot(): Promise<FleetRead>;
+}
+
+/**
+ * `unsupported` means this Privateer does not offer `fleet.snapshot` yet, which
+ * is a state to show calmly, not an error.
+ */
+export type FleetRead = { status: 'ok'; snapshot: FleetSnapshot } | { status: 'unsupported' };
+
+/**
+ * An older Privateer refuses a command it does not know. Its CLI says so on
+ * stderr (clap: "unrecognized subcommand") or as a JSON error. Anything else is
+ * a real failure and is rethrown.
+ */
+const UNKNOWN_COMMAND = /unknown (sub)?command|unrecognized subcommand|no such command/i;
+
+export function isUnknownCommand(error: unknown): boolean {
+	if (error instanceof PrivateerCommandError) return UNKNOWN_COMMAND.test(error.message);
+	if (error instanceof PrivateerExecError) {
+		return UNKNOWN_COMMAND.test(`${error.message}\n${error.stderr}`);
+	}
+	return false;
 }
 
 export class CliSource implements Source {
@@ -55,10 +85,20 @@ export class CliSource implements Source {
 	write(command: WriteCommand, args: ReplyArgs | DismissArgs): Promise<unknown> {
 		return this.#run(command, { ...args });
 	}
+
+	async snapshot(): Promise<FleetRead> {
+		try {
+			return { status: 'ok', snapshot: parseSnapshot(await this.#run('fleet.snapshot', {})) };
+		} catch (error) {
+			if (isUnknownCommand(error)) return { status: 'unsupported' };
+			throw error;
+		}
+	}
 }
 
 /** Fixture files, named after the command whose output they stand in for. */
 export const FIXTURE_FILES = ['captain.waiting.json', 'runtime.needs.json'] as const;
+export const FLEET_FIXTURE = 'fleet-snapshot.json';
 
 /** Keys that are derived when read, never shifted with the fixture clock. */
 const DERIVED_KEYS = new Set(['age_ms', 'waited_ms']);
@@ -116,6 +156,13 @@ export class FixtureSource implements Source {
 
 	write(): Promise<unknown> {
 		return Promise.reject(new Error('FixtureSource never writes to privateer'));
+	}
+
+	async snapshot(): Promise<FleetRead> {
+		const raw = await this.#read(FLEET_FIXTURE);
+		return raw === null
+			? { status: 'unsupported' }
+			: { status: 'ok', snapshot: parseSnapshot(raw) };
 	}
 }
 

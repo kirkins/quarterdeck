@@ -1,0 +1,180 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"generated_ms": 1792300000000,
+	"machines": [
+		{
+			"name": "atlas",
+			"reachable": true,
+			"changed_ms": 1792299996000,
+			"routes": [
+				{
+					"name": "primary",
+					"state": "available"
+				},
+				{
+					"name": "overflow",
+					"state": "backing_off",
+					"until_ms": 1792300540000
+				}
+			],
+			"ships": [
+				{
+					"name": "billing",
+					"scope": "Invoices, retries and dunning for paid plans",
+					"presence": "hosted",
+					"open_tasks": 3,
+					"jobs": [
+						{
+							"id": "job-billing-42",
+							"task_id": "billing-retries",
+							"task_title": "Retry policy for failed card payments",
+							"doing_now": "Replaying last month's declines against the draft policy",
+							"started_ms": 1792299280000,
+							"heavy": true,
+							"waits": "waiting for capacity"
+						},
+						{
+							"id": "job-billing-43",
+							"task_id": "billing-receipts",
+							"task_title": "Receipt email wording",
+							"doing_now": "Checking the tone against the style notes",
+							"started_ms": 1792299700000,
+							"heavy": false,
+							"waits": null
+						}
+					]
+				},
+				{
+					"name": "storefront",
+					"scope": "Catalogue pages, cart and checkout",
+					"presence": "hosted",
+					"open_tasks": 2,
+					"jobs": [
+						{
+							"id": "job-store-11",
+							"task_id": "cart-page",
+							"task_title": "New cart page layout",
+							"doing_now": "Running the checkout visual tests on the phone size",
+							"started_ms": 1792299520000,
+							"heavy": false,
+							"waits": null
+						}
+					]
+				},
+				{
+					"name": "docs-site",
+					"scope": "Public documentation and the changelog",
+					"presence": "asleep",
+					"open_tasks": 0,
+					"jobs": []
+				}
+			]
+		},
+		{
+			"name": "boreas",
+			"reachable": true,
+			"changed_ms": 1792299990000,
+			"routes": [
+				{
+					"name": "primary",
+					"state": "available"
+				}
+			],
+			"ships": [
+				{
+					"name": "search-index",
+					"scope": "Rebuilds the product search index nightly",
+					"presence": "hosted",
+					"open_tasks": 2,
+					"jobs": [
+						{
+							"id": "job-search-7",
+							"task_id": "index-rebuild",
+							"task_title": "Nightly index rebuild",
+							"doing_now": "Merging shard 4 of 6",
+							"started_ms": 1792298400000,
+							"heavy": true,
+							"waits": null
+						}
+					]
+				},
+				{
+					"name": "analytics",
+					"scope": "Weekly usage rollups for the dashboard",
+					"presence": "hosted",
+					"open_tasks": 1,
+					"jobs": [
+						{
+							"id": "job-ana-3",
+							"task_id": "weekly-rollup",
+							"task_title": "Weekly usage rollup",
+							"doing_now": "Counting active captains per fleet for last week",
+							"started_ms": 1792299100000,
+							"heavy": false,
+							"waits": null
+						}
+					]
+				},
+				{
+					"name": "ledger",
+					"scope": "Double-entry books and month-end close",
+					"presence": "asleep",
+					"open_tasks": 0,
+					"jobs": []
+				},
+				{
+					"name": "previews",
+					"scope": "Short-lived preview environments for pull requests",
+					"presence": "asleep",
+					"open_tasks": 0,
+					"jobs": []
+				}
+			]
+		},
+		{
+			"name": "calypso",
+			"reachable": false,
+			"changed_ms": 1792292800000,
+			"routes": [],
+			"ships": [
+				{
+					"name": "mobile-app",
+					"scope": "The iOS and Android shell",
+					"presence": null,
+					"open_tasks": 0,
+					"jobs": []
+				},
+				{
+					"name": "status-page",
+					"scope": "The public status page",
+					"presence": null,
+					"open_tasks": 0,
+					"jobs": []
+				}
+			]
+		}
+	],
+	"needs": [
+		{
+			"id": "m-billing-retries",
+			"ship": "billing",
+			"kind": "decision",
+			"source": "mail",
+			"question": "Which retry policy should failed card payments follow?"
+		},
+		{
+			"id": "m-search-reindex",
+			"ship": "search-index",
+			"kind": "blocker",
+			"source": "job",
+			"question": "The nightly rebuild is waiting for disk space."
+		},
+		{
+			"id": "m-storefront-deploy",
+			"ship": "storefront",
+			"kind": "approval",
+			"source": "mail",
+			"question": "Release the new cart page to all shoppers tonight?"
+		}
+	]
+}

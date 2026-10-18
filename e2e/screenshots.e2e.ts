@@ -156,3 +156,42 @@ test.describe('triage desktop', () => {
 		await page.screenshot({ path: `${dir}/triage-desktop.png` });
 	});
 });
+
+async function openFleet(page: Page, theme: 'light' | 'dark') {
+	await page.context().addCookies([
+		{
+			name: 'qd_theme',
+			value: theme,
+			url: test.info().project.use.baseURL ?? 'http://127.0.0.1:4173'
+		}
+	]);
+	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+	await page.goto('/fleet');
+	await expect(page.getByRole('heading', { level: 1, name: 'Fleet' })).toBeVisible();
+	await page.evaluate(() => document.fonts.ready);
+}
+
+test.describe('fleet phone', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true
+	});
+
+	for (const theme of ['light', 'dark'] as const) {
+		test(`fleet, ${theme}`, async ({ page }) => {
+			await openFleet(page, theme);
+			await page.screenshot({ path: `${dir}/fleet-phone-${theme}.png` });
+		});
+	}
+});
+
+test.describe('fleet desktop', () => {
+	test.use({ viewport: { width: 1280, height: 900 } });
+
+	test('fleet, light', async ({ page }) => {
+		await openFleet(page, 'light');
+		await page.screenshot({ path: `${dir}/fleet-desktop.png` });
+	});
+});
