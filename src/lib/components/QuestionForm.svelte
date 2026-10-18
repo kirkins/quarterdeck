@@ -16,6 +16,8 @@
 	import Blocked from './Blocked.svelte';
 	import Dismiss from './Dismiss.svelte';
 	import Icon from './Icon.svelte';
+	import { askKey } from '#lib/decision.ts';
+	import { resolve } from '$app/paths';
 
 	interface Props {
 		question: Question;
@@ -126,6 +128,17 @@
 	{/if}
 
 	<h2 id="{uid}-title" class:sub={index !== null}>{question.question}</h2>
+
+	{#if question.report}
+		<p class="report">
+			<a
+				class="open-report"
+				href={resolve('/report/[key]', { key: askKey(question.from, question.id) })}
+			>
+				<Icon name="doc" size={15} /> Open report: {question.report}
+			</a>
+		</p>
+	{/if}
 
 	{#if question.why}
 		<p class="why">{question.why}</p>
@@ -373,6 +386,21 @@
 		color: var(--ink-2);
 		text-wrap: pretty;
 		margin-top: calc(-1 * var(--s-2));
+	}
+	.report {
+		margin: 0;
+	}
+	.open-report {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--s-2);
+		min-height: var(--tap);
+		color: var(--sea-strong);
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.open-report:hover {
+		text-decoration: underline;
 	}
 
 	.hands {

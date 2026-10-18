@@ -17,7 +17,9 @@
 		link: 'M9 15 15 9M10.5 6.5l1.4-1.4a4 4 0 0 1 5.7 5.7l-1.4 1.4M13.5 17.5l-1.4 1.4a4 4 0 0 1-5.7-5.7l1.4-1.4',
 		compass: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM15.5 8.5l-2 5-5 2 2-5 5-2Z',
 		bell: 'M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16ZM10 20.5a2 2 0 0 0 4 0',
-		chevron: 'm7 10 5 5 5-5'
+		chevron: 'm7 10 5 5 5-5',
+		doc: 'M7 3h7l5 5v13H7zM14 3v5h5M9.5 13h5M9.5 17h5',
+		x: 'M6 6l12 12M18 6 6 18'
 	} as const;
 	export type IconName = keyof typeof paths;
 </script>
