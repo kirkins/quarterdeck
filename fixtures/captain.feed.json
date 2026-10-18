@@ -1,0 +1,1135 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"entries": [
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "b-101",
+			"created_ms": 1792042600000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "Can invoices show the customer tax ID?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "r-101",
+			"created_ms": 1792045000000,
+			"from": "captain",
+			"to": "billing",
+			"kind": "reply",
+			"correlation": "b-101",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Yes, after the March release.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "ops",
+			"id": "o-201",
+			"created_ms": 1792045600000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Nightly backup finished: 2.3 GB, 0 errors.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-301",
+			"created_ms": 1792048000000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "Launch the spring banner on Monday?",
+			"payload": {
+				"decision": {
+					"question": "Launch the spring banner on Monday?",
+					"options": [
+						{
+							"id": "all",
+							"label": "Everywhere",
+							"what_happens": "Home, category and product pages.",
+							"recommended": true
+						},
+						{
+							"id": "home",
+							"label": "Homepage only",
+							"what_happens": "Only the homepage, for a week."
+						},
+						{
+							"id": "wait",
+							"label": "Wait",
+							"what_happens": "Hold until the copy is approved."
+						}
+					],
+					"free_text_ok": true,
+					"why": "Marketing wants it live before the weekend traffic."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "r-301",
+			"created_ms": 1792049800000,
+			"from": "captain",
+			"to": "storefront",
+			"kind": "reply",
+			"correlation": "s-301",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Homepage only, for a week. Then we look again.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-401",
+			"created_ms": 1792051000000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "Which retention window for raw events?",
+			"payload": {
+				"choices": ["30 days", "90 days"]
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "r-401",
+			"created_ms": 1792052800000,
+			"from": "captain",
+			"to": "analytics",
+			"kind": "reply",
+			"correlation": "a-401",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "90 days",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "storefront",
+			"id": "x-501",
+			"created_ms": 1792054000000,
+			"from": "storefront",
+			"to": "billing",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Do you have the new price table for the spring plans?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "m-601",
+			"created_ms": 1792055200000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "dismissed",
+			"body": "Retry failed purchases automatically?",
+			"payload": {
+				"decision": {
+					"question": "Retry failed purchases automatically?",
+					"options": [
+						{
+							"id": "retry3",
+							"label": "Retry 3 times, a day apart",
+							"what_happens": "Most declines clear within three days.",
+							"recommended": true,
+							"cost": "$0"
+						},
+						{
+							"id": "none",
+							"label": "Never retry",
+							"what_happens": "The customer is asked to try again."
+						}
+					],
+					"free_text_ok": false,
+					"why": "Some card declines clear on a retry; others are final."
+				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "docs-site",
+			"id": "d-701",
+			"created_ms": 1792057600000,
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "report",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Onboarding guide draft is ready for a read.",
+			"payload": {
+				"report": {
+					"title": "Onboarding guide, draft 2",
+					"format": "markdown",
+					"content": "# Onboarding\n\nA new captain reads three things first:\n\n- the Decisions page\n- the Feed\n- the Fleet map\n\nSee https://example.test/guide for the full text."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "ops",
+			"id": "o-202",
+			"created_ms": 1792059400000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "high",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The mirror sync lags by about 40 minutes.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "m-602",
+			"created_ms": 1792084000000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": "t-mobile-9",
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Upload the new signing key to the release phone.",
+			"payload": {
+				"needs_hands": "Plug in the release phone, open the vault and import the key from the USB stick. Tell the ship when it is done."
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "b-102",
+			"created_ms": 1792086400000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Invoice export is slower than usual since Tuesday.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "billing",
+			"id": "x-502",
+			"created_ms": 1792088800000,
+			"from": "billing",
+			"to": "analytics",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Re-running the monthly export with the new columns.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-402",
+			"created_ms": 1792091200000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": 1792097200000,
+			"state": "open",
+			"body": "Dashboards for the pilot cohort: build them now or after the freeze?",
+			"payload": {
+				"decision": {
+					"question": "Dashboards for the pilot cohort: build them now or after the freeze?",
+					"options": [
+						{
+							"id": "now",
+							"label": "Build now",
+							"what_happens": "Ready Thursday, reviewed in the freeze.",
+							"cost": "2 days"
+						},
+						{
+							"id": "after",
+							"label": "After the freeze",
+							"what_happens": "Ready the week after.",
+							"recommended": true
+						}
+					],
+					"free_text_ok": false,
+					"why": "Building now means two changes to review during the freeze.",
+					"group": "pilot"
+				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-403",
+			"created_ms": 1792091320000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": 1792097200000,
+			"state": "open",
+			"body": "Which cohort size should the first chart use?",
+			"payload": {
+				"decision": {
+					"question": "Which cohort size should the first chart use?",
+					"options": [
+						{
+							"id": "small",
+							"label": "500 users",
+							"what_happens": "Fast to read, noisy."
+						},
+						{
+							"id": "large",
+							"label": "5,000 users",
+							"what_happens": "Stable, slower to load.",
+							"recommended": true
+						}
+					],
+					"free_text_ok": false,
+					"group": "pilot"
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "ops",
+			"id": "o-203",
+			"created_ms": 1792096000000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "high",
+			"deadline_ms": 1792102000000,
+			"state": "answered",
+			"body": "Pause the mirror sync while the disk is replaced?",
+			"payload": {
+				"decision": {
+					"question": "Pause the mirror sync while the disk is replaced?",
+					"options": [
+						{
+							"id": "pause",
+							"label": "Pause it",
+							"what_happens": "Stop the sync until the rebuild finishes.",
+							"recommended": true
+						},
+						{
+							"id": "keep",
+							"label": "Keep it running",
+							"what_happens": "Accept the rebuild taking longer."
+						}
+					],
+					"free_text_ok": false,
+					"why": "The new disk arrives at noon; the sync would fight the rebuild."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "ops",
+			"id": "r-203",
+			"created_ms": 1792097200000,
+			"from": "captain",
+			"to": "ops",
+			"kind": "reply",
+			"correlation": "o-203",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Pause it. Tell me when the rebuild is done.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-302",
+			"created_ms": 1792099600000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The sale page is 120 KB heavier than last week. Ship it anyway?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "r-302",
+			"created_ms": 1792102000000,
+			"from": "captain",
+			"to": "storefront",
+			"kind": "reply",
+			"correlation": "s-302",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Ship it after the images are compressed.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "mobile-app",
+			"id": "m-603",
+			"created_ms": 1792104400000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Store listing: can it mention offline mode?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "x-503",
+			"created_ms": 1792106800000,
+			"from": "mobile-app",
+			"to": "storefront",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Which deep-link scheme do the product pages use?",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "docs-site",
+			"id": "d-702",
+			"created_ms": 1792109200000,
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The API reference is out of date for the new routes.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "b-103",
+			"created_ms": 1792111600000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "high",
+			"deadline_ms": 1792114000000,
+			"state": "open",
+			"body": "Refund policy wording: which version goes live?",
+			"payload": {
+				"decision": {
+					"question": "Refund policy wording: which version goes live?",
+					"options": [
+						{
+							"id": "a",
+							"label": "Version A",
+							"what_happens": "14-day grace period.",
+							"recommended": true
+						},
+						{
+							"id": "b",
+							"label": "Version B",
+							"what_happens": "30-day grace period.",
+							"cost": "$0"
+						}
+					],
+					"free_text_ok": false,
+					"why": "Legal approved both; they differ in the grace period."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "m-604",
+			"created_ms": 1792114000000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "Enable the beta channel for the three pilot testers?",
+			"payload": {
+				"choices": ["Yes, all three", "Only the first two"]
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "r-604",
+			"created_ms": 1792115200000,
+			"from": "captain",
+			"to": "mobile-app",
+			"kind": "reply",
+			"correlation": "m-604",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Yes, all three.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-404",
+			"created_ms": 1792118800000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The weekly report failed once. Re-run it now?",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "ops",
+			"id": "o-204",
+			"created_ms": 1792122400000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Disk usage on the render box passed 80 percent.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "x-504",
+			"created_ms": 1792124200000,
+			"from": "analytics",
+			"to": "ops",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Can the render box keep the old logs one more week?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-303",
+			"created_ms": 1792126000000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": 1792132000000,
+			"state": "open",
+			"body": "New product photos are in the shared folder. Publish the batch?",
+			"payload": {
+				"decision": {
+					"question": "New product photos are in the shared folder. Publish the batch?",
+					"options": [
+						{
+							"id": "batch",
+							"label": "Publish the batch",
+							"what_happens": "All 42 photos go live with the next deploy.",
+							"recommended": true
+						},
+						{
+							"id": "half",
+							"label": "Only the first 20",
+							"what_happens": "The rest wait for the colour check."
+						}
+					],
+					"free_text_ok": true
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "b-104",
+			"created_ms": 1792129600000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "dismissed",
+			"body": "Dunning emails: send the reminder on day three or day five?",
+			"payload": {
+				"decision": {
+					"question": "Dunning emails: send the reminder on day three or day five?",
+					"options": [
+						{
+							"id": "three",
+							"label": "Day three",
+							"what_happens": "Earlier nudge, a little more churn.",
+							"recommended": true
+						},
+						{
+							"id": "five",
+							"label": "Day five",
+							"what_happens": "Later, gentler."
+						}
+					],
+					"free_text_ok": false
+				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "docs-site",
+			"id": "d-703",
+			"created_ms": 1792132000000,
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "report",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Changelog for 2.4 is ready. Read it before the tag?",
+			"payload": {
+				"report": {
+					"title": "Changelog 2.4",
+					"format": "markdown",
+					"content": "## 2.4\n\n- Spend view\n- Fleet map\n- Reports with comments\n\nThanks to everyone who tested the beta."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "status-page",
+			"id": "f0002-status-move",
+			"created_ms": 1792210000000,
+			"from": "status-page",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": "status-move",
+			"urgency": "high",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Move the status page to the new host tonight?",
+			"payload": {
+				"needs_hands": {
+					"step": "Approve the DNS change at the domain registrar. It asks for your two-factor code, so a ship cannot do it."
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "m-605",
+			"created_ms": 1792213600000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Crash rate dipped after the 2.3.1 hotfix. Keep the hotfix branch alive?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "r-605",
+			"created_ms": 1792216000000,
+			"from": "captain",
+			"to": "mobile-app",
+			"kind": "reply",
+			"correlation": "m-605",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Keep it for two weeks, then delete it.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "x-505",
+			"created_ms": 1792220200000,
+			"from": "storefront",
+			"to": "mobile-app",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "The checkout copy is in the shared folder now.",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-405",
+			"created_ms": 1792228000000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "Drop the legacy events table after the migration?",
+			"payload": {
+				"decision": {
+					"question": "Drop the legacy events table after the migration?",
+					"options": [
+						{
+							"id": "keep",
+							"label": "Keep it for now",
+							"what_happens": "Costs a little storage each month.",
+							"recommended": true
+						},
+						{
+							"id": "drop",
+							"label": "Drop it",
+							"what_happens": "Frees the storage; the backup stays."
+						}
+					],
+					"free_text_ok": false,
+					"why": "Nothing reads it since Monday, but a backup is the only copy of 2023."
+				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "r-405",
+			"created_ms": 1792231000000,
+			"from": "captain",
+			"to": "analytics",
+			"kind": "reply",
+			"correlation": "a-405",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Keep it for now. I will ask again in a month.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "b-105",
+			"created_ms": 1792234000000,
+			"from": "billing",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Two invoices failed to email. Resend them?",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "ops",
+			"id": "o-206",
+			"created_ms": 1792240000000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Weekly patch window: Sunday 02:00 to 03:00, OK?",
+			"payload": {
+				"decision": {
+					"question": "Weekly patch window: Sunday 02:00 to 03:00, OK?",
+					"options": [
+						{
+							"id": "yes",
+							"label": "Yes",
+							"what_happens": "The window is booked; no jobs run then.",
+							"recommended": true
+						},
+						{
+							"id": "later",
+							"label": "Move it to 04:00",
+							"what_happens": "Clear of the early reports."
+						}
+					],
+					"free_text_ok": false
+				}
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "docs-site",
+			"id": "d-704",
+			"created_ms": 1792246000000,
+			"from": "docs-site",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Screenshots for the new guide are attached in the report.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "billing",
+			"id": "x-506",
+			"created_ms": 1792249600000,
+			"from": "billing",
+			"to": "storefront",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Refund totals match the ledger for March.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-304",
+			"created_ms": 1792253200000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Cart abandonment is up two points. Look at it before the sale?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "r-304",
+			"created_ms": 1792255600000,
+			"from": "captain",
+			"to": "storefront",
+			"kind": "reply",
+			"correlation": "s-304",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Yes, after lunch. Ping me with the numbers.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "m-606",
+			"created_ms": 1792258000000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Push notifications: which copy for the restock message?",
+			"payload": {
+				"choices": ["In stock again", "Back in stock, grab it now"]
+			}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "a-406",
+			"created_ms": 1792261600000,
+			"from": "analytics",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "answered",
+			"body": "The cohort chart needs a label for the control group. Name it?",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "r-406",
+			"created_ms": 1792264000000,
+			"from": "captain",
+			"to": "analytics",
+			"kind": "reply",
+			"correlation": "a-406",
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Control.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "ops",
+			"id": "o-207",
+			"created_ms": 1792289200000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The mirror finished rebuilding on the new disk.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "search-index",
+			"id": "f0013-shard-count",
+			"created_ms": 1792291000000,
+			"from": "search-index",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": "index-shards",
+			"urgency": "normal",
+			"deadline_ms": 1792294000000,
+			"state": "open",
+			"body": "Which shard count should the new index use?",
+			"payload": {
+				"decision": {
+					"question": "Which shard count should the new index use?",
+					"why": "The corpus doubles next quarter. The count is hard to change once data is written.",
+					"options": [
+						{
+							"id": "four",
+							"label": "Four shards",
+							"what_happens": "Simplest. Enough for today's corpus, not for next quarter."
+						},
+						{
+							"id": "eight",
+							"label": "Eight shards",
+							"what_happens": "Room for the doubling. Slightly more memory at idle.",
+							"cost": "~$30/mo",
+							"recommended": true
+						},
+						{
+							"id": "twelve",
+							"label": "Twelve shards",
+							"what_happens": "Headroom for two years. Costs more at idle.",
+							"cost": "~$55/mo"
+						}
+					],
+					"free_text_ok": false
+				}
+			}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "mobile-app",
+			"id": "f0008-listing-offline",
+			"created_ms": 1792294600000,
+			"from": "mobile-app",
+			"to": "captain",
+			"kind": "request",
+			"correlation": null,
+			"task_id": "store-listing",
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Can the store listing mention offline mode before review?",
+			"payload": {}
+		},
+		{
+			"machine": "lab-box",
+			"ship": "analytics",
+			"id": "x-507",
+			"created_ms": 1792296400000,
+			"from": "analytics",
+			"to": "billing",
+			"kind": "request",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": null,
+			"body": "Cohort export is ready for the finance check.",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-305",
+			"created_ms": 1792297600000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "The spring banner is live on the homepage. Keep it up?",
+			"payload": {}
+		},
+		{
+			"machine": "north-rig",
+			"ship": "ops",
+			"id": "o-208",
+			"created_ms": 1792300000000,
+			"from": "ops",
+			"to": "captain",
+			"kind": "notice",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Storefront smoke test passed on the new build.",
+			"payload": {},
+			"arrives_in_s": 6
+		},
+		{
+			"machine": "north-rig",
+			"ship": "storefront",
+			"id": "s-306",
+			"created_ms": 1792300000000,
+			"from": "storefront",
+			"to": "captain",
+			"kind": "decision",
+			"correlation": null,
+			"task_id": null,
+			"urgency": "normal",
+			"deadline_ms": null,
+			"state": "open",
+			"body": "Smoke test passed. Ready for the sale page to go live?",
+			"payload": {
+				"decision": {
+					"question": "Ready for the sale page to go live?",
+					"options": [
+						{
+							"id": "go",
+							"label": "Go live now",
+							"what_happens": "The sale starts at the next deploy.",
+							"recommended": true
+						},
+						{
+							"id": "tomorrow",
+							"label": "Tomorrow at nine",
+							"what_happens": "One more night of checks."
+						}
+					],
+					"free_text_ok": false
+				}
+			},
+			"arrives_in_s": 9
+		}
+	]
+}

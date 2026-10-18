@@ -15,7 +15,7 @@ async function open(page: Page, theme: 'light' | 'dark') {
 		}
 	]);
 	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
-	await page.goto('/');
+	await page.goto('/decisions');
 	await expect(page.getByRole('heading', { level: 1, name: 'Decisions' })).toBeVisible();
 	await page.evaluate(() => document.fonts.ready);
 }
@@ -312,5 +312,56 @@ test.describe('report desktop', () => {
 		await comment(page, 'Do the 2019 exports', 'Yes, re-encrypt them before retiring the bucket.');
 		await page.mouse.move(0, 0);
 		await page.screenshot({ path: `${dir}/report-desktop.png` });
+	});
+});
+
+async function openFeed(page: Page, theme: 'light' | 'dark') {
+	await page.context().addCookies([
+		{
+			name: 'qd_theme',
+			value: theme,
+			url: test.info().project.use.baseURL ?? 'http://127.0.0.1:4173'
+		}
+	]);
+	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+	await page.goto('/feed');
+	await expect(page.getByRole('heading', { level: 1, name: 'Feed' })).toBeVisible();
+	await expect(page.locator('li.msg').last()).toBeInViewport();
+	await page.evaluate(() => document.fonts.ready);
+}
+
+test.describe('feed phone', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true
+	});
+
+	for (const theme of ['light', 'dark'] as const) {
+		test(`feed, ${theme}`, async ({ page }) => {
+			await openFeed(page, theme);
+			await page.screenshot({ path: `${dir}/feed-phone-${theme}.png` });
+		});
+	}
+
+	test('a decision answered in place', async ({ page }) => {
+		await openFeed(page, 'light');
+		const ask = page.locator('li.msg[data-entry="f0013-shard-count"]');
+		await ask.getByRole('radio', { name: /Eight shards/ }).check();
+		await ask.evaluate((el) =>
+			window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 120)
+		);
+		await page.mouse.move(0, 0);
+		await page.screenshot({ path: `${dir}/feed-phone-answer-in-place.png` });
+	});
+});
+
+test.describe('feed desktop', () => {
+	test.use({ viewport: { width: 1280, height: 900 } });
+
+	test('feed, light', async ({ page }) => {
+		await openFeed(page, 'light');
+		await page.screenshot({ path: `${dir}/feed-desktop-light.png` });
 	});
 });

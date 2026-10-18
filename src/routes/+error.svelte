@@ -11,7 +11,7 @@
 	<p class="code">{page.status}</p>
 	<h1>{page.status === 404 ? 'Off the chart' : 'Something went wrong'}</h1>
 	<p>{page.error?.message ?? 'An unexpected error occurred.'}</p>
-	<a class="btn" href={resolve('/')}>Back to Decisions</a>
+	<a class="btn" href={resolve('/feed')}>Back to the Feed</a>
 </div>
 
 <style>

@@ -170,7 +170,8 @@ describe('sendReply', () => {
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
 			usage: vi.fn(),
-			report: vi.fn()
+			report: vi.fn(),
+			feed: vi.fn()
 		};
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
@@ -223,7 +224,8 @@ describe('sendDismiss', () => {
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
 			usage: vi.fn(),
-			report: vi.fn()
+			report: vi.fn(),
+			feed: vi.fn()
 		};
 		const log = vi.fn();
 		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
@@ -240,7 +242,8 @@ describe('sendDismiss', () => {
 			snapshot: vi.fn(),
 			routesShow: vi.fn(),
 			usage: vi.fn(),
-			report: vi.fn()
+			report: vi.fn(),
+			feed: vi.fn()
 		};
 		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
 			sent: true,
