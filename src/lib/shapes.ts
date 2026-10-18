@@ -510,13 +510,16 @@ export function parseUsageRecords(result: unknown): UsageRecord[] {
  *
  *   captain.feed {after?, before?, limit?, ship?, include_ship_mail?, states?, open_only?}
  *
- * and answers `{ entries, more, next }`. Pages are oldest first. `next` is the
- * cursor to pass back as `after` to continue forward; `before` pages backward,
- * and `before: "now"` reads the newest page. Every entry carries its own
+ * and answers `{ entries, more, next }`. Pages are oldest first. `before` is a
+ * cursor, or a time in milliseconds, that the page ends just before; the newest
+ * page is `before` one millisecond past now. Every entry carries its own
  * `cursor`, and that is what paging is built on, never `created_ms`: a desk copy
  * collected late from another machine can carry an older `created_ms` than the
- * cursor, so ordering by time would lose it. Every field is optional and extras
- * are ignored. Adjust these parsers alone; see docs/DECISIONS.md section 16.
+ * cursor, so ordering by time would lose it. `next` is direction-dependent: after
+ * a forward read it is the cursor to continue from, and after a backward read it
+ * is a `before` cursor, so the browser never takes a forward cursor from it (see
+ * forwardCursorOf). Every field is optional and extras are ignored. Adjust these
+ * parsers alone; see docs/DECISIONS.md section 16.
  */
 
 /** One message in the feed. `payload` is the mail payload, unchanged. */
@@ -563,10 +566,9 @@ export interface FeedPage {
 	/** True when there are older entries than these. */
 	more: boolean;
 	/**
-	 * Where to read forward from: Privateer's `next`, or, when it reports the end
-	 * of the feed with a null, the last entry's own cursor, which is what a poll
-	 * is asked with. Read from Privateer's order, never from `entries` after the
-	 * page has been sorted by time for the chat.
+	 * Privateer's `next` as it sent it. Its direction follows the read: a forward
+	 * read's next is a cursor to read on from, a backward read's is a `before`
+	 * cursor. Read forward from forwardCursorOf(entries), never from this.
 	 */
 	next: string | null;
 	/** Where to read backward from: the first entry's own cursor, in Privateer's order. */
@@ -638,7 +640,7 @@ export function parseFeed(result: unknown): FeedPage {
 		entries,
 		more: root?.more === true,
 		// Both ends are taken here, while the page is still in Privateer's own order.
-		next: str(root?.next) ?? forwardCursorOf(entries),
+		next: str(root?.next),
 		first: firstCursorOf(entries)
 	};
 }

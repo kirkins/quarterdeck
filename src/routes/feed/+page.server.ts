@@ -1,4 +1,4 @@
-import { NEWEST, PAGE_LIMIT } from '#lib/feed.ts';
+import { PAGE_LIMIT } from '#lib/feed.ts';
 import { loadFeed } from '#lib/server/feed.ts';
 import { errorText } from '#lib/server/submit.ts';
 import type { PageServerLoad } from './$types';
@@ -8,8 +8,8 @@ export const load: PageServerLoad = async ({ depends }) => {
 	depends('quarterdeck:feed');
 	const now = Date.now();
 	try {
-		// before: "now" is the newest page, which the thread shows at the bottom.
-		const result = await loadFeed({ limit: PAGE_LIMIT, include_ship_mail: false, before: NEWEST });
+		// No bound names the newest page, which the thread shows at the bottom.
+		const result = await loadFeed({ limit: PAGE_LIMIT, include_ship_mail: false });
 		if (result.status === 'unsupported') return { now, page: null, unsupported: true, error: null };
 		return { now, page: result.page, unsupported: false, error: null };
 	} catch (error) {

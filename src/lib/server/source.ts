@@ -23,7 +23,7 @@ import {
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
-import { isShipToShip, NEWEST, type FeedQuery } from '#lib/feed.ts';
+import { isShipToShip, type FeedBound, type FeedQuery } from '#lib/feed.ts';
 import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
 import { REPORT_FORMATS, checkContent, type ReportFormat } from '#lib/report.ts';
 import type { ReplyArgs } from './answer.ts';
@@ -92,8 +92,13 @@ function rec(value: unknown): Record<string, unknown> | null {
 }
 
 /** The feed's own order: by cursor, which is arrival order, not creation time. */
+/** A fixture cursor's place in arrival order, read from its `f1.<n>` form. */
+function ordinalOf(cursor: string | null): number {
+	return Number(cursor?.replace(/^f1\./, '') ?? 0);
+}
+
 function byCursor(a: FeedEntry, b: FeedEntry): number {
-	return Number(a.cursor ?? 0) - Number(b.cursor ?? 0);
+	return ordinalOf(a.cursor) - ordinalOf(b.cursor);
 }
 
 /**
@@ -252,6 +257,26 @@ export function rebaseFixture(value: unknown, fixtureNow: number, now: number): 
 	return shift(value);
 }
 
+/**
+ * The entries before a bound: the ones written before a time, or the ones ahead
+ * of a cursor. An unknown cursor reads as the start of the feed, as a stale one would.
+ */
+function beforeBound(visible: readonly FeedEntry[], bound: FeedBound): FeedEntry[] {
+	if (typeof bound === 'number') return visible.filter((e) => (e.created_ms ?? 0) < bound);
+	const at = visible.findIndex((e) => e.cursor === bound);
+	return at < 0 ? [] : visible.slice(0, at);
+}
+
+/**
+ * The entries after a bound: the ones written after a time, or the ones behind a
+ * cursor. An unknown cursor reads as the start of the feed, as a stale one would.
+ */
+function afterBound(visible: readonly FeedEntry[], bound: FeedBound): FeedEntry[] {
+	if (typeof bound === 'number') return visible.filter((e) => (e.created_ms ?? 0) > bound);
+	const at = visible.findIndex((e) => e.cursor === bound);
+	return at < 0 ? [...visible] : visible.slice(at + 1);
+}
+
 export class FixtureSource implements Source {
 	readonly mode = 'fixtures' as const;
 	readonly #dir: string;
@@ -260,7 +285,11 @@ export class FixtureSource implements Source {
 	#feedBase: number | undefined;
 	/** When each held feed message first arrived; see feed(). */
 	readonly #arrivals = new Map<string, number>();
-	/** The cursor Privateer would have given each message, in the order they arrived. */
+	/**
+	 * The cursor Privateer would have given each message, in the order they arrived.
+	 * Shaped as Privateer's are (`f1.` and a number), never all digits, so a cursor
+	 * is never mistaken for a time.
+	 */
 	readonly #cursors = new Map<string, string>();
 
 	constructor(dir: string, now: () => number = Date.now) {
@@ -277,7 +306,7 @@ export class FixtureSource implements Source {
 	#cursorFor(key: string): string {
 		const held = this.#cursors.get(key);
 		if (held !== undefined) return held;
-		const cursor = String(this.#cursors.size + 1);
+		const cursor = `f1.${this.#cursors.size + 1}`;
 		this.#cursors.set(key, cursor);
 		return cursor;
 	}
@@ -326,11 +355,13 @@ export class FixtureSource implements Source {
 	}
 
 	/**
-	 * The feed as captain.feed answers it: oldest first, one page at a time, by
-	 * cursor. `before: "now"` (or no `before`) is the newest page, `before` is a
-	 * cursor to read the page ending before it, and `after` reads forward from
-	 * one. `next` is the cursor to continue forward with, and null once a page
-	 * reaches the end of the feed.
+	 * The feed as captain.feed answers it: oldest first, one page at a time. `before`
+	 * ends the page just before a cursor, or just before a time in milliseconds
+	 * (the newest page is `before` one millisecond past now). `after` reads forward
+	 * from a cursor, up to `limit`. The text "now" is not a bound, as Privateer
+	 * refuses it. `next` is direction-dependent, as Privateer's is: a backward page
+	 * gives a `before` cursor (its oldest entry) while there are older entries, and
+	 * a forward page gives the cursor to read on from, null once nothing is newer.
 	 *
 	 * The fixture's times are pinned to the moment this process first reads the
 	 * feed, so a poll sees only what is really new. An entry with `arrives_in_s`
@@ -341,6 +372,7 @@ export class FixtureSource implements Source {
 	 * never have shown it.
 	 */
 	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
+		if (query.before === 'now') throw new Error('now is not a feed cursor');
 		this.#feedBase ??= this.#now();
 		const elapsed = this.#now() - this.#feedBase;
 		const raw = await this.#read(FEED_FIXTURE, this.#feedBase);
@@ -378,36 +410,33 @@ export class FixtureSource implements Source {
 			.filter((e) => !query.open_only || e.state === 'open')
 			.filter((e) => !query.states || (e.state !== null && query.states.includes(e.state)))
 			.sort(byCursor);
-		const indexOf = (cursor: string): number => visible.findIndex((e) => e.cursor === cursor);
+		const { limit } = query;
 
 		if (query.after !== undefined) {
-			const from = indexOf(query.after);
-			const rest = from < 0 ? visible : visible.slice(from + 1);
+			// The oldest `limit` entries after the bound, so a forward read pages up from it.
+			const rest = afterBound(visible, query.after);
+			const page = rest.slice(0, limit);
 			return {
 				status: 'ok',
 				value: {
-					entries: rest,
-					more: rest.length < visible.length,
-					next: forwardCursorOf(rest),
-					first: firstCursorOf(rest)
+					entries: page,
+					more: rest.length > page.length,
+					next: forwardCursorOf(page),
+					first: firstCursorOf(page)
 				}
 			};
 		}
 
-		const end =
-			query.before === undefined || query.before === NEWEST
-				? visible.length
-				: Math.max(0, indexOf(query.before));
-		const start = Math.max(0, end - query.limit);
-		const page = visible.slice(start, end);
+		// The newest `limit` entries before the bound: the newest page when there is none.
+		const older = query.before === undefined ? visible : beforeBound(visible, query.before);
+		const page = older.slice(Math.max(0, older.length - limit));
+		const more = older.length > page.length;
 		return {
 			status: 'ok',
 			value: {
 				entries: page,
-				more: start > 0,
-				// Privateer sends a null once a page reaches the end of the feed; parseFeed fills
-				// that with the last entry's own cursor, and this stands for the filled value.
-				next: forwardCursorOf(page),
+				more,
+				next: more ? firstCursorOf(page) : null,
 				first: firstCursorOf(page)
 			}
 		};

@@ -15,7 +15,7 @@ import { reportOf } from '#lib/report.ts';
 import { formatAge } from '#lib/time.ts';
 import type { FeedEntry } from '#lib/shapes.ts';
 
-// A page's two cursors, read in Privateer's own order; see parseFeed.
+// A page's two cursors, read in Privateer's own order; see forwardCursorOf.
 export { firstCursorOf, forwardCursorOf } from '#lib/shapes.ts';
 
 /** The captain's own name on the wire. */
@@ -24,8 +24,6 @@ export const CAPTAIN = 'captain';
 export const PAGE_LIMIT = 15;
 /** The most a page may ask for; Privateer caps a page at 200. */
 export const MAX_LIMIT = 200;
-/** `before` for the newest page. Every other cursor is one Privateer gave us. */
-export const NEWEST = 'now';
 /** How often a visible feed asks for new entries. */
 export const POLL_MS = 10_000;
 /**
@@ -52,15 +50,22 @@ export const FEED_KIND_LABELS: Record<FeedKind, string> = {
 };
 
 /**
- * A query for `captain.feed`. Both ends of the feed are cursors Privateer gave
- * us, never a time: an entry's `created_ms` says when it was written, which for
- * a desk copy collected late is older than its place in the feed.
+ * A bound on `captain.feed`: a cursor Privateer gave us, or a time in
+ * milliseconds. A time is only ever a bound on the newest end (`newestBefore`);
+ * the feed is paged by cursor, never by an entry's `created_ms`, which for a
+ * desk copy collected late is older than its place in the feed.
+ */
+export type FeedBound = string | number;
+
+/**
+ * A query for `captain.feed`. Pages move by cursor. `before` with no `after`
+ * reads the page ending just before it; neither is the newest page.
  */
 export interface FeedQuery {
-	/** Read forward from this entry's cursor; the newest page's `next`. */
-	after?: string;
-	/** Read the page ending just before this cursor, or `NEWEST` for the newest page. */
-	before?: string;
+	/** Read forward from this entry's cursor. */
+	after?: FeedBound;
+	/** Read the page ending just before this bound. */
+	before?: FeedBound;
 	limit: number;
 	ship?: string;
 	include_ship_mail: boolean;
@@ -68,6 +73,26 @@ export interface FeedQuery {
 	open_only?: boolean;
 	/** Privateer's own state filter, as `states`. */
 	states?: string[];
+}
+
+/** A bound from its text: digits are a time in milliseconds, anything else a cursor. */
+function boundOf(value: string): FeedBound {
+	return /^\d+$/.test(value) ? Number(value) : value;
+}
+
+/**
+ * The newest page's `before`: one millisecond past now, so every message
+ * written so far is before it. The clock is the server's, since it is the one
+ * Privateer's times are checked against.
+ */
+export function newestBefore(now: number): number {
+	return now + 1;
+}
+
+/** A query that reads the newest page when it names no bound at all. */
+export function withNewest(query: FeedQuery, now: number): FeedQuery {
+	if (query.before !== undefined || query.after !== undefined) return query;
+	return { ...query, before: newestBefore(now) };
 }
 
 /** Read the feed query from a URL's search params. Bad values fall back to the defaults. */
@@ -82,8 +107,8 @@ export function feedQuery(params: URLSearchParams): FeedQuery {
 		.map((value) => value.trim())
 		.filter((value) => value !== '');
 	return {
-		...(after && { after }),
-		...(before && { before }),
+		...(after && { after: boundOf(after) }),
+		...(before && { before: boundOf(before) }),
 		limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), MAX_LIMIT) : PAGE_LIMIT,
 		...(ship && { ship }),
 		include_ship_mail: params.get('include_ship_mail') === '1',

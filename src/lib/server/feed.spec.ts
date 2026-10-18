@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NEWEST, PAGE_LIMIT, firstCursorOf, forwardCursorOf } from '#lib/feed.ts';
+import { PAGE_LIMIT, firstCursorOf, forwardCursorOf } from '#lib/feed.ts';
 import { loadFeed } from './feed.ts';
 import { FixtureSource } from './source.ts';
 
@@ -22,17 +22,20 @@ async function page(query: Parameters<typeof loadFeed>[0]) {
 	return read.page;
 }
 
-const newest = { limit: PAGE_LIMIT, include_ship_mail: false, before: NEWEST };
+/** A time past every message the fixture holds, as the newest page's bound is: one ms past now. */
+const FAR_FUTURE = 9_999_999_999_999;
+const newest = { limit: PAGE_LIMIT, include_ship_mail: false, before: FAR_FUTURE };
 
 describe('the fixture feed', () => {
-	it('reads the newest page for before:"now", oldest first, and pages back by cursor', async () => {
+	it('reads the newest page for a bound past everything, oldest first, and pages back by cursor', async () => {
 		const { source } = fixtureAt(1_800_000_000_000);
 		const first = ok(await source.feed(newest));
 		expect(first.entries).toHaveLength(PAGE_LIMIT);
 		expect(first.more).toBe(true);
-		// The newest page reaches the end of the feed: Privateer reports that with a null next,
-		// which is kept as the last entry's own cursor, the one a poll asks with.
-		expect(first.next).toBe(forwardCursorOf(first.entries));
+		// A backward page's next is a before cursor: the oldest entry of the page, to page back from.
+		expect(first.next).toBe(firstCursorOf(first.entries));
+		// The forward cursor is read from the entries, the newest one, which a poll asks with.
+		expect(forwardCursorOf(first.entries)).not.toBeNull();
 
 		const second = ok(await source.feed({ ...newest, before: firstCursorOf(first.entries) ?? '' }));
 		expect(second.entries).toHaveLength(PAGE_LIMIT);
@@ -64,6 +67,50 @@ describe('the fixture feed', () => {
 		const quiet = ok(await source.feed({ limit: PAGE_LIMIT, include_ship_mail: false, after: at }));
 		expect(quiet.entries).toEqual([]);
 		expect(quiet.next).toBeNull();
+	});
+
+	it('refuses "now" as a bound, as Privateer does', async () => {
+		const { source } = fixtureAt(1_800_000_000_000);
+		await expect(source.feed({ ...newest, before: 'now' })).rejects.toThrow(
+			'now is not a feed cursor'
+		);
+	});
+
+	it('gives cursors shaped as Privateer gives them, never digits that read as a time', async () => {
+		const { source } = fixtureAt(1_800_000_000_000);
+		const everything = ok(await source.feed({ ...newest, limit: 1000 }));
+		expect(everything.entries.length).toBeGreaterThan(0);
+		for (const e of everything.entries) expect(e.cursor).toMatch(/^f1\.\d+$/);
+	});
+
+	it('reads forward from a cursor at most a limit, and says there is more', async () => {
+		const { source } = fixtureAt(1_800_000_000_000);
+		const all = ok(await source.feed({ ...newest, limit: 1000 }));
+		const start = all.entries[0].cursor ?? '';
+
+		const one = ok(await source.feed({ limit: 3, include_ship_mail: false, after: start }));
+		expect(one.entries.map((e) => e.id)).toEqual(all.entries.slice(1, 4).map((e) => e.id));
+		expect(one.more).toBe(true);
+		// A forward page's next is the cursor to read on from: the last entry it holds.
+		expect(one.next).toBe(forwardCursorOf(one.entries));
+
+		const next = ok(
+			await source.feed({ limit: 3, include_ship_mail: false, after: one.next ?? '' })
+		);
+		expect(next.entries.map((e) => e.id)).toEqual(all.entries.slice(4, 7).map((e) => e.id));
+	});
+
+	it('reads a time as a bound: only the messages written before it', async () => {
+		const { source } = fixtureAt(1_800_000_000_000);
+		const all = ok(await source.feed({ ...newest, limit: 1000 }));
+		// The newest message was written at the newest time, so a bound at that time leaves it out.
+		const bound = Math.max(...all.entries.map((e) => e.created_ms ?? 0));
+		const page = ok(await source.feed({ ...newest, limit: 1000, before: bound }));
+		expect(page.entries.every((e) => (e.created_ms ?? 0) < bound)).toBe(true);
+		expect(page.entries.map((e) => e.id)).toEqual(
+			all.entries.filter((e) => (e.created_ms ?? 0) < bound).map((e) => e.id)
+		);
+		expect(page.entries.length).toBeLessThan(all.entries.length);
 	});
 
 	it('keeps ship-to-ship mail out unless it is asked for', async () => {
@@ -157,7 +204,7 @@ describe('the fixture feed', () => {
 describe('the page handed to the browser', () => {
 	it('carries both cursors, though its entries are ordered by time for the chat', async () => {
 		const { source } = fixtureAt(1_800_000_000_000);
-		const query = { limit: PAGE_LIMIT, include_ship_mail: false, before: NEWEST };
+		const query = { limit: PAGE_LIMIT, include_ship_mail: false };
 		const raw = ok(await source.feed(query));
 		const first = await page(query);
 
@@ -186,7 +233,7 @@ describe('the page handed to the browser', () => {
 		}
 		expect(pages).toBeGreaterThan(1);
 
-		const everything = await page({ limit: 1000, include_ship_mail: false, before: NEWEST });
+		const everything = await page({ limit: 1000, include_ship_mail: false });
 		expect(seen.size).toBe(everything.entries.length);
 	});
 });

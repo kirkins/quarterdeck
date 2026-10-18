@@ -4,7 +4,6 @@ import {
 	CAPTAIN,
 	EMPTY_FILTER,
 	MAX_LIMIT,
-	NEWEST,
 	PAGE_LIMIT,
 	anchorOf,
 	applyLocalAnswers,
@@ -17,6 +16,7 @@ import {
 	feedQuery,
 	isOpen,
 	mergeEntries,
+	newestBefore,
 	newestOf,
 	outcomeOf,
 	outcomesOf,
@@ -28,7 +28,8 @@ import {
 	unseenAfter,
 	isWaiting,
 	visibleEntries,
-	waitingCount
+	waitingCount,
+	withNewest
 } from './feed.ts';
 import { firstCursorOf, forwardCursorOf, parseFeed, type FeedEntry } from './shapes.ts';
 
@@ -181,12 +182,12 @@ describe('parseFeed', () => {
 			next: null
 		});
 		expect(page.first).toBe('c-9');
-		// Privateer reports the end of the feed with a null next; the last entry's own cursor is
-		// what a poll asks with, so that is what is kept.
-		expect(page.next).toBe('c-8');
+		// next is Privateer's own, unchanged. The forward cursor is the newest entry's, read from the entries.
+		expect(page.next).toBeNull();
+		expect(forwardCursorOf(page.entries)).toBe('c-8');
 	});
 
-	it("keeps Privateer's own next when it sends one", () => {
+	it("keeps Privateer's next as sent, whichever way the page reads", () => {
 		const page = parseFeed({
 			entries: [{ id: 'a', cursor: 'c-1', from: 'ops', to: 'captain' }],
 			next: 'c-1'
@@ -196,6 +197,29 @@ describe('parseFeed', () => {
 });
 
 describe('feedQuery', () => {
+	it('reads a time as a number and a cursor as text, and the newest page is one ms past now', () => {
+		expect(feedQuery(new URLSearchParams('before=1800000000000'))).toEqual({
+			before: 1_800_000_000_000,
+			limit: PAGE_LIMIT,
+			include_ship_mail: false
+		});
+		expect(feedQuery(new URLSearchParams('after=f1.12&before=f1.3')).after).toBe('f1.12');
+		expect(feedQuery(new URLSearchParams('after=f1.12&before=f1.3')).before).toBe('f1.3');
+		expect(newestBefore(1_800_000_000_000)).toBe(1_800_000_000_001);
+	});
+
+	it('reads the newest page when it names no bound, and keeps any bound it is given', () => {
+		const query = { limit: PAGE_LIMIT, include_ship_mail: false };
+		expect(withNewest(query, 1_800_000_000_000)).toEqual({
+			...query,
+			before: 1_800_000_000_001
+		});
+		expect(withNewest({ ...query, after: 'f1.4' }, 1_800_000_000_000)).toEqual({
+			...query,
+			after: 'f1.4'
+		});
+	});
+
 	it('reads cursors, open_only and states, clamping the limit', () => {
 		expect(
 			feedQuery(
@@ -209,9 +233,9 @@ describe('feedQuery', () => {
 			open_only: true
 		});
 		expect(
-			feedQuery(new URLSearchParams(`before=${NEWEST}&limit=x&state=open&state=dismissed`))
+			feedQuery(new URLSearchParams('before=f1.9&limit=x&state=open&state=dismissed'))
 		).toEqual({
-			before: 'now',
+			before: 'f1.9',
 			limit: PAGE_LIMIT,
 			include_ship_mail: false,
 			states: ['open', 'dismissed']

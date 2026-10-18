@@ -102,7 +102,8 @@ test('Only waiting on me asks Privateer, so an old open ask appears without pagi
 		(r) => r.url().includes('/feed/data') && r.url().includes('open_only=1')
 	);
 	await page.getByLabel('Only waiting on me').check();
-	expect(new URL((await asked).url()).searchParams.get('before')).toBe('now');
+	// A reload of the newest open items sends no cursor: Privateer's newest bound is the server's to set.
+	expect(new URL((await asked).url()).searchParams.has('after')).toBe(false);
 	await expect(ask).toBeVisible();
 });
 

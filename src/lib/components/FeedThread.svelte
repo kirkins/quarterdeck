@@ -12,7 +12,6 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import { failureFrom } from '#lib/form.ts';
 	import {
-		NEWEST,
 		MAX_LIMIT,
 		OPEN_REFRESH_MS,
 		PAGE_LIMIT,
@@ -21,6 +20,7 @@
 		buildRows,
 		entryKey,
 		applyLocalAnswers,
+		forwardCursorOf,
 		mergeEntries,
 		newestOf,
 		outcomesOf,
@@ -67,9 +67,13 @@
 
 	// svelte-ignore state_referenced_locally
 	let hasOlder = $state(page?.more ?? false);
-	/** Where a forward poll starts: the newest entry of the page last read. */
+	/**
+	 * Where a forward poll starts: the newest entry of the page last read. Taken
+	 * from the entries, never from `next`, which for a backward page is a cursor
+	 * to page back with.
+	 */
 	// svelte-ignore state_referenced_locally
-	let forwardCursor = $state<string | null>(page?.next ?? null);
+	let forwardCursor = $state<string | null>(forwardCursorOf(page?.entries ?? []));
 	/**
 	 * Where to page back to: the oldest place in the feed among what is loaded.
 	 * Privateer reads it off the page in its own order, because it is not the
@@ -110,7 +114,7 @@
 		if (!next) return;
 		untrack(() => {
 			entries = mergeEntries(entries, next.entries);
-			forwardCursor = next.next ?? forwardCursor;
+			forwardCursor = forwardCursorOf(next.entries) ?? forwardCursor;
 			hasOlder = hasOlder || next.more;
 		});
 	});
@@ -247,7 +251,7 @@
 			const result = await fetchFeed({ after: forwardCursor, ...filterParams() });
 			const known = new Set(entries.map(entryKey));
 			const arrived = result.entries.filter((e) => !known.has(entryKey(e)));
-			forwardCursor = result.next ?? forwardCursor;
+			forwardCursor = forwardCursorOf(result.entries) ?? forwardCursor;
 			fetchError = null;
 			if (arrived.length === 0) return;
 			const bottom = atBottomNow();
@@ -271,8 +275,10 @@
 	 * The open items, read again over the whole history. A desk copy collected
 	 * late from another machine carries an older `created_ms` than the cursor that
 	 * passed it, so no amount of forward polling brings it in; an open_only read
-	 * does. Anything already on screen is merged by key, so nothing appears twice
-	 * and the captain is not moved.
+	 * does. It reads the newest open page, so it does not move the forward cursor:
+	 * that is the poll's, read from the newest page of the whole feed. Anything
+	 * already on screen is merged by key, so nothing appears twice and the captain
+	 * is not moved.
 	 */
 	async function refreshOpen(): Promise<void> {
 		if (refreshingOpen || reloading) return;
@@ -286,7 +292,6 @@
 			});
 			const known = new Set(entries.map(entryKey));
 			const added = result.entries.filter((e) => !known.has(entryKey(e)));
-			forwardCursor = result.next ?? forwardCursor;
 			fetchError = null;
 			if (added.length === 0) return;
 			entries = mergeEntries(entries, added);
@@ -327,9 +332,9 @@
 	async function reload(): Promise<void> {
 		reloading = true;
 		try {
-			const result = await fetchFeed({ ...filterParams(), before: NEWEST });
+			const result = await fetchFeed({ ...filterParams() });
 			entries = result.entries;
-			forwardCursor = result.next;
+			forwardCursor = forwardCursorOf(result.entries);
 			olderCursor = result.first;
 			hasOlder = result.more;
 			unseen = 0;

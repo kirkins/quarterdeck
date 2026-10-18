@@ -1,4 +1,4 @@
-import { NEWEST, PAGE_LIMIT } from '#lib/feed.ts';
+import { PAGE_LIMIT } from '#lib/feed.ts';
 import { getPortal } from '#lib/server/app.ts';
 import { loadFeed } from '#lib/server/feed.ts';
 import { loadShipView } from '#lib/server/ship.ts';
@@ -15,12 +15,7 @@ export const load: PageServerLoad = async ({ params, depends }) => {
 	}
 	try {
 		// The newest page of this ship's conversation, as the Feed reads its own.
-		const result = await loadFeed({
-			limit: PAGE_LIMIT,
-			include_ship_mail: false,
-			before: NEWEST,
-			ship: ship.name
-		});
+		const result = await loadFeed({ limit: PAGE_LIMIT, include_ship_mail: false, ship: ship.name });
 		if (result.status === 'unsupported') {
 			return { now, ship, page: null, feedUnsupported: true, feedError: null };
 		}

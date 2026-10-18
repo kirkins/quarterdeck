@@ -1,7 +1,8 @@
 /**
  * The feed as JSON, for the page's older pages, its poll, its open refresh and
- * its filters. Query: before (a cursor, or "now" for the newest page), after (a
- * cursor), limit, ship, include_ship_mail=1, open_only=1, state (repeatable).
+ * its filters. Query: before (a cursor, or a time in ms), after (a cursor or a
+ * time in ms), limit, ship, include_ship_mail=1, open_only=1, state (repeatable).
+ * With neither before nor after, it is the newest page.
  */
 import { json } from '@sveltejs/kit';
 import { feedQuery } from '#lib/feed.ts';
