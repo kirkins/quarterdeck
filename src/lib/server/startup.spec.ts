@@ -54,7 +54,7 @@ describe('checkStartup', () => {
 		expect(report.summary).toBe(`source=cli send=off login=off listen=${VPN}:3000`);
 	});
 
-	it('treats any non-empty QD_LOGIN_SECRET as a login, but warns that it is not enforced yet', () => {
+	it('does not let an unenforced QD_LOGIN_SECRET unlock sending on a network bind', () => {
 		const report = checkStartup({
 			HOST: VPN,
 			QD_SOURCE: 'cli',
@@ -62,12 +62,13 @@ describe('checkStartup', () => {
 			QD_LOGIN_SECRET: 'x',
 			ORIGIN: `http://${VPN}:3000`
 		});
-		expect(report.ok).toBe(true);
+		expect(report.ok).toBe(false);
+		expect(report.errors[0]).toMatch(/no login is configured/);
 		expect(report.warnings).toEqual([
 			'QD_LOGIN_SECRET is set, but login is not implemented yet: nothing enforces it.'
 		]);
 		expect(report.summary).not.toContain('x');
-		expect(report.summary).toContain('login=on');
+		expect(report.summary).toContain('login=off');
 		expect(checkStartup({ HOST: VPN, QD_LOGIN_SECRET: '   ' }).errors).toEqual([]);
 	});
 

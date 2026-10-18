@@ -7,7 +7,7 @@ Read this first. Quarterdeck acts as the captain. Anyone who can load the portal
 - **Bind `HOST` to the VPN address only**, never `0.0.0.0` and never a public address. The startup guard refuses to start when `HOST` is not loopback and sending is on without a login.
 - **Firewall the port** so that only your own devices can reach it. A VPN address is not a firewall.
 - **Keep `QD_ALLOW_SEND=0`** until a login is configured and tested. With it off, answers are logged and never sent to Privateer.
-- A login (`QD_LOGIN_SECRET`) is not built yet. Setting it does not protect anything yet; the guard only checks that it is set.
+- A login (`QD_LOGIN_SECRET`) is not built yet. Until it is, the guard refuses `QD_ALLOW_SEND=1` on any non-loopback bind, whether or not `QD_LOGIN_SECRET` is set.
 
 Placeholders such as `<vpn-address>`, `<install-dir>` and `<privateer-home>` stand for your own values. Do not commit them.
 
@@ -61,7 +61,7 @@ ORIGIN=http://<vpn-address>:3000
 | `PRIVATEER_BIN`   | with `cli`                       | The privateer binary. Run as an absolute path.                                                                                           |
 | `PRIVATEER_HOME`  | with `cli`                       | The Privateer home directory the portal reads.                                                                                           |
 | `QD_ALLOW_SEND`   | no (default `0`)                 | Exactly `1` to really send answers. Refused at startup with `fixtures`, and refused when `HOST` is not loopback unless a login is set.   |
-| `QD_LOGIN_SECRET` | no                               | Read by the startup guard only. Its presence counts as "login configured". Login is not implemented yet.                                 |
+| `QD_LOGIN_SECRET` | no                               | Reserved for the coming login. Not enforced yet, so it does not count as a login: sending stays refused on a network bind.               |
 | `QD_FIXTURES_DIR` | no                               | Where the fixture source reads its JSON. Only used with `fixtures`.                                                                      |
 | `HOST`            | no (default `127.0.0.1`)         | The listen address. Set it to `<vpn-address>`, not `0.0.0.0`.                                                                            |
 | `PORT`            | no (default `3000`)              | The listen port. Firewall it (step 6).                                                                                                   |

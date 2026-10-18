@@ -51,7 +51,10 @@ export function checkStartup(env = process.env) {
 	const port = (env.PORT || '3000').trim();
 	const source = (env.QD_SOURCE || 'fixtures').trim().toLowerCase();
 	const send = env.QD_ALLOW_SEND === '1';
-	const login = Boolean(env.QD_LOGIN_SECRET?.trim());
+	// Login is not built yet, so a QD_LOGIN_SECRET protects nothing and must not
+	// unlock sending on a network bind. The login change will turn this on.
+	const loginEnforced = false;
+	const login = loginEnforced && Boolean(env.QD_LOGIN_SECRET?.trim());
 	const exposed = !isLoopback(host);
 
 	/** @type {string[]} */
