@@ -200,146 +200,337 @@ export function assemble(captainWaiting: unknown, runtimeNeeds: unknown, now: nu
 }
 
 /*
- * The fleet map (PROVISIONAL). Privateer's `fleet.snapshot` is not out yet; this
- * is the shape we build against, from its description. Every field is optional
- * and extra fields are ignored, so a real snapshot that is richer still parses,
- * and a poorer one renders with gaps rather than failing. Adjust it here, in
- * parseSnapshot alone, when the Privateer PR lands. See docs/DECISIONS.md.
+ * The fleet map. Privateer's `fleet.snapshot {since?}` (operator-only, read-only)
+ * returns every machine, ship, route and need in one JSON. Its shape is the one
+ * privateer PR 241 describes. Every field is optional and extra fields are
+ * ignored, so a richer snapshot still parses and a poorer one renders with gaps.
+ * Parse it here alone.
  */
 
-/** A running crew job: a task's worker, with what it is doing now. */
+/** Presence values Privateer reports. Anything else reads as `unknown`, which is not an all-clear. */
+export const PRESENCES = [
+	'hosted',
+	'asleep',
+	'session',
+	'absent',
+	'unavailable',
+	'unknown'
+] as const;
+export type Presence = (typeof PRESENCES)[number];
+
+export interface FleetTask {
+	id: string;
+	title: string | null;
+	status: string | null;
+	handoff_to: string | null;
+}
+
+/** Why a job is not moving. `for` is capacity, disk, or job (behind a parked crew). */
+export interface FleetWait {
+	for: string | null;
+	since_ms: number | null;
+	job_id: string | null;
+	park: string | null;
+	behind: { job_id: string | null; ship: string | null; unhealthy: boolean }[];
+}
+
+/** A live job: starting, queued, launching, running, parked or orphaned, as `state` says. */
 export interface FleetJob {
 	id: string;
 	task_id: string | null;
 	task_title: string | null;
-	/** The last crew.report line. */
-	doing_now: string | null;
-	started_ms: number | null;
+	kind: string | null;
+	state: string | null;
 	heavy: boolean;
-	/** Why the job is not moving, e.g. "waiting for capacity". */
-	waits: string | null;
+	created_ms: number | null;
+	spawned_ms: number | null;
+	started_ms: number | null;
+	model_route: string | null;
+	/** The last crew.report line, or null when the crew has not reported. */
+	doing: { text: string; at_ms: number | null; report_id: string | null } | null;
+	wait: FleetWait | null;
 }
 
 export interface FleetShip {
 	name: string;
-	scope: string | null;
-	/** "hosted", "asleep", or another presence Privateer reports. */
-	presence: string | null;
-	open_tasks: number;
+	machine: string | null;
+	liaison: string | null;
+	harness: string | null;
+	hosted: boolean;
+	presence: Presence;
+	presence_since_ms: number | null;
+	unread: number;
+	open_requests: number;
+	/** At most 20, as Privateer sends them. */
+	open_tasks: FleetTask[];
+	open_tasks_total: number;
+	/** At most 20, newest first. */
 	jobs: FleetJob[];
+	jobs_total: number;
+}
+
+/** Allowance numbers are as Privateer reports them, with no unit it names. */
+export interface FleetAllowance {
+	shape: string | null;
+	window_ends_ms: number | null;
+	weekly_ends_ms: number | null;
+	window_used: number | null;
+	week_used: number | null;
+	last_used_ms: number | null;
 }
 
 /**
- * A model route on one machine. `cost` is "free", "plan" or "credits" as
- * Privateer reports it; `state` is "available", "backing_off" or "capped".
- * `until_ms` is when a backoff clears; `resets_at` is when a cap resets.
+ * A model route on one machine. `state` is available, idle (usable), backing_off or
+ * capped; `until_ms` is when a backoff or a cap clears. `error` is the classified
+ * error bearings show, never the command's text.
  */
 export interface FleetRoute {
 	name: string;
-	harness: string | null;
-	model: string | null;
+	route: string | null;
 	cost: string | null;
+	tier: string | null;
 	state: string | null;
 	until_ms: number | null;
-	resets_at: number | null;
-	last_error: string | null;
+	error: string | null;
+	allowance: FleetAllowance | null;
 }
 
 export interface FleetMachine {
 	name: string;
+	/** here, reaches, or reached_by: how this machine relates to the one reading. */
+	link: string | null;
 	reachable: boolean;
-	/** When this machine's state last changed, as Privateer observed it. */
+	error: string | null;
+	via: string | null;
+	/** When an unreachable machine was last read; its ships and routes are as of then. */
+	as_of_ms: number | null;
+	/** When this machine's own section last changed. */
 	changed_ms: number | null;
-	ships: FleetShip[];
+	/** True when this read did not resend the machine's ships and routes. */
+	unchanged: boolean;
+	truncated: boolean;
+	/** Things Privateer could not check, e.g. `answered:<ship>`. */
+	unknown: string[];
 	routes: FleetRoute[];
+	ships: FleetShip[];
 }
 
-/** An item needing the captain, from runtime.needs, with the ship it belongs to. */
+/** An item needing the captain: runtime.needs with the machine it came from. */
 export interface FleetNeed {
 	id: string;
 	ship: string;
+	machine: string | null;
 	kind: string | null;
+	source: string | null;
+	question: string | null;
+	/** Set for mail-sourced needs; null for blockers. */
+	mail_id: string | null;
+	/** Set for a cached need from an unreachable machine; null when live. */
+	as_of_ms: number | null;
+	actions: string[];
 }
 
 export interface FleetSnapshot {
+	schema_version: number | null;
 	generated_ms: number | null;
 	machines: FleetMachine[];
 	needs: FleetNeed[];
 }
 
+/** The `since` argument: each machine's changed_ms, compared for equality by Privateer. */
+export type SinceToken = Record<string, number>;
+
+/** The token for the next read, or null when no machine has a change time to send. */
+export function sinceOf(snapshot: FleetSnapshot | null): SinceToken | null {
+	if (!snapshot) return null;
+	const token: SinceToken = {};
+	for (const machine of snapshot.machines) {
+		if (machine.changed_ms !== null) token[machine.name] = machine.changed_ms;
+	}
+	return Object.keys(token).length > 0 ? token : null;
+}
+
+/**
+ * Joins a read made with `since` onto the snapshot held before it. An unchanged
+ * machine comes back with no ships or routes, so its held ones stand; its other
+ * fields are the new read's. Needs always come back in full, so they are the new
+ * read's. Returns null when an unchanged machine has nothing held to stand on,
+ * and the caller reads in full instead.
+ */
+export function mergeSnapshot(
+	held: FleetSnapshot | null,
+	next: FleetSnapshot
+): FleetSnapshot | null {
+	const machines: FleetMachine[] = [];
+	for (const machine of next.machines) {
+		if (!machine.unchanged) {
+			machines.push(machine);
+			continue;
+		}
+		const before = held?.machines.find((m) => m.name === machine.name);
+		if (!before) return null;
+		machines.push({ ...machine, ships: before.ships, routes: before.routes });
+	}
+	return { ...next, machines };
+}
+
 /** Read `fleet.snapshot` tolerantly: missing fields become null, empty or zero; extras are ignored. */
 export function parseSnapshot(result: unknown): FleetSnapshot {
 	const root = rec(result);
+	const ships = list(root?.ships).flatMap((raw) => {
+		const ship = rec(raw);
+		const name = str(ship?.name);
+		return ship && name ? [parseShip(name, ship)] : [];
+	});
 	return {
+		schema_version: num(root?.schema_version),
 		generated_ms: num(root?.generated_ms),
 		machines: list(root?.machines).flatMap((raw) => {
 			const machine = rec(raw);
 			const name = str(machine?.name);
-			return machine && name ? [parseMachine(name, machine)] : [];
+			return machine && name ? [parseMachine(name, machine, ships)] : [];
 		}),
 		needs: list(root?.needs).flatMap((raw) => {
 			const need = rec(raw);
 			const id = str(need?.id);
-			const ship = str(need?.ship);
-			return need && id && ship ? [{ id, ship, kind: str(need.kind) }] : [];
+			return need && id ? [parseNeed(id, need)] : [];
 		})
 	};
 }
 
-function parseMachine(name: string, machine: Rec): FleetMachine {
+function presenceOf(value: unknown): Presence {
+	return (PRESENCES as readonly unknown[]).includes(value) ? (value as Presence) : 'unknown';
+}
+
+function parseMachine(name: string, machine: Rec, ships: FleetShip[]): FleetMachine {
 	return {
 		name,
+		link: str(machine.link),
 		reachable: machine.reachable === true,
+		error: str(machine.error),
+		via: str(machine.via),
+		as_of_ms: num(machine.as_of_ms),
 		changed_ms: num(machine.changed_ms),
-		ships: list(machine.ships).flatMap((raw) => {
-			const ship = rec(raw);
-			const shipName = str(ship?.name);
-			return ship && shipName ? [parseShip(shipName, ship)] : [];
-		}),
+		unchanged: machine.unchanged === true,
+		truncated: machine.truncated === true,
+		unknown: strings(machine.unknown),
 		routes: list(machine.routes).flatMap((raw) => {
 			const route = rec(raw);
 			const routeName = str(route?.name);
 			return route && routeName ? [parseRoute(routeName, route)] : [];
-		})
-	};
-}
-
-function parseRoute(name: string, route: Rec): FleetRoute {
-	return {
-		name,
-		harness: str(route.harness),
-		model: str(route.model),
-		cost: str(route.cost),
-		state: str(route.state),
-		until_ms: num(route.until_ms),
-		resets_at: num(route.resets_at),
-		last_error: str(route.last_error)
+		}),
+		ships: ships.filter((ship) => ship.machine === name)
 	};
 }
 
 function parseShip(name: string, ship: Rec): FleetShip {
 	return {
 		name,
-		scope: str(ship.scope),
-		presence: str(ship.presence),
-		open_tasks: num(ship.open_tasks) ?? 0,
-		jobs: list(ship.jobs).flatMap((raw) => {
-			const job = rec(raw);
-			const id = str(job?.id);
-			return job && id
+		machine: str(ship.machine),
+		liaison: str(ship.liaison),
+		harness: str(ship.harness),
+		hosted: ship.hosted === true,
+		presence: presenceOf(ship.presence),
+		presence_since_ms: num(ship.presence_since_ms),
+		unread: num(ship.unread) ?? 0,
+		open_requests: num(ship.open_requests) ?? 0,
+		open_tasks: list(ship.open_tasks).flatMap((raw) => {
+			const task = rec(raw);
+			const id = str(task?.id);
+			return task && id
 				? [
 						{
 							id,
-							task_id: str(job.task_id),
-							task_title: str(job.task_title),
-							doing_now: str(job.doing_now),
-							started_ms: num(job.started_ms),
-							heavy: job.heavy === true,
-							waits: str(job.waits)
+							title: str(task.title),
+							status: str(task.status),
+							handoff_to: str(task.handoff_to)
 						}
 					]
 				: [];
-		})
+		}),
+		open_tasks_total: num(ship.open_tasks_total) ?? 0,
+		jobs: list(ship.jobs).flatMap((raw) => {
+			const job = rec(raw);
+			const id = str(job?.id);
+			return job && id ? [parseJob(id, job)] : [];
+		}),
+		jobs_total: num(ship.jobs_total) ?? 0
+	};
+}
+
+function parseJob(id: string, job: Rec): FleetJob {
+	const doing = rec(job.doing);
+	const wait = rec(job.wait);
+	return {
+		id,
+		task_id: str(job.task_id),
+		task_title: str(job.task_title),
+		kind: str(job.kind),
+		state: str(job.state),
+		heavy: job.heavy === true,
+		created_ms: num(job.created_ms),
+		spawned_ms: num(job.spawned_ms),
+		started_ms: num(job.started_ms),
+		model_route: str(job.model_route),
+		doing:
+			doing && str(doing.text)
+				? {
+						text: str(doing.text) as string,
+						at_ms: num(doing.at_ms),
+						report_id: str(doing.report_id)
+					}
+				: null,
+		wait: wait
+			? {
+					for: str(wait.for),
+					since_ms: num(wait.since_ms),
+					job_id: str(wait.job_id),
+					park: str(wait.park),
+					behind: list(wait.behind).flatMap((raw) => {
+						const b = rec(raw);
+						return b
+							? [{ job_id: str(b.job_id), ship: str(b.ship), unhealthy: b.unhealthy === true }]
+							: [];
+					})
+				}
+			: null
+	};
+}
+
+function parseRoute(name: string, route: Rec): FleetRoute {
+	const allowance = rec(route.allowance);
+	return {
+		name,
+		route: str(route.route),
+		cost: str(route.cost),
+		tier: str(route.tier),
+		state: str(route.state),
+		until_ms: num(route.until_ms),
+		error: str(route.error),
+		allowance: allowance
+			? {
+					shape: str(allowance.shape),
+					window_ends_ms: num(allowance.window_ends_ms),
+					weekly_ends_ms: num(allowance.weekly_ends_ms),
+					window_used: num(allowance.window_used),
+					week_used: num(allowance.week_used),
+					last_used_ms: num(allowance.last_used_ms)
+				}
+			: null
+	};
+}
+
+function parseNeed(id: string, need: Rec): FleetNeed {
+	return {
+		id,
+		ship: str(need.ship) ?? '',
+		machine: str(need.machine),
+		kind: str(need.kind),
+		source: str(need.source),
+		question: str(need.question),
+		mail_id: str(need.mail_id),
+		as_of_ms: num(need.as_of_ms),
+		actions: strings(need.actions)
 	};
 }
 

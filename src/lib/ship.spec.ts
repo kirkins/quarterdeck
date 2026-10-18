@@ -36,55 +36,75 @@ describe('tabOf', () => {
 
 describe('shipFacts', () => {
 	const snapshot = parseSnapshot({
+		generated_ms: 1,
 		machines: [
+			{ name: 'atlas', reachable: true, changed_ms: 1 },
+			{ name: 'calypso', reachable: false, as_of_ms: 1 }
+		],
+		ships: [
 			{
-				name: 'atlas',
-				reachable: true,
-				ships: [
+				name: 'billing',
+				machine: 'atlas',
+				presence: 'hosted',
+				presence_since_ms: 5,
+				open_tasks_total: 3,
+				jobs: [
 					{
-						name: 'billing',
-						presence: 'hosted',
-						open_tasks: 3,
-						jobs: [{ id: 'j1', task_title: 'Retries', doing_now: 'Replaying' }]
+						id: 'j1',
+						task_title: 'Retries',
+						state: 'running',
+						doing: { text: 'Replaying' }
 					}
 				]
 			},
-			{ name: 'calypso', reachable: false, ships: [{ name: 'mobile-app' }] }
+			{ name: 'mobile-app', machine: 'calypso', presence: 'asleep', open_tasks_total: 0 }
 		],
 		needs: [
-			{ id: 'n1', ship: 'billing', kind: 'decision' },
-			{ id: 'n2', ship: 'billing', kind: 'blocker' },
-			{ id: 'n3', ship: 'other' }
+			{ id: 'n1', ship: 'billing', machine: 'atlas', kind: 'decision' },
+			{ id: 'n2', ship: 'billing', machine: null, kind: 'blocker' },
+			{ id: 'n3', ship: 'billing', machine: 'boreas', kind: 'blocker' },
+			{ id: 'n4', ship: 'other', machine: 'atlas' }
 		]
 	});
 
-	it('places a ship on its machine, with its crew and the needs that name it', () => {
+	it('places a ship on its machine, with its crew and the needs that name it on that machine', () => {
 		expect(shipFacts(snapshot, 'billing')).toEqual({
 			machine: 'atlas',
 			reachable: true,
 			presence: 'hosted',
+			presenceSince: 5,
 			openTasks: 3,
 			jobs: [
 				{
 					id: 'j1',
 					task_id: null,
 					task_title: 'Retries',
-					doing_now: 'Replaying',
-					started_ms: null,
+					kind: null,
+					state: 'running',
 					heavy: false,
-					waits: null
+					created_ms: null,
+					spawned_ms: null,
+					started_ms: null,
+					model_route: null,
+					doing: { text: 'Replaying', at_ms: null, report_id: null },
+					wait: null
 				}
 			],
 			needs: 2
 		});
 	});
 
-	it('says which machine is not reachable', () => {
-		expect(shipFacts(snapshot, 'mobile-app')?.reachable).toBe(false);
+	it('says the machine is not reachable for a ship on an unreachable machine', () => {
+		expect(shipFacts(snapshot, 'mobile-app')).toMatchObject({
+			machine: 'calypso',
+			reachable: false,
+			presence: 'asleep',
+			jobs: []
+		});
 	});
 
-	it('is null for a ship the fleet does not place', () => {
-		expect(shipFacts(snapshot, 'ghost')).toBeNull();
+	it('returns null for a ship the fleet does not place on any machine', () => {
+		expect(shipFacts(snapshot, 'nowhere')).toBeNull();
 	});
 });
 

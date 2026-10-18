@@ -122,13 +122,6 @@
 						<span class="cost cost-{row.cost} tag">{costChip[row.cost]}</span>
 					</div>
 					{#if row.note}<p class="note">{row.note}</p>{/if}
-					{#if row.harnesses.length > 0 || row.models.length > 0}
-						<p class="meta">
-							{#if row.harnesses.length > 0}{row.harnesses.join(', ')}{/if}
-							{#if row.models.length > 0}
-								· {row.models.join(', ')}{/if}
-						</p>
-					{/if}
 					<ul class="states">
 						{#each row.states as s (s.machine)}
 							<li class="state-line" data-kind={s.kind} data-machine={s.machine}>

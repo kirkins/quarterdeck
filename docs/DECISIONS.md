@@ -114,26 +114,21 @@ Privateer finds the open ask across this machine's homes, and over the gateway f
 
 **Newer runtime.needs fields are optional.** `urgency`, `deadline_ms`, `asked_ms` and `mail_id` are read when present. Older Privateer sends none of them, so those asks sort as normal urgency with no deadline, and captain.waiting still supplies them when it lists the same ask.
 
-## 13. Fleet map: read-only, built on a provisional `fleet.snapshot`
+## 13. Fleet map: read-only, built on `fleet.snapshot`
 
 **The fleet map** (`/fleet`) shows machine, then ship, then crew: each machine with its reachability and ships, each ship with its presence, open tasks and needs, and each running crew job with what it is doing now, how long it has run, whether it is heavy, and any wait. It only reads. Nothing on the page changes the fleet.
 
-**Provisional shape.** Privateer is adding an operator-only `fleet.snapshot {}` that returns one JSON across all machines. Its PR is not out yet, so Quarterdeck builds against the shape Privateer described and marks it provisional:
+**The contract.** Privateer's `fleet.snapshot {since?}` (operator-only, read-only; its PR 241) returns one JSON across all machines: `machines` (each with `link`, `reachable`, `error`, `via`, `as_of_ms`, `changed_ms`, `unchanged`, `unknown` and `routes`), `ships` at the top level (each with its `machine`, `presence` and `presence_since_ms`, `open_tasks`, and live `jobs` with `state`, `doing` and `wait`), and `needs` (each with its `machine` and `mail_id`, `as_of_ms` set when cached). It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field is optional and extra fields are ignored, so a missing value becomes null, zero or empty. A ship's presence is one of hosted, asleep, session, absent, unavailable or unknown; anything else reads as unknown.
 
-```
-{ generated_ms,
-  machines: [ { name, reachable, changed_ms,
-     ships: [ { name, scope, presence, open_tasks,
-        jobs: [ { id, task_id, task_title, doing_now, started_ms, heavy, waits } ] } ],
-     routes?: [ { name, state, until_ms? } ] } ],
-  needs: [ { id, ship, kind, ... } ] }
-```
+**Presence and jobs.** Only `hosted` and `session` count as awake. `unknown` and `unavailable` are not all-clears: a ship with either is counted apart in the summary strip ("N ships unknown") and is never counted as awake or healthy. Live jobs are `starting`, `queued`, `launching`, `running`, `parked` or `orphaned`. Only starting, launching and running count as running crew. Queued and parked count as waiting, with `wait.for` saying on what (capacity, disk, or a job). Orphaned is a problem and is shown as one.
 
-It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field is optional, extra fields are ignored, and a missing value becomes null, zero or empty, so a richer or poorer snapshot still renders. When Privateer's PR lands, adjust `parseSnapshot` and its tests alone.
+**Polling with `since`.** A machine's `changed_ms` is sent back as `since: {machine: changed_ms}`. An unchanged machine comes back with `unchanged: true` and no ships or routes, so `CliSource` keeps the previous ships and routes for it (`mergeSnapshot`). Needs always come back in full. If an unchanged machine has nothing held to stand on, or the answer has no machines list, the read is repeated in full (`sinceOf`, `mergeSnapshot`, `CliSource.snapshot`).
+
+**Unreachable machines.** An unreachable machine is shown as last known, dimmed, with its `as_of` time and its ships and jobs as they were. Its counts are not added to the summary, and its cached needs still count as items that need the captain.
 
 **An older Privateer.** If the CLI refuses `fleet.snapshot` as an unknown command, the page shows a calm "does not offer a fleet map yet" state. Only that case is treated this way (`isUnknownCommand` in `src/lib/server/source.ts`); a timeout or any other failure shows the error state.
 
-**Sorting** (`src/lib/fleet.ts`). Machines with needs or running crew come first, then idle reachable machines, then unreachable ones; ties sort by name. Within a machine, ships with needs come first, then ships with crew, then awake ships, then asleep ones. An unreachable machine shows its ship names only, with no counts, because its numbers are stale.
+**Sorting** (`src/lib/fleet.ts`). Machines with needs or running crew come first, then idle reachable machines, then unreachable ones; ties sort by name. Within a machine, ships with needs or orphaned crew come first, then ships with running or waiting crew, then awake ships, then unknown ones, then the rest.
 
 **Refresh.** The page re-runs its load every 15 s while the tab is visible, and again on focus or when the tab becomes visible. Refreshes use `invalidate('quarterdeck:fleet')`, which re-runs only this page's load and leaves the component mounted, so the collapsed machines stay collapsed and the scroll position stays put.
 
@@ -145,7 +140,7 @@ It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field i
 
 **Provisional shapes.** Privateer has not shipped these yet, so Quarterdeck builds against guessed shapes and marks them provisional. Each is parsed in one place in `src/lib/shapes.ts`, with every field optional:
 
-- `fleet.snapshot` gains per machine `routes: [ { name, harness, model, cost, state, until_ms?, resets_at?, last_error? } ]`. It is the same parser the fleet map uses (`parseSnapshot`).
+- `fleet.snapshot` gives each machine `routes: [ { name, route, cost, tier, state, until_ms, error, allowance } ]`, with state available, idle (usable), backing_off or capped. It is the same parser the fleet map uses (`parseSnapshot`). The allowance numbers carry no unit Privateer names, so the view does not show them as a budget.
 - `routes.show {}` returns `{ routes: { <name>: { cost, note, options, manifest, allowance_resets_utc? } }, crew: [...], errand: [...], first_mate: [...] }`. The three lists are the order each tries routes in; the spend view uses the first list that names a route, crew first.
 - `usage.summary { since_ms, until_ms?, group_by }` returns `{ since_ms, until_ms, group_by, groups: [ { key, jobs, usage: { input, output, cacheRead, cacheWrite, totalTokens } | null, gaps: [harness] } ] }`. A harness that reports nothing has its fields null and is named in `gaps`. `totalTokens` is the sum of the four as reported, or the reported value when Privateer sends one.
 

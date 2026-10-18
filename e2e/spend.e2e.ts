@@ -31,6 +31,7 @@ test('routes show the throttled one first, with its relative time', async ({ pag
 		/backing off, back in \d+m/
 	);
 	await expect(free.locator('details.error-detail summary')).toHaveText('Last error');
+	await expect(free.locator('.state-line[data-machine="boreas"] .kind')).toContainText('idle');
 
 	const plan = page.locator('li.route[data-route="plan-main"]');
 	await expect(plan.locator('.state-line[data-machine="boreas"] .kind')).toContainText(

@@ -119,7 +119,7 @@ test('the tools search narrows the tool lists to what matches', async ({ page })
 
 test('a ship asleep and a ship on another machine show their place', async ({ page }) => {
 	await openShip(page, 'docs-site');
-	await expect(page.getByText('asleep', { exact: true })).toBeVisible();
+	await expect(page.getByText(/^asleep for \d+h( \d+m)?$/)).toBeVisible();
 
 	await openShip(page, 'search-index');
 	await expect(page.getByText('On boreas', { exact: true })).toBeVisible();

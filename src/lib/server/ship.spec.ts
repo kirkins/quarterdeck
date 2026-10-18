@@ -4,13 +4,8 @@ import { loadShipView } from './ship.ts';
 import type { ShipRead, Source, FleetRead } from './source.ts';
 
 const snapshot = parseSnapshot({
-	machines: [
-		{
-			name: 'atlas',
-			reachable: true,
-			ships: [{ name: 'billing', presence: 'hosted', open_tasks: 1, jobs: [] }]
-		}
-	],
+	machines: [{ name: 'atlas', reachable: true }],
+	ships: [{ name: 'billing', machine: 'atlas', presence: 'hosted', open_tasks_total: 1, jobs: [] }],
 	needs: []
 });
 

@@ -3,7 +3,7 @@
  * fleet map, and the search over its tools. Pure, so the server and the page
  * agree, and it is unit tested without Privateer.
  */
-import type { FleetJob, FleetSnapshot, ShipProfile } from '#lib/shapes.ts';
+import type { FleetJob, FleetSnapshot, Presence, ShipProfile } from '#lib/shapes.ts';
 
 /** A ship name is a word with letters, digits, dots, dashes or underscores. Anything else is not a ship. */
 const SHIP_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -29,9 +29,10 @@ export function tabOf(raw: string | null): ShipTab {
 export interface ShipFacts {
 	machine: string;
 	reachable: boolean;
-	presence: string | null;
+	presence: Presence;
+	presenceSince: number | null;
 	openTasks: number;
-	/** The crew running on the ship, each with what it is doing now. */
+	/** The live crew on the ship: running, queued, parked or orphaned, each with what it is doing. */
 	jobs: FleetJob[];
 	/** Items from runtime.needs that name this ship. */
 	needs: number;
@@ -46,9 +47,12 @@ export function shipFacts(snapshot: FleetSnapshot, name: string): ShipFacts | nu
 			machine: machine.name,
 			reachable: machine.reachable,
 			presence: ship.presence,
-			openTasks: ship.open_tasks,
+			presenceSince: ship.presence_since_ms,
+			openTasks: ship.open_tasks_total,
 			jobs: ship.jobs,
-			needs: snapshot.needs.filter((n) => n.ship === name).length
+			needs: snapshot.needs.filter(
+				(n) => n.ship === name && (n.machine === null || n.machine === machine.name)
+			).length
 		};
 	}
 	return null;
