@@ -143,6 +143,8 @@ enum Message {
     Settings(settings::Message),
     Window(window::Id, window::Event),
     Maximized(bool),
+    /// Read the watched live session again.
+    SessionTick,
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
@@ -250,6 +252,9 @@ impl Quarterdeck {
                     open_link(&url);
                     Task::none()
                 }
+                Some(dashboard::Event::WatchSession(ship)) => {
+                    self.connection.read_session(&ship).map(Message::Connection)
+                }
                 Some(dashboard::Event::ReadReport(id)) => {
                     self.connection.read_report(id).map(Message::Connection)
                 }
@@ -311,6 +316,13 @@ impl Quarterdeck {
             }
             Message::Saved(Ok(())) => Task::none(),
             Message::Window(id, event) => self.window_event(id, event),
+            Message::SessionTick => match self.dashboard.watching() {
+                Some(ship) => {
+                    let ship = ship.to_owned();
+                    self.connection.read_session(&ship).map(Message::Connection)
+                }
+                None => Task::none(),
+            },
             Message::Maximized(maximized) => {
                 self.main_window.update_maximize(maximized);
                 Task::none()
@@ -430,6 +442,13 @@ impl Quarterdeck {
             appearance::subscription().map(Message::AppearanceChanged),
             iced::time::every(self.connection.poll_every())
                 .map(|_| Message::Connection(connection::Message::Poll)),
+            // A watched live session is read every second, only while shown.
+            if self.dashboard.watching().is_some() {
+                iced::time::every(std::time::Duration::from_secs(1))
+                    .map(|_| Message::SessionTick)
+            } else {
+                Subscription::none()
+            },
         ])
     }
 }

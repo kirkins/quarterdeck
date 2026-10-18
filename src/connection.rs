@@ -16,7 +16,7 @@ use data::report::Report;
 use data::ships::{self, Ship};
 use data::triage;
 use iced::Task;
-use serde_json::json;
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -24,6 +24,7 @@ pub enum Message {
     LoadOlder,
     Ships(u64, Result<Vec<Ship>, Error>),
     ReportRead(u64, String, Result<Report, Error>),
+    SessionRead(u64, String, Result<Value, Error>),
     FeedRead {
         generation: u64,
         older: bool,
@@ -75,9 +76,22 @@ pub struct Connection {
     pub feed: Feed,
     /// Every ship the fleet knows, A to Z, read once per connection.
     pub ships: Vec<Ship>,
+    /// The live session being watched: its last screen.
+    pub screen: Option<Screen>,
+    reading_session: bool,
     /// Stored reports read so far, by id, with their Markdown.
     pub reports: HashMap<String, Result<(Report, Document), Error>>,
     reading_ships: bool,
+}
+
+/// A live session's last screen.
+pub struct Screen {
+    pub ship: String,
+    pub revision: u64,
+    pub agent_status: String,
+    pub lines: Vec<Vec<data::ansi::Run>>,
+    /// Why there is no screen: no live session, or an older Privateer.
+    pub error: Option<String>,
 }
 
 /// The Feed as read so far: the conversation, each message's Markdown, and
@@ -109,6 +123,8 @@ impl Connection {
             ships: Vec::new(),
             reading_ships: false,
             reports: HashMap::new(),
+            screen: None,
+            reading_session: false,
         }
     }
 
@@ -158,6 +174,33 @@ impl Connection {
             self.read_feed(false),
             self.read_ships(),
         ])
+    }
+
+    /// The screen of `ship`'s live session, unless a read is under way.
+    pub fn read_session(&mut self, ship: &str) -> Task<Message> {
+        if self.reading_session {
+            return Task::none();
+        }
+        self.reading_session = true;
+        let client = self.client.clone();
+        let generation = self.generation;
+        let ship = ship.to_owned();
+        Task::perform(
+            {
+                let ship = ship.clone();
+                async move {
+                    client
+                        .run(
+                            "session.read",
+                            json!({"ship": ship, "lines": 200}),
+                        )
+                        .await
+                }
+            },
+            move |result| {
+                Message::SessionRead(generation, ship.clone(), result)
+            },
+        )
     }
 
     /// A stored report, read once; it is kept until the connection changes.
@@ -264,6 +307,55 @@ impl Connection {
         match message {
             Message::Poll => self.poll(),
             Message::LoadOlder => self.read_feed(true),
+            Message::SessionRead(generation, ship, result) => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                self.reading_session = false;
+                let screen = match result {
+                    Ok(read) => {
+                        let revision = read["revision"].as_u64().unwrap_or(0);
+                        // An unchanged screen is not drawn again.
+                        if let Some(current) = &self.screen
+                            && current.ship == ship
+                            && current.error.is_none()
+                            && current.revision == revision
+                        {
+                            return Task::none();
+                        }
+                        Screen {
+                            ship,
+                            revision,
+                            agent_status: read["agent_status"]
+                                .as_str()
+                                .unwrap_or("unknown")
+                                .to_owned(),
+                            lines: data::ansi::parse(
+                                read["text"].as_str().unwrap_or_default(),
+                            ),
+                            error: None,
+                        }
+                    }
+                    Err(error) => Screen {
+                        ship,
+                        revision: 0,
+                        agent_status: "unknown".into(),
+                        lines: Vec::new(),
+                        error: Some(match &error {
+                            Error::Command { error, .. }
+                                if error.contains("unknown") =>
+                            {
+                                "This Privateer cannot show live sessions yet."
+                                    .to_owned()
+                            }
+                            Error::Command { error, .. } => error.clone(),
+                            other => other.to_string(),
+                        }),
+                    },
+                };
+                self.screen = Some(screen);
+                Task::none()
+            }
             Message::ReportRead(generation, id, result) => {
                 if generation == self.generation {
                     let read = result.map(|report| {

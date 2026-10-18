@@ -3,6 +3,7 @@ pub use self::config::Config;
 pub use self::dashboard::Dashboard;
 pub use self::window::Window;
 
+pub mod ansi;
 pub mod appearance;
 pub mod captain;
 pub mod choices;

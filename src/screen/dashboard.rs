@@ -10,7 +10,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
 use crate::screen::triage::{self, Triage};
-use crate::screen::{feed, reports};
+use crate::screen::{feed, live, reports};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -28,6 +28,7 @@ pub enum Message {
     Triage(triage::Message),
     Feed(feed::Message),
     Reports(reports::Message),
+    Live(live::Message),
 }
 
 /// What the app must do after an update.
@@ -39,6 +40,8 @@ pub enum Event {
     LoadOlder,
     /// Fetch a stored report.
     ReadReport(String),
+    /// Read a ship's live session now.
+    WatchSession(String),
     /// Run a write for the ask `key`.
     Write {
         key: String,
@@ -60,6 +63,7 @@ pub struct Dashboard {
     answering: HashSet<String>,
     composer: feed::Composer,
     reports: reports::Reports,
+    live: live::Live,
 }
 
 impl Dashboard {
@@ -74,6 +78,7 @@ impl Dashboard {
             answering: HashSet::new(),
             composer: feed::Composer::default(),
             reports: reports::Reports::default(),
+            live: live::Live::default(),
         }
     }
 
@@ -82,6 +87,13 @@ impl Dashboard {
         data::Dashboard {
             layout: layout(&self.panes, self.panes.layout()),
         }
+    }
+
+    /// The ship whose live session should be read now: one is picked and
+    /// the Live pane is on screen.
+    pub fn watching(&self) -> Option<&str> {
+        let shown = self.panes.iter().any(|(_, pane)| pane.view == View::Live);
+        shown.then(|| self.live.ship()).flatten()
     }
 
     /// Open a report in the Reports pane, putting the pane on screen.
@@ -106,7 +118,9 @@ impl Dashboard {
         key: String,
         result: Result<data::privateer::Sent, data::privateer::Error>,
     ) {
-        if key == reports::REPORT_KEY {
+        if key == live::LIVE_KEY {
+            self.live.written(result);
+        } else if key == reports::REPORT_KEY {
             self.reports.written(result);
         } else if key == feed::COMPOSE_KEY {
             self.composer.written(result);
@@ -190,6 +204,14 @@ impl Dashboard {
                 }
                 None
             }
+            Message::Live(message) => match self.live.update(message)? {
+                live::Event::Watch(ship) => Some(Event::WatchSession(ship)),
+                live::Event::Write { command, args } => Some(Event::Write {
+                    key: live::LIVE_KEY.to_owned(),
+                    command,
+                    args,
+                }),
+            },
             Message::Reports(message) => {
                 match self.reports.update(message, connection)? {
                     reports::Event::Read(id) => Some(Event::ReadReport(id)),
@@ -380,6 +402,9 @@ impl Dashboard {
             let body = match pane.view {
                 View::Triage => {
                     self.triage.view(connection, theme).map(Message::Triage)
+                }
+                View::Live => {
+                    self.live.view(connection, theme).map(Message::Live)
                 }
                 View::Reports => {
                     self.reports.view(connection, theme).map(Message::Reports)

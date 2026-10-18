@@ -222,6 +222,7 @@ pub mod naval {
             View::Fleet => &FLEET,
             View::Spend => &SPEND,
             View::Reports => &REPORTS,
+            View::Live => &SHIPS,
         })
     }
 

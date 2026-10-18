@@ -16,16 +16,18 @@ pub enum View {
     Fleet,
     Spend,
     Reports,
+    Live,
 }
 
 impl View {
-    pub const ALL: [View; 6] = [
+    pub const ALL: [View; 7] = [
         View::Triage,
         View::Feed,
         View::Ships,
         View::Fleet,
         View::Spend,
         View::Reports,
+        View::Live,
     ];
 
     pub fn title(self) -> &'static str {
@@ -36,6 +38,7 @@ impl View {
             View::Fleet => "Fleet",
             View::Spend => "Spend",
             View::Reports => "Reports",
+            View::Live => "Live",
         }
     }
 
@@ -52,6 +55,9 @@ impl View {
             View::Fleet => "Machines, ships and crew, and what each is doing.",
             View::Spend => "Model routes and what they have used.",
             View::Reports => "Reports from the ships, to read and annotate.",
+            View::Live => {
+                "A ship's first mate as it works, to watch and type to."
+            }
         }
     }
 }
