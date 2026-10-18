@@ -178,7 +178,7 @@
 			],
 			"mcp_servers": [
 				{
-					"name": "storefront-preview",
+					"name": "shop-preview",
 					"url": "https://preview.example.test/mcp",
 					"credentials": []
 				}
