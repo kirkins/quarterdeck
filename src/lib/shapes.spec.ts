@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assemble, parseCaptainWaiting, parseRuntimeNeeds } from './shapes.ts';
+import { assemble, parseCaptainWaiting, parseRuntimeNeeds, parseSnapshot } from './shapes.ts';
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
@@ -331,5 +331,113 @@ describe('assemble', () => {
 		);
 		expect(result.items).toHaveLength(1);
 		expect(result.unavailable).toBe('down');
+	});
+});
+
+describe('parseSnapshot (provisional fleet.snapshot)', () => {
+	const full = {
+		generated_ms: NOW,
+		machines: [
+			{
+				name: 'atlas',
+				reachable: true,
+				changed_ms: NOW - 4000,
+				routes: [{ name: 'primary', state: 'backing_off', until_ms: NOW + 9 * MIN }],
+				ships: [
+					{
+						name: 'billing',
+						scope: 'Invoices',
+						presence: 'hosted',
+						open_tasks: 3,
+						jobs: [
+							{
+								id: 'j1',
+								task_id: 'billing-retries',
+								task_title: 'Retry policy',
+								doing_now: 'Replaying declines',
+								started_ms: NOW - 12 * MIN,
+								heavy: true,
+								waits: 'waiting for capacity'
+							}
+						]
+					}
+				]
+			}
+		],
+		needs: [{ id: 'n1', ship: 'billing', kind: 'decision', source: 'mail' }]
+	};
+
+	it('reads the full shape', () => {
+		const snap = parseSnapshot(full);
+		expect(snap.generated_ms).toBe(NOW);
+		expect(snap.machines).toHaveLength(1);
+		const [machine] = snap.machines;
+		expect(machine).toMatchObject({ name: 'atlas', reachable: true, changed_ms: NOW - 4000 });
+		expect(machine.routes).toEqual([
+			{ name: 'primary', state: 'backing_off', until_ms: NOW + 9 * MIN }
+		]);
+		expect(machine.ships[0]).toMatchObject({
+			name: 'billing',
+			scope: 'Invoices',
+			presence: 'hosted',
+			open_tasks: 3
+		});
+		expect(machine.ships[0].jobs[0]).toEqual({
+			id: 'j1',
+			task_id: 'billing-retries',
+			task_title: 'Retry policy',
+			doing_now: 'Replaying declines',
+			started_ms: NOW - 12 * MIN,
+			heavy: true,
+			waits: 'waiting for capacity'
+		});
+		expect(snap.needs).toEqual([{ id: 'n1', ship: 'billing', kind: 'decision' }]);
+	});
+
+	it('fills gaps for a partial snapshot instead of failing', () => {
+		const snap = parseSnapshot({ machines: [{ name: 'boreas', ships: [{ name: 'analytics' }] }] });
+		expect(snap).toEqual({
+			generated_ms: null,
+			machines: [
+				{
+					name: 'boreas',
+					reachable: false,
+					changed_ms: null,
+					routes: [],
+					ships: [{ name: 'analytics', scope: null, presence: null, open_tasks: 0, jobs: [] }]
+				}
+			],
+			needs: []
+		});
+	});
+
+	it('ignores extra fields at every level', () => {
+		const snap = parseSnapshot({
+			...full,
+			privateer_version: '9.9',
+			machines: [{ ...full.machines[0], spend_usd: 4.2, ships: [{ name: 'x', hostname: 'h' }] }],
+			needs: [{ id: 'n2', ship: 'x', kind: 'blocker', extra: true }]
+		});
+		expect(snap.machines[0].ships).toEqual([
+			{ name: 'x', scope: null, presence: null, open_tasks: 0, jobs: [] }
+		]);
+		expect(snap.needs).toEqual([{ id: 'n2', ship: 'x', kind: 'blocker' }]);
+	});
+
+	it('returns an empty fleet when machines are missing or not a list', () => {
+		expect(parseSnapshot({})).toEqual({ generated_ms: null, machines: [], needs: [] });
+		expect(parseSnapshot({ machines: 'atlas' }).machines).toEqual([]);
+		expect(parseSnapshot(null).machines).toEqual([]);
+		expect(parseSnapshot('not an object').needs).toEqual([]);
+	});
+
+	it('drops machines, ships and needs without a name or id', () => {
+		const snap = parseSnapshot({
+			machines: [{ reachable: true }, { name: 'calypso', ships: [{ scope: 'no name' }] }],
+			needs: [{ id: 'n3' }, { ship: 'billing' }]
+		});
+		expect(snap.machines.map((m) => m.name)).toEqual(['calypso']);
+		expect(snap.machines[0].ships).toEqual([]);
+		expect(snap.needs).toEqual([]);
 	});
 });

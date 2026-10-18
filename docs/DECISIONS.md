@@ -111,3 +111,28 @@ Privateer finds the open ask across this machine's homes, and over the gateway f
 **Still open for Privateer:** a mail need's `kind` in runtime.needs may now be `request`, `notice` or `report` as well as `decision` and `approval`. Quarterdeck reads it that way until Privateer confirms the names.
 
 **Newer runtime.needs fields are optional.** `urgency`, `deadline_ms`, `asked_ms` and `mail_id` are read when present. Older Privateer sends none of them, so those asks sort as normal urgency with no deadline, and captain.waiting still supplies them when it lists the same ask.
+
+## 13. Fleet map: read-only, built on a provisional `fleet.snapshot`
+
+**The fleet map** (`/fleet`) shows machine, then ship, then crew: each machine with its reachability and ships, each ship with its presence, open tasks and needs, and each running crew job with what it is doing now, how long it has run, whether it is heavy, and any wait. It only reads. Nothing on the page changes the fleet.
+
+**Provisional shape.** Privateer is adding an operator-only `fleet.snapshot {}` that returns one JSON across all machines. Its PR is not out yet, so Quarterdeck builds against the shape Privateer described and marks it provisional:
+
+```
+{ generated_ms,
+  machines: [ { name, reachable, changed_ms,
+     ships: [ { name, scope, presence, open_tasks,
+        jobs: [ { id, task_id, task_title, doing_now, started_ms, heavy, waits } ] } ],
+     routes?: [ { name, state, until_ms? } ] } ],
+  needs: [ { id, ship, kind, ... } ] }
+```
+
+It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field is optional, extra fields are ignored, and a missing value becomes null, zero or empty, so a richer or poorer snapshot still renders. When Privateer's PR lands, adjust `parseSnapshot` and its tests alone.
+
+**An older Privateer.** If the CLI refuses `fleet.snapshot` as an unknown command, the page shows a calm "does not offer a fleet map yet" state. Only that case is treated this way (`isUnknownCommand` in `src/lib/server/source.ts`); a timeout or any other failure shows the error state.
+
+**Sorting** (`src/lib/fleet.ts`). Machines with needs or running crew come first, then idle reachable machines, then unreachable ones; ties sort by name. Within a machine, ships with needs come first, then ships with crew, then awake ships, then asleep ones. An unreachable machine shows its ship names only, with no counts, because its numbers are stale.
+
+**Refresh.** The page re-runs its load every 15 s while the tab is visible, and again on focus or when the tab becomes visible. Refreshes use `invalidate('quarterdeck:fleet')`, which re-runs only this page's load and leaves the component mounted, so the collapsed machines stay collapsed and the scroll position stays put.
+
+**Needs link to triage.** A ship's "items need you" link goes to `/triage?ship=<name>`. Triage reads that ship from the URL and filters to it, and the URL choice wins over the remembered filter.

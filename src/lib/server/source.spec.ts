@@ -7,11 +7,13 @@ import { buildDismiss } from './dismiss.ts';
 import {
 	CliSource,
 	FixtureSource,
+	isUnknownCommand,
 	rebaseFixture,
 	sendDismiss,
 	sendReply,
 	type Source
 } from './source.ts';
+import { PrivateerCommandError, PrivateerExecError } from './privateer.ts';
 
 const NOW = 1_800_000_000_000;
 const H = 3_600_000;
@@ -160,7 +162,12 @@ describe('rebaseFixture', () => {
 
 describe('sendReply', () => {
 	function source(mode: Source['mode']) {
-		return { mode, waiting: vi.fn(), write: vi.fn(async () => ({ id: 'r' })) };
+		return {
+			mode,
+			waiting: vi.fn(),
+			write: vi.fn(async () => ({ id: 'r' })),
+			snapshot: vi.fn()
+		};
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
 
@@ -205,7 +212,7 @@ describe('sendDismiss', () => {
 	const dismiss = { id: 'mail-9', note: 'Covered elsewhere' };
 
 	it('logs captain.dismiss and never writes in fixture mode', async () => {
-		const s = { mode: 'fixtures' as const, waiting: vi.fn(), write: vi.fn() };
+		const s = { mode: 'fixtures' as const, waiting: vi.fn(), write: vi.fn(), snapshot: vi.fn() };
 		const log = vi.fn();
 		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
 		expect(s.write).not.toHaveBeenCalled();
@@ -214,7 +221,12 @@ describe('sendDismiss', () => {
 	});
 
 	it('writes captain.dismiss from the cli source when allowed', async () => {
-		const s = { mode: 'cli' as const, waiting: vi.fn(), write: vi.fn(async () => ({ ok: true })) };
+		const s = {
+			mode: 'cli' as const,
+			waiting: vi.fn(),
+			write: vi.fn(async () => ({ ok: true })),
+			snapshot: vi.fn()
+		};
 		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
 			sent: true,
 			result: { ok: true }
@@ -243,5 +255,71 @@ describe('buildDismiss', () => {
 			ok: false,
 			error: 'Keep the note under 2000 characters.'
 		});
+	});
+});
+
+describe('fleet snapshot', () => {
+	it('reads fleet.snapshot and parses it', async () => {
+		const run = vi.fn(async () => ({
+			generated_ms: NOW,
+			machines: [{ name: 'atlas', reachable: true }]
+		}));
+		const read = await new CliSource(run as never).snapshot();
+		expect(run).toHaveBeenCalledWith('fleet.snapshot', {});
+		expect(read).toEqual({
+			status: 'ok',
+			snapshot: {
+				generated_ms: NOW,
+				machines: [{ name: 'atlas', reachable: true, changed_ms: null, routes: [], ships: [] }],
+				needs: []
+			}
+		});
+	});
+
+	it('reports an older Privateer that does not know the command as unsupported', async () => {
+		const unknownJson = new CliSource(async () => {
+			throw new PrivateerCommandError('fleet.snapshot', 'unknown command fleet.snapshot');
+		});
+		expect(await unknownJson.snapshot()).toEqual({ status: 'unsupported' });
+
+		const unknownClap = new CliSource(async () => {
+			throw new PrivateerExecError(
+				'fleet.snapshot',
+				'privateer fleet.snapshot failed with exit code 2',
+				"error: unrecognized subcommand 'fleet.snapshot'"
+			);
+		});
+		expect(await unknownClap.snapshot()).toEqual({ status: 'unsupported' });
+	});
+
+	it('rethrows real failures instead of calling them unsupported', async () => {
+		const timedOut = new CliSource(async () => {
+			throw new PrivateerExecError('fleet.snapshot', 'privateer fleet.snapshot timed out');
+		});
+		await expect(timedOut.snapshot()).rejects.toThrow('timed out');
+
+		const unknownError = new CliSource(async () => {
+			throw new PrivateerCommandError('fleet.snapshot', 'unknown error');
+		});
+		await expect(unknownError.snapshot()).rejects.toThrow('unknown error');
+	});
+
+	it('recognises only the unknown-command messages', () => {
+		expect(isUnknownCommand(new Error('unknown command'))).toBe(false);
+		expect(isUnknownCommand(new PrivateerCommandError('x', 'no such command: x'))).toBe(true);
+	});
+
+	it('reads the fixture snapshot, shifted to now', async () => {
+		const read = await new FixtureSource('fixtures', () => NOW).snapshot();
+		expect(read.status).toBe('ok');
+		if (read.status !== 'ok') return;
+		expect(read.snapshot.machines.map((m) => m.name)).toEqual(['atlas', 'boreas', 'calypso']);
+		expect(read.snapshot.generated_ms).toBe(NOW);
+	});
+
+	it('reports an absent fixture as unsupported', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'qd-fleet-'));
+		await writeFile(path.join(dir, 'captain.waiting.json'), '{}');
+		expect(await new FixtureSource(dir, () => NOW).snapshot()).toEqual({ status: 'unsupported' });
 	});
 });

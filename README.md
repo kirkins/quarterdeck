@@ -4,11 +4,11 @@ A web portal for a [Privateer](https://github.com/kirkins/privateer) fleet: wher
 
 - **Decisions**: one card per thing the captain must decide, with options, costs and the ship's recommendation.
 - **Triage**: everything owed to the captain, in one list: decisions, requests, approvals and blocked items, sorted by urgency, then deadline, then age.
-- **Fleet map** (soon): machines, ships and crew, live.
+- **Fleet**: machines, ships and crew, with what each is doing. Read-only; refreshes every 15 s while visible.
 
 Quarterdeck reads Privateer only through its JSON commands, and answers as the captain. It must never be reachable without authentication.
 
-Status: early development. Decisions and Triage are live; Fleet is a placeholder.
+Status: early development. Decisions, Triage and Fleet are live. Fleet reads a provisional `fleet.snapshot` shape; see [docs/DECISIONS.md](docs/DECISIONS.md) section 13.
 
 | Phone, light                                      | Phone, dark                                     | Desktop                                               |
 | ------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
@@ -90,6 +90,7 @@ Layout:
 - `src/lib/server/source.ts`: `CliSource`, `FixtureSource`, and the send-or-log rule.
 - `src/lib/shapes.ts`: reads the real `captain.waiting` and `runtime.needs` output into one item model.
 - `src/lib/triage.ts`: triage kinds, sections, sort order and filters.
+- `src/lib/fleet.ts`: the fleet map's summary, needs per ship, and machine and ship sort order.
 - `src/lib/server/answer.ts`: builds the reply from the captain's choice.
 - `src/routes/+page.server.ts`: loads cards; the `answer` form action.
 - `fixtures/`: invented ships and asks covering every card variant.

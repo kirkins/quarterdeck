@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { refreshAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import Icon from '#lib/components/Icon.svelte';
 	import TriageRow from '#lib/components/TriageRow.svelte';
 	import { askKey } from '#lib/decision.ts';
@@ -78,7 +79,9 @@
 		} catch {
 			stored = null;
 		}
-		filter = readFilter(stored);
+		// A link from the fleet map names a ship; that choice wins over the remembered one.
+		const shipParam = page.url.searchParams.get('ship');
+		filter = shipParam ? { ship: shipParam, kind: null } : readFilter(stored);
 		ready = true;
 		clock = Date.now();
 
