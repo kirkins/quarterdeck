@@ -7,15 +7,18 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	assemble,
+	parseFeed,
 	parseRoutesShow,
 	parseSnapshot,
 	parseUsageRecords,
 	parseUsageSummary,
+	type FeedPage,
 	type FleetSnapshot,
 	type RoutesConfig,
 	type UsageSummary,
 	type Waiting
 } from '#lib/shapes.ts';
+import { isShipToShip, type FeedQuery } from '#lib/feed.ts';
 import { summarizeRecords, type UsageQuery } from '#lib/usage.ts';
 import { REPORT_FORMATS, checkContent, type ReportFormat } from '#lib/report.ts';
 import type { ReplyArgs } from './answer.ts';
@@ -50,6 +53,8 @@ export interface Source {
 	usage(query: UsageQuery): Promise<Read<UsageSummary>>;
 	/** A report held by id, from whichever home has it (`report.get`). */
 	report(id: string): Promise<FetchedReport>;
+	/** The captain's feed, merged across homes and machines (`captain.feed`), read-only. */
+	feed(query: FeedQuery): Promise<Read<FeedPage>>;
 }
 
 export interface FetchedReport {
@@ -167,6 +172,15 @@ export class CliSource implements Source {
 			throw error;
 		}
 	}
+
+	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
+		try {
+			return { status: 'ok', value: parseFeed(await this.#run('captain.feed', { ...query })) };
+		} catch (error) {
+			if (isUnknownCommand(error)) return { status: 'unsupported' };
+			throw error;
+		}
+	}
 }
 
 /** Fixture files, named after the command whose output they stand in for. */
@@ -176,6 +190,7 @@ export const REPORT_FIXTURE = 'report.get.json';
 export const FLEET_FIXTURE = 'fleet-snapshot.json';
 export const ROUTES_FIXTURE = 'routes-show.json';
 export const USAGE_FIXTURE = 'usage-records.json';
+export const FEED_FIXTURE = 'captain.feed.json';
 
 /** Keys that are derived when read, never shifted with the fixture clock. */
 const DERIVED_KEYS = new Set(['age_ms', 'waited_ms']);
@@ -208,6 +223,10 @@ export class FixtureSource implements Source {
 	readonly mode = 'fixtures' as const;
 	readonly #dir: string;
 	readonly #now: () => number;
+	/** When this process first read the feed; see feed(). */
+	#feedBase: number | undefined;
+	/** When each held feed message first arrived; see feed(). */
+	readonly #arrivals = new Map<string, number>();
 
 	constructor(dir: string, now: () => number = Date.now) {
 		this.#dir = dir;
@@ -215,7 +234,7 @@ export class FixtureSource implements Source {
 	}
 
 	/** One fixture file as parsed JSON, or null when it is absent. */
-	async #read(file: string): Promise<unknown> {
+	async #read(file: string, now: number = this.#now()): Promise<unknown> {
 		let text: string;
 		try {
 			text = await readFile(path.resolve(this.#dir, file), 'utf8');
@@ -225,7 +244,7 @@ export class FixtureSource implements Source {
 		}
 		const json = JSON.parse(text) as { fixture_now_ms?: unknown };
 		return typeof json.fixture_now_ms === 'number'
-			? rebaseFixture(json, json.fixture_now_ms, this.#now())
+			? rebaseFixture(json, json.fixture_now_ms, now)
 			: json;
 	}
 
@@ -255,6 +274,68 @@ export class FixtureSource implements Source {
 	async routesShow(): Promise<Read<RoutesConfig>> {
 		const raw = await this.#read(ROUTES_FIXTURE);
 		return raw === null ? { status: 'unsupported' } : { status: 'ok', value: parseRoutesShow(raw) };
+	}
+
+	/**
+	 * The feed as captain.feed would answer it. `after` lists what is newer; otherwise
+	 * the newest `limit` entries, or the page before `before`, whose cursor is the
+	 * index of its first entry.
+	 *
+	 * The fixture's times are pinned to the moment this process first reads the
+	 * feed, so a poll sees only what is really new. An entry with `arrives_in_s`
+	 * is held back until that many seconds after then, so the live feed can be
+	 * seen to bring a message in.
+	 */
+	async feed(query: FeedQuery): Promise<Read<FeedPage>> {
+		this.#feedBase ??= this.#now();
+		const elapsed = this.#now() - this.#feedBase;
+		const raw = await this.#read(FEED_FIXTURE, this.#feedBase);
+		if (raw === null) return { status: 'unsupported' };
+		const sent = rec(raw)?.entries;
+		const arrived: unknown[] = [];
+		for (const e of Array.isArray(sent) ? sent : []) {
+			const delay = rec(e)?.arrives_in_s;
+			if (typeof delay !== 'number') {
+				arrived.push(e);
+			} else if (delay * 1000 <= elapsed) {
+				// A held message is stamped when it first arrives, so it is newer than anything before it.
+				const id = String(rec(e)?.id);
+				if (!this.#arrivals.has(id)) this.#arrivals.set(id, this.#now());
+				arrived.push({ ...(rec(e) ?? {}), created_ms: this.#arrivals.get(id) });
+			}
+		}
+		const visible = parseFeed({ entries: arrived })
+			.entries.filter((e) => query.include_ship_mail || !isShipToShip(e))
+			.filter(
+				(e) =>
+					query.ship === undefined ||
+					e.ship === query.ship ||
+					e.from === query.ship ||
+					e.to === query.ship
+			)
+			.sort((a, b) => (a.created_ms ?? 0) - (b.created_ms ?? 0));
+		if (query.after !== undefined) {
+			const after = query.after;
+			return {
+				status: 'ok',
+				value: {
+					entries: visible.filter((e) => (e.created_ms ?? 0) > after),
+					more: false,
+					next: null
+				}
+			};
+		}
+		const end =
+			query.before === undefined ? visible.length : Math.min(Number(query.before), visible.length);
+		const start = Math.max(0, end - query.limit);
+		return {
+			status: 'ok',
+			value: {
+				entries: visible.slice(start, end),
+				more: start > 0,
+				next: start > 0 ? String(start) : null
+			}
+		};
 	}
 
 	/** Records are grouped here, the way usage.summary would group them live. */

@@ -7,6 +7,7 @@
 	error is on screen.
 -->
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import type { Failure } from '#lib/form.ts';
 	import { dismissDetail } from '#lib/dismiss.ts';
 	import Icon from './Icon.svelte';
@@ -23,7 +24,7 @@
 
 <details class="dismiss" open={failure !== null}>
 	<summary class="btn btn-quiet">{label}</summary>
-	<form method="POST" action="?/dismiss" class="confirm">
+	<form method="POST" action="?/dismiss" class="confirm" use:enhance>
 		<input type="hidden" name="from" value={from} />
 		<input type="hidden" name="id" value={id} />
 		<label>

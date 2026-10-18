@@ -14,7 +14,7 @@ Palette: sail-canvas paper, deep navy ink, sea-glass for action and selection, b
 
 ## 3. Dependencies
 
-There are **no runtime dependencies** beyond SvelteKit, with one exception: `marked`, which renders Markdown reports on the server (section 14). Everything else in `package.json` is a dev dependency and the built server bundles what it needs.
+There are **no runtime dependencies** beyond SvelteKit, with one exception: `marked`, which renders Markdown reports on the server (section 15). Everything else in `package.json` is a dev dependency and the built server bundles what it needs.
 
 - `@fontsource-variable/fraunces` (dev dependency, OFL-1.1): the display face for the wordmark and card questions, self-hosted and bundled at build time so pages never call a font CDN. Only the Latin subsets a page actually uses are downloaded (`unicode-range`). Body text uses the system UI font.
 - Tooling: vitest (data layer and schema), Playwright (smoke test and screenshots, chromium only), eslint + prettier + svelte-check. These came from the official `sv create` templates.
@@ -187,3 +187,23 @@ A ship can hand the captain a **report**: a long Markdown or HTML document. It a
 **Drafts** are kept per report in `localStorage`, saved as the captain works, restored on return, and cleared only after a successful send. Storage that is refused is not an error: the comments still work for that visit.
 
 **What is not done.** The frame's links do nothing, rather than opening anywhere. Nested frames and templates in an HTML report show as text. A report by id is fetched on each read; nothing is cached. Comments are not persisted on the server, so a draft lives in one browser until it is sent. The `report.get` shape is read as `{format, content}` at the top level or under `report`, which is a guess until Privateer's command lands; see `parseFetched` in `src/lib/server/source.ts`.
+
+## 16. The Feed: one chat with the captain, built on a provisional `captain.feed`
+
+The Feed is the landing page (`/` redirects to `/feed`). It is every message to and from the captain across ships and machines, drawn as a chat: newest at the bottom, older pages loaded on scroll-up, ship runs, date separators, and an Unread divider. Decisions moved to `/decisions` and keeps working. Triage and Fleet are unchanged.
+
+**The wire shape is provisional.** Privateer's `captain.feed {after?, before?, limit?, ship?, include_ship_mail?}` is agreed in direction but not built. We read `{entries, more, next}`, which is our guess at the wrapper; the entry fields are as agreed: `machine, ship, id, created_ms, from, to, kind, correlation, task_id, urgency, deadline_ms, state, body, payload`. It is parsed in one place, `parseFeed` in `src/lib/shapes.ts`, with every field optional. `fixtures/captain.feed.json` is the stand-in. An older Privateer that does not know the command gives a calm "not on this Privateer yet" state, as Fleet and Spend do.
+
+**Answering in place reuses the existing paths.** A decision or request is answered with the same `QuestionForm` as Decisions (`captain.reply`, the same send guard), a needs_hands step closes with Done (`captain.dismiss`), and a notice or report with Mark read or Open report. The feed's actions call the same `submitAnswer` and `submitDismiss` as the other pages. Nothing new writes to Privateer.
+
+**An answer this portal sent appears before Privateer lists it.** `applyLocalAnswers` (`src/lib/feed.ts`) marks the ask answered or dismissed, and adds the captain's reply, marked "Logged, not sent" when nothing was sent. A reply Privateer already lists wins, so nothing shows twice.
+
+**Scope.** The default is the captain's own mail. Ship-to-ship mail is behind a toggle, and a changed toggle or ship asks Privateer again, since it is Privateer that filters. "Only waiting on me" filters the messages already loaded; it does not ask Privateer for every open item, because `captain.feed` has no such filter yet.
+
+**Identity of a message.** Messages are keyed by sender and id, as asks are (`askKey`), not by id alone: ships choose their own mail ids, so two ships can both send `b-1`. A desk copy and its original share both and appear once, the later version kept.
+
+**Live.** The page polls `after` (the newest time on screen) every 10 s while the tab is visible, and again on focus. New messages append. If the captain is scrolled up, they are counted in a "N new messages" pill rather than moving the page. Scroll position is kept when older pages load. Typed answers survive polls, because each message is keyed and not remounted.
+
+**Remembered per viewer** (`localStorage`, failures ignored): the filters, and where the captain last read. The Unread divider marks the point where the captain last read, and stays for that visit.
+
+**Not done, by design.** System events (crew started or finished, merges) are not in the feed; `kind` and `payload` leave room for them. The ship page at `/ship/[name]` is a placeholder. Times are drawn only after the page runs, since the server's zone is not the captain's. The Feed badge shows the same count as Triage: open items waiting on the captain.

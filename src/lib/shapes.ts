@@ -490,3 +490,75 @@ export function parseUsageRecords(result: unknown): UsageRecord[] {
 			: [];
 	});
 }
+
+/*
+ * The captain's feed (PROVISIONAL). Privateer's `captain.feed` is agreed but not
+ * built yet: one stream of every message to and from the captain, across ships
+ * and machines. The entry fields are as agreed; the page wrapper
+ * `{ entries, more, next }` is our guess. Every field is optional and extras are
+ * ignored. Adjust these parsers alone; see docs/DECISIONS.md section 16.
+ */
+
+/** One message in the feed. `payload` is the mail payload, unchanged. */
+export interface FeedEntry {
+	machine: string | null;
+	/** The ship the conversation belongs to; for ship-to-ship mail, the sender. */
+	ship: string;
+	id: string;
+	created_ms: number | null;
+	from: string;
+	to: string;
+	kind: string;
+	correlation: string | null;
+	task_id: string | null;
+	urgency: string;
+	deadline_ms: number | null;
+	/** "open", "answered", "dismissed", or another state Privateer reports. */
+	state: string | null;
+	body: string | null;
+	payload: Rec;
+	/** Set on an answer made in this portal that Privateer does not list yet. */
+	local?: { sent: boolean };
+}
+
+export interface FeedPage {
+	entries: FeedEntry[];
+	/** True when there are older entries than these. */
+	more: boolean;
+	/** Opaque cursor for the page of older entries; pass it back as `before`. */
+	next: string | null;
+}
+
+/** Read `captain.feed`. Entries without an id or a sender are dropped. */
+export function parseFeed(result: unknown): FeedPage {
+	const root = rec(result);
+	return {
+		entries: list(root?.entries).flatMap((raw) => {
+			const entry = rec(raw);
+			const id = str(entry?.id);
+			const from = str(entry?.from);
+			if (!entry || !id || !from) return [];
+			const to = str(entry.to) ?? '';
+			return [
+				{
+					machine: str(entry.machine),
+					ship: str(entry.ship) ?? (from === 'captain' ? to : from),
+					id,
+					created_ms: num(entry.created_ms),
+					from,
+					to,
+					kind: str(entry.kind) ?? 'request',
+					correlation: str(entry.correlation),
+					task_id: str(entry.task_id),
+					urgency: urgencyOf(entry.urgency),
+					deadline_ms: num(entry.deadline_ms),
+					state: str(entry.state),
+					body: str(entry.body),
+					payload: rec(entry.payload) ?? {}
+				}
+			];
+		}),
+		more: root?.more === true,
+		next: str(root?.next)
+	};
+}

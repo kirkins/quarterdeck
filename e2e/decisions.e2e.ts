@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 test.describe.configure({ mode: 'serial' });
 
 test('lists decision cards from fixtures, most urgent first', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 
 	await expect(page.getByRole('heading', { level: 1, name: 'Decisions' })).toBeVisible();
 	await expect(page.getByText('Fixture data')).toBeVisible();
@@ -41,7 +41,7 @@ test('lists decision cards from fixtures, most urgent first', async ({ page }) =
 });
 
 test('answering takes a choice and a confirm, and can be cancelled', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 	const card = page.locator('[data-card]').filter({ hasText: 'retry policy' });
 	const send = card.getByRole('button', { name: 'Send answer' });
 
@@ -68,7 +68,7 @@ test('answering takes a choice and a confirm, and can be cancelled', async ({ pa
 });
 
 test('free-text answers and the keyboard work', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 	// An ask whose decision payload is malformed is shown from its body, with nothing to pick,
 	// so the answer is written in words straight away.
 	const card = page.locator('[data-card]').filter({ hasText: 'search ranking' });
@@ -92,7 +92,7 @@ test('free-text answers and the keyboard work', async ({ page }) => {
 test('every decision takes the captain’s own answer, with no send until there is text', async ({
 	page
 }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 	const card = page.locator('[data-card]').filter({ hasText: 'Which shard count' });
 	const send = card.getByRole('button', { name: 'Send answer' });
 
@@ -114,7 +114,7 @@ test('every decision takes the captain’s own answer, with no send until there 
 });
 
 test('theme toggle cycles and persists', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 	const html = page.locator('html');
 	await expect(html).toHaveAttribute('data-theme', 'system');
 	const toggle = page.getByRole('button', { name: /Theme:/ });
@@ -128,7 +128,7 @@ test('theme toggle cycles and persists', async ({ page }) => {
 
 test('works at phone width without horizontal scroll', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 812 });
-	await page.goto('/');
+	await page.goto('/decisions');
 	await expect(page.locator('[data-card]').first()).toBeVisible();
 	const overflow = await page.evaluate(
 		() => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -139,7 +139,7 @@ test('works at phone width without horizontal scroll', async ({ page }) => {
 test('picking an option after writing your own answer hands the answer back to the options', async ({
 	page
 }) => {
-	await page.goto('/');
+	await page.goto('/decisions');
 	const card = page.locator('[data-card]').filter({ hasText: 'autumn sale' });
 	const own = card.locator('.option.own');
 
@@ -159,7 +159,7 @@ test.describe('without JavaScript', () => {
 	test.use({ javaScriptEnabled: false });
 
 	test('the note and own answer are in the plain form, and send', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/decisions');
 		const card = page.locator('[data-card]').filter({ hasText: 'autumn sale' });
 
 		await expect(card.getByRole('button', { name: /write my own answer/i })).toHaveCount(0);

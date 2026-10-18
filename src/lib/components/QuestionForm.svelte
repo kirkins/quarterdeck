@@ -32,6 +32,8 @@
 		failure?: Failure | null;
 		/** A failed dismiss for this question. */
 		dismissFailure?: Failure | null;
+		/** Say that an ask with no choices is in the older format. The Feed's plain requests are not. */
+		formatNote?: boolean;
 	}
 
 	let {
@@ -42,7 +44,8 @@
 		showBlocked = true,
 		showDeadline = true,
 		failure = null,
-		dismissFailure = null
+		dismissFailure = null,
+		formatNote = true
 	}: Props = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -158,7 +161,7 @@
 		<Blocked who={question.blocked} />
 	{/if}
 
-	{#if question.kind === 'legacy'}
+	{#if question.kind === 'legacy' && formatNote}
 		<p class="format-note">Older ask format: the ship sent choices without details.</p>
 	{:else if question.kind === 'invalid'}
 		<details class="format-note invalid">

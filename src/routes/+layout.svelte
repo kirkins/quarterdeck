@@ -21,14 +21,27 @@
 
 <header class="masthead">
 	<div class="inner">
-		<a class="brand" href={resolve('/')} aria-label="Quarterdeck, home">
+		<a class="brand" href={resolve('/feed')} aria-label="Quarterdeck, home">
 			<Mark size={30} />
 			<span class="wordmark">Quarterdeck</span>
 		</a>
 		<nav aria-label="Sections">
 			<ul>
 				<li>
-					<a href={resolve('/')} aria-current={page.url.pathname === '/' ? 'page' : undefined}>
+					<a
+						href={resolve('/feed')}
+						aria-current={page.url.pathname.startsWith('/feed') ? 'page' : undefined}
+					>
+						Feed
+						{#if triage}<span class="count" aria-label="{triage} waiting on you">{triage}</span
+							>{/if}
+					</a>
+				</li>
+				<li>
+					<a
+						href={resolve('/decisions')}
+						aria-current={page.url.pathname.startsWith('/decisions') ? 'page' : undefined}
+					>
 						Decisions
 						{#if open}<span class="count" aria-label="{open} waiting">{open}</span>{/if}
 					</a>
