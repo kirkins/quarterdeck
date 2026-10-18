@@ -21,6 +21,7 @@ use serde_json::Value;
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Details};
+use crate::screen::reports;
 use crate::widget::{Column, Element, markdown, text};
 use crate::{font, icon};
 
@@ -40,6 +41,7 @@ pub enum Message {
     Note(String, String),
     SendDismiss(String),
     OpenLink(String),
+    OpenReport(reports::Opened),
 }
 
 pub enum Event {
@@ -50,6 +52,7 @@ pub enum Event {
         args: Value,
     },
     OpenLink(String),
+    OpenReport(reports::Opened),
 }
 
 /// The captain's answer so far to one ask.
@@ -164,6 +167,7 @@ impl Triage {
                 self.write(key, "captain.dismiss", args)
             }
             Message::OpenLink(url) => Some(Event::OpenLink(url)),
+            Message::OpenReport(opened) => Some(Event::OpenReport(opened)),
         }
     }
 
@@ -408,6 +412,24 @@ impl Triage {
                     details.card.problems.join("; ")
                 ))
                 .style(theme::text::tertiary),
+            );
+        }
+        if let Some(opened) = reports::Opened::from_mail(
+            &item.mail.from,
+            &item.mail.id,
+            true,
+            &item.mail.payload,
+        ) {
+            body = body.push(
+                button(text(format!(
+                    "Open report: {}",
+                    opened.attached.title()
+                )))
+                .padding([4, 12])
+                .style(|theme, status| {
+                    theme::button::secondary(theme, status, false)
+                })
+                .on_press(Message::OpenReport(opened)),
             );
         }
         if let Some(step) = &item.step {

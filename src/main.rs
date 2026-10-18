@@ -250,6 +250,9 @@ impl Quarterdeck {
                     open_link(&url);
                     Task::none()
                 }
+                Some(dashboard::Event::ReadReport(id)) => {
+                    self.connection.read_report(id).map(Message::Connection)
+                }
                 Some(dashboard::Event::LoadOlder) => self
                     .connection
                     .update(connection::Message::LoadOlder)

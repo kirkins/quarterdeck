@@ -12,6 +12,7 @@ use data::decision::Card;
 use data::feed::{Page, Thread};
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
+use data::report::Report;
 use data::ships::{self, Ship};
 use data::triage;
 use iced::Task;
@@ -22,6 +23,7 @@ pub enum Message {
     Poll,
     LoadOlder,
     Ships(u64, Result<Vec<Ship>, Error>),
+    ReportRead(u64, String, Result<Report, Error>),
     FeedRead {
         generation: u64,
         older: bool,
@@ -73,6 +75,8 @@ pub struct Connection {
     pub feed: Feed,
     /// Every ship the fleet knows, A to Z, read once per connection.
     pub ships: Vec<Ship>,
+    /// Stored reports read so far, by id, with their Markdown.
+    pub reports: HashMap<String, Result<(Report, Document), Error>>,
     reading_ships: bool,
 }
 
@@ -104,6 +108,7 @@ impl Connection {
             feed: Feed::default(),
             ships: Vec::new(),
             reading_ships: false,
+            reports: HashMap::new(),
         }
     }
 
@@ -153,6 +158,29 @@ impl Connection {
             self.read_feed(false),
             self.read_ships(),
         ])
+    }
+
+    /// A stored report, read once; it is kept until the connection changes.
+    pub fn read_report(&mut self, id: String) -> Task<Message> {
+        if matches!(self.reports.get(&id), Some(Ok(_))) {
+            return Task::none();
+        }
+        let client = self.client.clone();
+        let generation = self.generation;
+        Task::perform(
+            {
+                let id = id.clone();
+                async move {
+                    let value =
+                        client.run("report.get", json!({"id": id})).await?;
+                    Report::parse(value).map_err(|error| Error::Command {
+                        command: "report.get".into(),
+                        error: format!("unexpected answer: {error}"),
+                    })
+                }
+            },
+            move |result| Message::ReportRead(generation, id.clone(), result),
+        )
     }
 
     /// The fleet's ships, until they have been read once.
@@ -236,6 +264,16 @@ impl Connection {
         match message {
             Message::Poll => self.poll(),
             Message::LoadOlder => self.read_feed(true),
+            Message::ReportRead(generation, id, result) => {
+                if generation == self.generation {
+                    let read = result.map(|report| {
+                        let document = markdown::parse(&report.content, None);
+                        (report, document)
+                    });
+                    self.reports.insert(id, read);
+                }
+                Task::none()
+            }
             Message::Ships(generation, result) => {
                 if generation == self.generation {
                     self.reading_ships = false;

@@ -36,7 +36,8 @@ where
     .into()
 }
 
-fn node_view<'a, Message>(
+/// One block of a document, for a view that lays blocks out itself.
+pub fn node_view<'a, Message>(
     node: &'a Node,
     theme: &Theme,
     on_link: fn(String) -> Message,

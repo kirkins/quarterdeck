@@ -17,6 +17,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::Connection;
 use crate::font;
+use crate::screen::reports;
 use crate::screen::triage::{self, Triage};
 use crate::widget::{Column, Element, markdown, text};
 use serde_json::{Value, json};
@@ -30,6 +31,7 @@ pub enum Message {
     /// Answering in place, through Triage's one answer path.
     Triage(triage::Message),
     Compose(Compose),
+    OpenReport(reports::Opened),
 }
 
 /// Writing to a ship.
@@ -325,6 +327,22 @@ fn message_view<'a>(
                 content.push(markdown(document, theme, Message::OpenLink));
         }
         None => content = content.push(text(entry.body.as_str())),
+    }
+    let takes_comments = entry.is_open_ask() || entry.is_unread_notice();
+    if let Some(opened) = reports::Opened::from_mail(
+        &entry.from,
+        &entry.id,
+        takes_comments,
+        &entry.payload,
+    ) {
+        content = content.push(
+            button(text(format!("Open report: {}", opened.attached.title())))
+                .padding([4, 12])
+                .style(|theme, status| {
+                    theme::button::secondary(theme, status, false)
+                })
+                .on_press(Message::OpenReport(opened)),
+        );
     }
     if entry.is_open_ask() {
         let open = panel.is_some();

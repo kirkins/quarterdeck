@@ -9,8 +9,8 @@ use iced::{Alignment, Length, Padding};
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
-use crate::screen::feed;
 use crate::screen::triage::{self, Triage};
+use crate::screen::{feed, reports};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -27,6 +27,7 @@ pub enum Message {
     Refresh,
     Triage(triage::Message),
     Feed(feed::Message),
+    Reports(reports::Message),
 }
 
 /// What the app must do after an update.
@@ -36,6 +37,8 @@ pub enum Event {
     Refresh,
     OpenLink(String),
     LoadOlder,
+    /// Fetch a stored report.
+    ReadReport(String),
     /// Run a write for the ask `key`.
     Write {
         key: String,
@@ -56,6 +59,7 @@ pub struct Dashboard {
     /// Asks whose answer controls are open under them in the Feed.
     answering: HashSet<String>,
     composer: feed::Composer,
+    reports: reports::Reports,
 }
 
 impl Dashboard {
@@ -69,6 +73,7 @@ impl Dashboard {
             triage: Triage::default(),
             answering: HashSet::new(),
             composer: feed::Composer::default(),
+            reports: reports::Reports::default(),
         }
     }
 
@@ -79,13 +84,31 @@ impl Dashboard {
         }
     }
 
+    /// Open a report in the Reports pane, putting the pane on screen.
+    fn open_report(
+        &mut self,
+        opened: reports::Opened,
+        connection: &Connection,
+    ) -> Option<Event> {
+        let read = self
+            .reports
+            .update(reports::Message::Open(opened), connection);
+        let shown = self.update(Message::Open(View::Reports), connection);
+        match read {
+            Some(reports::Event::Read(id)) => Some(Event::ReadReport(id)),
+            _ => shown,
+        }
+    }
+
     /// What became of a write Triage asked for.
     pub fn written(
         &mut self,
         key: String,
         result: Result<data::privateer::Sent, data::privateer::Error>,
     ) {
-        if key == feed::COMPOSE_KEY {
+        if key == reports::REPORT_KEY {
+            self.reports.written(result);
+        } else if key == feed::COMPOSE_KEY {
             self.composer.written(result);
         } else {
             self.triage.written(key, result);
@@ -167,6 +190,22 @@ impl Dashboard {
                 }
                 None
             }
+            Message::Reports(message) => {
+                match self.reports.update(message, connection)? {
+                    reports::Event::Read(id) => Some(Event::ReadReport(id)),
+                    reports::Event::Write { command, args } => {
+                        Some(Event::Write {
+                            key: reports::REPORT_KEY.to_owned(),
+                            command,
+                            args,
+                        })
+                    }
+                    reports::Event::OpenLink(url) => Some(Event::OpenLink(url)),
+                }
+            }
+            Message::Feed(feed::Message::OpenReport(opened)) => {
+                self.open_report(opened, connection)
+            }
             Message::Feed(feed::Message::Compose(message)) => {
                 let (command, args) = self.composer.update(message)?;
                 Some(Event::Write {
@@ -184,6 +223,9 @@ impl Dashboard {
                         Some(Event::Write { key, command, args })
                     }
                     triage::Event::OpenLink(url) => Some(Event::OpenLink(url)),
+                    triage::Event::OpenReport(opened) => {
+                        self.open_report(opened, connection)
+                    }
                 }
             }
         }
@@ -338,6 +380,9 @@ impl Dashboard {
             let body = match pane.view {
                 View::Triage => {
                     self.triage.view(connection, theme).map(Message::Triage)
+                }
+                View::Reports => {
+                    self.reports.view(connection, theme).map(Message::Reports)
                 }
                 View::Feed => feed::view(
                     connection,

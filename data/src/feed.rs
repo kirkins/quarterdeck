@@ -48,6 +48,13 @@ impl Entry {
         format!("{}/{}", self.from, self.id)
     }
 
+    /// A notice the captain has not marked read: a report on it still takes
+    /// comments.
+    pub fn is_unread_notice(&self) -> bool {
+        self.kind == "notice"
+            && matches!(self.state.as_deref(), None | Some("open"))
+    }
+
     pub fn is_open_ask(&self) -> bool {
         matches!(self.kind.as_str(), "request" | "decision")
             && self.state.as_deref() == Some("open")

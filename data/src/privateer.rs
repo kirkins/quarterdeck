@@ -33,6 +33,7 @@ const GRACE: Duration = Duration::from_secs(2);
 const WAITING_FIXTURE: &str =
     include_str!("../../fixtures/captain.waiting.json");
 const FEED_FIXTURE: &str = include_str!("../../fixtures/captain.feed.json");
+const REPORTS_FIXTURE: &str = include_str!("../../fixtures/report.get.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Error {
@@ -126,7 +127,7 @@ impl Client {
         args: Value,
     ) -> Result<Value, Error> {
         match self.source {
-            Source::Fixtures => fixture(command),
+            Source::Fixtures => fixture(command, &args),
             Source::Cli => {
                 let home = self.home.as_deref().ok_or_else(|| {
                     Error::NotConfigured(
@@ -141,7 +142,23 @@ impl Client {
     }
 }
 
-fn fixture(command: &str) -> Result<Value, Error> {
+fn fixture(command: &str, args: &Value) -> Result<Value, Error> {
+    if command == "report.get" {
+        let all: Value =
+            serde_json::from_str(REPORTS_FIXTURE).map_err(|_| {
+                Error::Parse {
+                    command: command.to_owned(),
+                }
+            })?;
+        let id = args["id"].as_str().unwrap_or_default();
+        return all["reports"]
+            .get(id)
+            .cloned()
+            .ok_or_else(|| Error::Command {
+                command: command.to_owned(),
+                error: format!("no report {id} in the fleet"),
+            });
+    }
     let text = match command {
         "captain.waiting" => WAITING_FIXTURE,
         "captain.feed" => FEED_FIXTURE,
