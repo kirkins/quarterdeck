@@ -10,6 +10,7 @@ pub mod config;
 pub mod dashboard;
 pub mod decision;
 pub mod environment;
+pub mod feed;
 pub mod markdown;
 pub mod privateer;
 pub mod triage;

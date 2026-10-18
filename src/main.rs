@@ -250,6 +250,10 @@ impl Quarterdeck {
                     open_link(&url);
                     Task::none()
                 }
+                Some(dashboard::Event::LoadOlder) => self
+                    .connection
+                    .update(connection::Message::LoadOlder)
+                    .map(Message::Connection),
                 Some(dashboard::Event::Refresh) => {
                     self.connection.poll().map(Message::Connection)
                 }

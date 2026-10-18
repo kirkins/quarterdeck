@@ -7,6 +7,7 @@ use iced::{Alignment, Length, Padding};
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
+use crate::screen::feed;
 use crate::screen::triage::{self, Triage};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
@@ -23,6 +24,7 @@ pub enum Message {
     OpenSettings,
     Refresh,
     Triage(triage::Message),
+    Feed(feed::Message),
 }
 
 /// What the app must do after an update.
@@ -31,6 +33,7 @@ pub enum Event {
     OpenSettings,
     Refresh,
     OpenLink(String),
+    LoadOlder,
     /// Run a write for the ask `key`.
     Write {
         key: String,
@@ -143,6 +146,14 @@ impl Dashboard {
             }
             Message::OpenSettings => Some(Event::OpenSettings),
             Message::Refresh => Some(Event::Refresh),
+            Message::Feed(feed::Message::LoadOlder) => Some(Event::LoadOlder),
+            Message::Feed(feed::Message::OpenLink(url)) => {
+                Some(Event::OpenLink(url))
+            }
+            Message::Feed(feed::Message::Answer(key)) => {
+                self.triage.reveal(&key, connection);
+                self.update(Message::Open(View::Triage), connection)
+            }
             Message::Triage(message) => {
                 match self.triage.update(message, connection)? {
                     triage::Event::Write { key, command, args } => {
@@ -307,6 +318,7 @@ impl Dashboard {
                 View::Triage => {
                     self.triage.view(connection, theme).map(Message::Triage)
                 }
+                View::Feed => feed::view(connection, theme).map(Message::Feed),
                 view => placeholder(view),
             };
 

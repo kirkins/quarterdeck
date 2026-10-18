@@ -30,6 +30,7 @@ toml = "0.8.20"
 toml_edit = "0.22.27"
 
 [dependencies]
+chrono = { version = "0.4.40", default-features = false, features = ["clock"] }
 data = { path = "data" }
 emojis = "0.8.0"
 fern = "0.7.1"

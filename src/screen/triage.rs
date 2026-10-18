@@ -188,6 +188,19 @@ impl Triage {
         }
     }
 
+    /// Show an ask open, as when the Feed asks to answer it.
+    pub fn reveal(&mut self, key: &str, connection: &Connection) {
+        let decision = connection
+            .details
+            .get(key)
+            .is_some_and(|d| !d.card.options.is_empty());
+        if decision {
+            self.toggled.remove(key);
+        } else {
+            self.toggled.insert(key.to_owned());
+        }
+    }
+
     /// What became of a write. A sent answer leaves the list on the next
     /// poll; a refused one keeps the draft so nothing typed is lost.
     pub fn written(&mut self, key: String, result: Result<Sent, Error>) {

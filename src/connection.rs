@@ -9,6 +9,7 @@ use data::captain::Waiting;
 use data::choices;
 use data::config::{self, Source};
 use data::decision::Card;
+use data::feed::{Page, Thread};
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
 use data::triage;
@@ -18,6 +19,12 @@ use serde_json::json;
 #[derive(Debug, Clone)]
 pub enum Message {
     Poll,
+    LoadOlder,
+    FeedRead {
+        generation: u64,
+        older: bool,
+        result: Result<Page, Error>,
+    },
     Waited(u64, Result<Waiting, Error>),
 }
 
@@ -61,7 +68,22 @@ pub struct Connection {
     pub error: Option<Error>,
     /// When Privateer last answered, in ms since the epoch.
     pub checked_ms: Option<i64>,
+    pub feed: Feed,
 }
+
+/// The Feed as read so far: the conversation, each message's Markdown, and
+/// whether the last read worked.
+#[derive(Default)]
+pub struct Feed {
+    pub thread: Thread,
+    pub bodies: HashMap<String, Document>,
+    pub error: Option<Error>,
+    reading_newer: bool,
+    pub reading_older: bool,
+}
+
+/// Messages read per page.
+const FEED_PAGE: u32 = 30;
 
 impl Connection {
     pub fn new(config: &config::Privateer) -> Self {
@@ -74,6 +96,7 @@ impl Connection {
             details: HashMap::new(),
             error: None,
             checked_ms: None,
+            feed: Feed::default(),
         }
     }
 
@@ -118,6 +141,48 @@ impl Connection {
     }
 
     pub fn poll(&mut self) -> Task<Message> {
+        Task::batch([self.poll_waiting(), self.read_feed(false)])
+    }
+
+    /// Read new mail, or the newest page when nothing is read yet; with
+    /// `older`, the page before the oldest message read.
+    fn read_feed(&mut self, older: bool) -> Task<Message> {
+        let feed = &mut self.feed;
+        let args = if older {
+            if feed.reading_older {
+                return Task::none();
+            }
+            let Some(args) = feed.thread.older_args(FEED_PAGE) else {
+                return Task::none();
+            };
+            feed.reading_older = true;
+            args
+        } else {
+            if feed.reading_newer {
+                return Task::none();
+            }
+            feed.reading_newer = true;
+            feed.thread.newer_args(FEED_PAGE, now_ms())
+        };
+        let client = self.client.clone();
+        let generation = self.generation;
+        Task::perform(
+            async move {
+                let value = client.run("captain.feed", args).await?;
+                Page::parse(value).map_err(|error| Error::Command {
+                    command: "captain.feed".into(),
+                    error: format!("unexpected answer: {error}"),
+                })
+            },
+            move |result| Message::FeedRead {
+                generation,
+                older,
+                result,
+            },
+        )
+    }
+
+    fn poll_waiting(&mut self) -> Task<Message> {
         if self.in_flight {
             return Task::none();
         }
@@ -139,6 +204,43 @@ impl Connection {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Poll => self.poll(),
+            Message::LoadOlder => self.read_feed(true),
+            Message::FeedRead {
+                generation,
+                older,
+                result,
+            } => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                let feed = &mut self.feed;
+                if older {
+                    feed.reading_older = false;
+                } else {
+                    feed.reading_newer = false;
+                }
+                match result {
+                    Ok(page) => {
+                        for entry in &page.entries {
+                            feed.bodies.insert(
+                                entry.key(),
+                                markdown::parse(&entry.body, None),
+                            );
+                        }
+                        if older {
+                            feed.thread.add_older(page);
+                        } else {
+                            feed.thread.add_newer(page);
+                        }
+                        feed.error = None;
+                    }
+                    Err(error) => {
+                        log::warn!("{error}");
+                        feed.error = Some(error);
+                    }
+                }
+                Task::none()
+            }
             Message::Waited(generation, result) => {
                 if generation != self.generation {
                     return Task::none();
