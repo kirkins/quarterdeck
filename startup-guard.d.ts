@@ -13,3 +13,8 @@ export function hostAllowed(
 	env: Record<string, string | undefined>,
 	hostHeader: string | null
 ): boolean;
+
+export function requestOrigin(env: Record<string, string | undefined>): {
+	protocol: string;
+	host: string | null;
+};

@@ -44,8 +44,8 @@ Every text and background pair used in the components meets WCAG AA (4.5:1) in b
 
 One `<nav aria-label="Sections">`, drawn two ways:
 
-- **Phone** (under 60 rem): a tab bar fixed to the bottom with Feed, Triage, Decisions, Fleet and Spend. Five destinations fit at 320 px, so there is no "More" menu and nothing is hidden. The top bar holds only the mark, the theme button and, when answers are not sent, the fixture or dry-run notice; it scrolls away.
-- **Desktop**: a quiet sidebar with the same links, the notice and the theme button (system, light, dark) at the foot.
+- **Phone** (under 60 rem): a tab bar fixed to the bottom with Feed, Triage, Decisions, Fleet and Spend. Five destinations fit at 320 px, so there is no "More" menu and nothing is hidden. The top bar holds only the mark, the theme button, Sign out (an icon, when login is on) and, when answers are not sent, the fixture or dry-run notice; it scrolls away.
+- **Desktop**: a quiet sidebar with the same links, the notice and the theme button (system, light, dark) at the foot, and under a hairline, a green "Signed in" dot with **Sign out** beside it when login is on.
 
 Badges show what waits on the captain: a brass count on Triage, a brass dot on Feed (the same items, so the number is not repeated), and a neutral count on Decisions while it is open. `--dock` holds the tab bar's height, so floating things (toasts, the "new messages" pill, the report's comment sheet, the confirm bar) sit above it on a phone and at the bottom on a desktop.
 
@@ -77,6 +77,10 @@ The summary line under each title puts what needs the captain first, marked in b
 - Thin rules: crew hang off their ship on a hairline like entries in a log, and day separators are labelled like soundings on a chart.
 - Empty states show a horizon at sunrise rather than a stock illustration.
 - The palette: navy, sea-glass and brass.
+
+## Signing in
+
+The login page stands alone: no navigation, nothing from the fleet, only the theme button in the corner. One card, centred on the chart grid, lifted like an ask and edged in brass: the mark and wordmark, a small-caps "The captain's portal", the display title **Come aboard**, and one line on why it matters. Then one field, the passphrase, with a show/hide eye inside it (44 px, `aria-pressed`), and a full-width sea-glass **Sign in** that reads "Checking…" with a spinner while the server works. A wrong passphrase gets a red callout and a red edge on the field, and says only that it did not work; a lockout gets a warning callout that says how long to wait. Signing out lands back here with a green "Signed out" note. A hairline footer says how long a session lasts. Screenshots: `docs/screenshots/login-*.png`.
 
 ## Reports
 

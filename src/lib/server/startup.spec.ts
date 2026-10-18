@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { checkStartup, hostAllowed, isLoopback } from '../../../startup-guard.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { hashPassphrase } from '../../../login-hash.js';
+import { checkStartup, hostAllowed, isLoopback, requestOrigin } from '../../../startup-guard.js';
 
 const VPN = '192.0.2.10';
 
@@ -50,26 +51,75 @@ describe('checkStartup', () => {
 	it('allows a non-loopback bind with send off', () => {
 		const report = checkStartup({ HOST: VPN, QD_SOURCE: 'cli', ORIGIN: `http://${VPN}:3000` });
 		expect(report.ok).toBe(true);
-		expect(report.warnings).toEqual([]);
+		expect(report.warnings).toHaveLength(1);
+		expect(report.warnings[0]).toMatch(/no login is configured/);
 		expect(report.summary).toBe(`source=cli send=off login=off listen=${VPN}:3000`);
 	});
 
-	it('does not let an unenforced QD_LOGIN_SECRET unlock sending on a network bind', () => {
-		const report = checkStartup({
-			HOST: VPN,
-			QD_SOURCE: 'cli',
-			QD_ALLOW_SEND: '1',
-			QD_LOGIN_SECRET: 'x',
-			ORIGIN: `http://${VPN}:3000`
-		});
+	it('refuses a QD_LOGIN_SECRET that is not a hash, and never echoes it', () => {
+		const report = checkStartup({ QD_LOGIN_SECRET: 'my plain passphrase' });
 		expect(report.ok).toBe(false);
-		expect(report.errors[0]).toMatch(/no login is configured/);
-		expect(report.warnings).toEqual([
-			'QD_LOGIN_SECRET is set, but login is not implemented yet: nothing enforces it.'
-		]);
-		expect(report.summary).not.toContain('x');
+		expect(report.errors[0]).toMatch(/not a scrypt hash/);
+		expect(JSON.stringify(report)).not.toContain('plain passphrase');
 		expect(report.summary).toContain('login=off');
-		expect(checkStartup({ HOST: VPN, QD_LOGIN_SECRET: '   ' }).errors).toEqual([]);
+		expect(
+			checkStartup({ HOST: VPN, QD_LOGIN_SECRET: '   ', ORIGIN: `http://${VPN}:3000` }).ok
+		).toBe(true);
+	});
+
+	it('refuses session settings that are not positive numbers', () => {
+		expect(checkStartup({ QD_SESSION_HOURS: '0' }).errors[0]).toMatch(/QD_SESSION_HOURS/);
+		expect(checkStartup({ QD_SESSION_IDLE_MINUTES: 'two' }).errors[0]).toMatch(
+			/QD_SESSION_IDLE_MINUTES/
+		);
+		expect(checkStartup({ QD_SESSION_HOURS: '8', QD_SESSION_IDLE_MINUTES: '30' }).ok).toBe(true);
+	});
+
+	describe('with a valid login hash', () => {
+		let secret = '';
+		beforeAll(async () => {
+			secret = await hashPassphrase('a passphrase only for this test');
+		});
+
+		it('turns login on, and lets send on a network bind', () => {
+			const report = checkStartup({
+				HOST: VPN,
+				QD_SOURCE: 'cli',
+				QD_ALLOW_SEND: '1',
+				QD_LOGIN_SECRET: secret,
+				ORIGIN: `http://${VPN}:3000`
+			});
+			expect(report).toEqual({
+				ok: true,
+				errors: [],
+				warnings: [],
+				summary: `source=cli send=on login=on listen=${VPN}:3000`
+			});
+			expect(JSON.stringify(report)).not.toContain(secret.split('$')[5]);
+		});
+
+		it('still refuses send on a network bind without ORIGIN', () => {
+			const report = checkStartup({
+				HOST: VPN,
+				QD_SOURCE: 'cli',
+				QD_ALLOW_SEND: '1',
+				QD_LOGIN_SECRET: secret
+			});
+			expect(report.ok).toBe(false);
+			expect(report.errors).toHaveLength(1);
+			expect(report.errors[0]).toMatch(/ORIGIN is unset/);
+		});
+
+		it('refuses a hash whose parameters are weak', () => {
+			const weak = secret.replace(/^scrypt\$131072\$/, 'scrypt$16384$');
+			const report = checkStartup({ QD_LOGIN_SECRET: weak });
+			expect(report.ok).toBe(false);
+			expect(report.errors[0]).toMatch(/weak scrypt parameters/);
+		});
+
+		it('turns login on over loopback too', () => {
+			expect(checkStartup({ QD_LOGIN_SECRET: secret }).summary).toContain('login=on');
+		});
 	});
 
 	it('refuses send with fixtures, whatever the bind', () => {
@@ -78,10 +128,10 @@ describe('checkStartup', () => {
 		expect(report.errors[0]).toMatch(/QD_SOURCE=fixtures/);
 	});
 
-	it('warns on a non-loopback bind without ORIGIN', () => {
+	it('refuses a non-loopback bind without ORIGIN', () => {
 		const report = checkStartup({ HOST: VPN, QD_SOURCE: 'cli' });
-		expect(report.ok).toBe(true);
-		expect(report.warnings[0]).toMatch(/ORIGIN is unset/);
+		expect(report.ok).toBe(false);
+		expect(report.errors[0]).toMatch(/ORIGIN is unset/);
 	});
 
 	it('refuses an ORIGIN that is not a URL', () => {
@@ -115,5 +165,23 @@ describe('hostAllowed', () => {
 	it('brackets an IPv6 HOST', () => {
 		const env = { HOST: 'fd00::2', PORT: '3000' };
 		expect(hostAllowed(env, '[fd00::2]:3000')).toBe(true);
+	});
+});
+
+describe('requestOrigin', () => {
+	it('takes the protocol and host from ORIGIN', () => {
+		expect(requestOrigin({ ORIGIN: `http://${VPN}:3000` })).toEqual({
+			protocol: 'http',
+			host: `${VPN}:3000`
+		});
+		expect(requestOrigin({ ORIGIN: 'https://quarterdeck.example' })).toEqual({
+			protocol: 'https',
+			host: 'quarterdeck.example'
+		});
+	});
+
+	it('is plain http with the request’s own Host without ORIGIN (loopback)', () => {
+		expect(requestOrigin({})).toEqual({ protocol: 'http', host: null });
+		expect(requestOrigin({ ORIGIN: 'not a url' })).toEqual({ protocol: 'http', host: null });
 	});
 });

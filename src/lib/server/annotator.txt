@@ -7,8 +7,12 @@
  * file is the frame's side of that contract, not a place to trust input.
  *
  * Every message to the portal carries TOKEN, which the server writes in for
- * this render alone. If the frame is navigated to another document, that
- * document cannot know it, so the portal drops what it sends.
+ * this render alone, as the text of the JSON block just before this script
+ * (text, not an attribute, so CSS cannot match it). This script reads it and
+ * removes the block before the report's body is parsed. If the frame is
+ * navigated to another document, that document cannot know it, so the portal
+ * drops what it sends. The script itself is the same in every render, so the
+ * portal's own CSP, which a srcdoc frame inherits, can allow it by its hash.
  *
  * Offsets are character indexes into the flattened text, which puts a newline
  * between blocks. The portal matches quotes on that text, so both sides use
@@ -17,7 +21,9 @@
 (function () {
 	'use strict';
 
-	var TOKEN = '__QD_TOKEN__';
+	var tokenBlock = document.getElementById('qd-token');
+	var TOKEN = tokenBlock ? JSON.parse(tokenBlock.textContent) : '';
+	if (tokenBlock) tokenBlock.remove();
 	var XLINK = 'http://www.w3.org/1999/xlink';
 	var BLOCK = 'p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote,td,th,dt,dd,figcaption,caption,hr';
 	var CONTEXT = 32;
