@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod decision;
 pub mod environment;
 pub mod feed;
+pub mod fleet;
 pub mod markdown;
 pub mod privateer;
 pub mod report;

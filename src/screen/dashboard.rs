@@ -10,7 +10,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
 use crate::screen::triage::{self, Triage};
-use crate::screen::{feed, live, reports};
+use crate::screen::{feed, fleet, live, reports};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -29,6 +29,7 @@ pub enum Message {
     Feed(feed::Message),
     Reports(reports::Message),
     Live(live::Message),
+    Fleet(fleet::Message),
 }
 
 /// What the app must do after an update.
@@ -64,6 +65,7 @@ pub struct Dashboard {
     composer: feed::Composer,
     reports: reports::Reports,
     live: live::Live,
+    fleet: fleet::Fleet,
 }
 
 impl Dashboard {
@@ -79,6 +81,7 @@ impl Dashboard {
             composer: feed::Composer::default(),
             reports: reports::Reports::default(),
             live: live::Live::default(),
+            fleet: fleet::Fleet::default(),
         }
     }
 
@@ -94,6 +97,15 @@ impl Dashboard {
     pub fn watching(&self) -> Option<&str> {
         let shown = self.panes.iter().any(|(_, pane)| pane.view == View::Live);
         shown.then(|| self.live.ship()).flatten()
+    }
+
+    /// Whether a view's pane is on screen: open, and not behind a
+    /// maximized pane.
+    pub fn shows(&self, view: View) -> bool {
+        match self.panes.maximized() {
+            Some(pane) => self.panes.get(pane).is_some_and(|p| p.view == view),
+            None => self.panes.iter().any(|(_, pane)| pane.view == view),
+        }
     }
 
     /// Open a report in the Reports pane, putting the pane on screen.
@@ -202,6 +214,10 @@ impl Dashboard {
                 if !self.answering.remove(&key) {
                     self.answering.insert(key);
                 }
+                None
+            }
+            Message::Fleet(message) => {
+                self.fleet.update(message);
                 None
             }
             Message::Live(message) => match self.live.update(message)? {
@@ -408,6 +424,9 @@ impl Dashboard {
                 }
                 View::Reports => {
                     self.reports.view(connection, theme).map(Message::Reports)
+                }
+                View::Fleet => {
+                    self.fleet.view(connection, theme).map(Message::Fleet)
                 }
                 View::Feed => feed::view(
                     connection,

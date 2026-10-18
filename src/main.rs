@@ -9,6 +9,7 @@ mod widget;
 mod window;
 
 use data::config::{self, Config};
+use data::dashboard::View;
 use data::environment;
 use iced::widget::{column, container};
 use iced::{Length, Subscription, Task};
@@ -145,6 +146,8 @@ enum Message {
     Maximized(bool),
     /// Read the watched live session again.
     SessionTick,
+    /// Read the fleet again, if it is due.
+    FleetTick,
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
@@ -323,6 +326,13 @@ impl Quarterdeck {
                 }
                 None => Task::none(),
             },
+            Message::FleetTick => {
+                if self.dashboard.shows(View::Fleet) {
+                    self.connection.read_fleet().map(Message::Connection)
+                } else {
+                    Task::none()
+                }
+            }
             Message::Maximized(maximized) => {
                 self.main_window.update_maximize(maximized);
                 Task::none()
@@ -446,6 +456,14 @@ impl Quarterdeck {
             if self.dashboard.watching().is_some() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::SessionTick)
+            } else {
+                Subscription::none()
+            },
+            // The fleet is read every 15 s while its pane is on screen; the
+            // tick also keeps its times fresh.
+            if self.dashboard.shows(View::Fleet) {
+                iced::time::every(std::time::Duration::from_secs(1))
+                    .map(|_| Message::FleetTick)
             } else {
                 Subscription::none()
             },
