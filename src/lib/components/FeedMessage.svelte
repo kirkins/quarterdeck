@@ -17,6 +17,7 @@
 		feedKindOf,
 		handsTextOf,
 		isOpen,
+		isWaiting,
 		reportTitleOf,
 		segmentsOf,
 		shipMark,
@@ -82,6 +83,7 @@
 	const key = $derived(askKey(entry.from, entry.id));
 	const kind = $derived(feedKindOf(entry));
 	const open = $derived(isOpen(entry));
+	const waits = $derived(isWaiting(entry));
 	const question = $derived(toQuestion(toMailItem(entry), now));
 	const title = $derived(reportTitleOf(entry));
 	const mark = $derived(shipMark(entry.ship));
@@ -162,8 +164,10 @@
 					<span class="kind kind-{kind}">{FEED_KIND_LABELS[kind]}</span>
 					{#if entry.urgency === 'high'}<span class="urgent-tag tag tag-danger">High urgency</span
 						>{/if}
-					{#if open}
+					{#if waits}
 						<span class="waiting tag tag-brass">Waiting on you</span>
+					{:else if open}
+						<span class="unread-tag tag tag-outline">Unread</span>
 					{:else if outcome}
 						<span class="outcome tag tag-ok">{outcome}</span>
 					{/if}
@@ -422,7 +426,8 @@
 	.kind-approval {
 		color: var(--brass);
 	}
-	.waiting {
+	.waiting,
+	.unread-tag {
 		margin-left: auto;
 	}
 	.outcome {

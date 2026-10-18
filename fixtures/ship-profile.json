@@ -1,0 +1,287 @@
+{
+	"ships": {
+		"billing": {
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 30
+			},
+			"first_mate": {
+				"harness": "tidewater",
+				"options": {
+					"model": "large",
+					"effort": "high",
+					"max_turns": 40,
+					"api_key": "fixture-secret-do-not-show"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "ship",
+					"names": ["plan-main"]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": ["plan-main", "free-pool", "credits-reserve"]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": ["free-pool"]
+				}
+			},
+			"charter": {
+				"actions": [
+					"read the ledger",
+					"draft the retry policy",
+					"reply to the captain",
+					"run the billing tests",
+					"open pull requests",
+					"send dunning mail after approval"
+				]
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": ["Never charge a card", "Ask before a live policy changes"],
+				"ship_rules": ["Keep retries under three attempts", "No direct edits to the ledger"]
+			},
+			"skills": [
+				{
+					"name": "retry-policy",
+					"description": "Draft and replay retry policies against past declines"
+				},
+				{
+					"name": "dunning-letters",
+					"description": "Write the reminder emails for overdue invoices"
+				},
+				{
+					"name": "invoice-pdf",
+					"description": "Render invoices to PDF with the house template"
+				},
+				{
+					"name": "refund-check",
+					"description": "Check a refund against the original charge"
+				},
+				{
+					"name": "tax-lines",
+					"description": "Split tax across invoice lines by jurisdiction"
+				},
+				{
+					"name": "currency-round",
+					"description": "Round amounts consistently across currencies"
+				},
+				{
+					"name": "chargeback-notes",
+					"description": "Summarise a chargeback for the captain"
+				},
+				{
+					"name": "ledger-recon",
+					"description": "Reconcile the day's ledger against the bank export"
+				},
+				{
+					"name": "webhook-replay",
+					"description": "Replay a failed payment webhook safely"
+				},
+				{
+					"name": "statement-csv",
+					"description": "Export account statements as CSV"
+				},
+				{
+					"name": "fraud-flags",
+					"description": "Explain why a payment was flagged"
+				}
+			],
+			"mcp_servers": [
+				{
+					"name": "stripe-sandbox",
+					"url": "https://mcp.example.test/stripe?token=fixture-secret-do-not-show",
+					"credentials": ["STRIPE_API_KEY"]
+				},
+				{
+					"name": "postgres-ledger",
+					"url": "https://user:fixture-secret-do-not-show@db.example.test/mcp",
+					"credentials": {
+						"DB_PASSWORD": "fixture-secret-do-not-show"
+					}
+				},
+				{
+					"name": "mail-drafts",
+					"url": "https://mail.example.test/mcp",
+					"credentials": ["MAIL_TOKEN"]
+				},
+				{
+					"name": "calendar",
+					"url": "https://cal.example.test/mcp",
+					"credentials": []
+				}
+			],
+			"plugins": [
+				{
+					"name": "ledger-tools",
+					"description": "Read-only views of the ledger"
+				},
+				{
+					"name": "pdf-render",
+					"description": "Invoice rendering"
+				},
+				{
+					"name": "metrics",
+					"description": "Retry success rates"
+				}
+			]
+		},
+		"chandlery": {
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 60
+			},
+			"first_mate": {
+				"harness": "tidewater",
+				"options": {
+					"model": "large",
+					"effort": "medium"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": ["plan-main"]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": ["plan-main", "free-pool"]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": ["free-pool"]
+				}
+			},
+			"charter": {
+				"actions": ["build the catalogue", "reply to the captain", "run the visual tests"]
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": ["Release only with the captain's approval"],
+				"ship_rules": []
+			},
+			"skills": [
+				{
+					"name": "catalogue-pages",
+					"description": "Build and tidy product pages"
+				},
+				{
+					"name": "visual-check",
+					"description": "Compare screenshots at phone and desktop sizes"
+				}
+			],
+			"mcp_servers": [
+				{
+					"name": "storefront-preview",
+					"url": "https://preview.example.test/mcp",
+					"credentials": []
+				}
+			],
+			"plugins": []
+		},
+		"docs-site": {
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 15
+			},
+			"first_mate": {
+				"harness": "tidewater",
+				"options": {
+					"model": "small-free"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": ["free-pool"]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": ["free-pool"]
+				},
+				"errand": {
+					"list": "ship",
+					"names": []
+				}
+			},
+			"charter": {
+				"actions": ["write the changelog", "reply to the captain"]
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": [],
+				"ship_rules": []
+			},
+			"skills": [
+				{
+					"name": "changelog",
+					"description": "Write release notes from merged changes"
+				}
+			],
+			"mcp_servers": [],
+			"plugins": []
+		},
+		"search-index": {
+			"machine": "boreas",
+			"hosted": true,
+			"sleep": {
+				"policy": "never",
+				"idle_minutes": null
+			},
+			"first_mate": {
+				"harness": "ferry",
+				"options": {
+					"model": "large"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "ship",
+					"names": ["credits-reserve"]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": ["credits-reserve", "plan-main"]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": ["credits-reserve"]
+				}
+			},
+			"charter": {
+				"actions": ["rebuild the search index", "reply to the captain"]
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": ["Rebuilds run at night only"],
+				"ship_rules": []
+			},
+			"skills": [
+				{
+					"name": "reindex",
+					"description": "Rebuild the index from the document store"
+				}
+			],
+			"mcp_servers": [
+				{
+					"name": "docs-store",
+					"url": "https://docs.example.test/mcp",
+					"credentials": ["DOCS_TOKEN"]
+				}
+			],
+			"plugins": [
+				{
+					"name": "search-metrics"
+				}
+			]
+		}
+	}
+}

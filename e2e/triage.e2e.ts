@@ -65,7 +65,7 @@ test('a question takes a reply, and drops out of triage', async ({ page }) => {
 	// A plain request, not one that needs hands.
 	const row = page.locator('[data-kind="request"]:not(:has(.flag.hands))').first();
 	const id = await row.getAttribute('data-row');
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	await row.getByLabel(/^Reply to/).fill('Not before review. Mention it after.');
 	await row.getByRole('button', { name: 'Send reply' }).click();
 
@@ -78,7 +78,7 @@ test('a needs-hands step shows the exact step, and Done replies to the asker', a
 	const row = page.locator('[data-row]:has(.flag.hands)').first();
 	const id = await row.getAttribute('data-row');
 	await expect(row.locator('.flag.hands')).toBeVisible();
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	await expect(row.locator('.command')).toContainText(/\S/);
 	await expect(row.getByRole('button', { name: 'Copy step' })).toBeVisible();
 	await row.getByRole('button', { name: 'Done, I did this' }).click();
@@ -90,7 +90,7 @@ test('a decision opens its card in place and answers like the Decisions page', a
 	await page.goto('/triage');
 	const row = page.locator('[data-kind="decision"]').first();
 	const id = await row.getAttribute('data-row');
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	const card = row.locator('[data-card]');
 	await expect(card.getByRole('radio').first()).toBeVisible();
 	await card.getByRole('radio').first().check();
@@ -102,12 +102,12 @@ test('a decision opens its card in place and answers like the Decisions page', a
 test('approvals and blockers say what Quarterdeck can and cannot do', async ({ page }) => {
 	await page.goto('/triage');
 	const approval = page.locator('[data-kind="approval"]');
-	await approval.locator('button.head').click();
+	await approval.locator('button.toggle').click();
 	await expect(approval.getByText(/answered in Privateer/)).toBeVisible();
 	await expect(approval.getByRole('button', { name: 'Send reply' })).toHaveCount(0);
 
 	const blocker = page.locator('[data-kind="blocker"]').first();
-	await blocker.locator('button.head').click();
+	await blocker.locator('button.toggle').click();
 	await expect(blocker.getByRole('button', { name: 'Send reply' })).toHaveCount(0);
 });
 
@@ -137,7 +137,7 @@ test('a request is dismissed only after the confirm step, with an optional note'
 	const before = await badge(page);
 	const row = page.locator('[data-kind="request"]:not(:has(.flag.hands))').first();
 	const id = await row.getAttribute('data-row');
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	const dismiss = dismissOf(row);
 
 	await dismiss.summary.click();
@@ -154,7 +154,7 @@ test('a cancelled dismiss leaves the item where it was', async ({ page }) => {
 	await page.goto('/triage');
 	const row = page.locator('[data-kind="notice"]').first();
 	const id = await row.getAttribute('data-row');
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	const dismiss = dismissOf(row);
 
 	await dismiss.summary.click();
@@ -171,7 +171,7 @@ test('a notice is marked read, and a needs-hands step closes with Done, nothing 
 	await page.goto('/triage');
 	const notice = page.locator('[data-kind="notice"]').first();
 	const noticeId = await notice.getAttribute('data-row');
-	await notice.locator('button.head').click();
+	await notice.locator('button.toggle').click();
 	await expect(dismissOf(notice).summary).toHaveText('Mark read');
 	await dismissOf(notice).summary.click();
 	await dismissOf(notice).confirm.click();
@@ -179,7 +179,7 @@ test('a notice is marked read, and a needs-hands step closes with Done, nothing 
 
 	const hands = page.locator('[data-row]:has(.flag.hands)').first();
 	const handsId = await hands.getAttribute('data-row');
-	await hands.locator('button.head').click();
+	await hands.locator('button.toggle').click();
 	await expect(dismissOf(hands).summary).toHaveText('Done, nothing to add');
 	await dismissOf(hands).summary.click();
 	await dismissOf(hands).confirm.click();
@@ -190,7 +190,7 @@ test('a decision card can be dismissed from the row as well', async ({ page }) =
 	await page.goto('/triage');
 	const row = page.locator('[data-kind="decision"]').first();
 	const id = await row.getAttribute('data-row');
-	await row.locator('button.head').click();
+	await row.locator('button.toggle').click();
 	const dismiss = dismissOf(row.locator('[data-card]'));
 	await expect(dismiss.summary).toHaveText('Dismiss');
 	await dismiss.summary.click();

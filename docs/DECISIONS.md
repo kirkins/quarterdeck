@@ -206,4 +206,22 @@ The Feed is the landing page (`/` redirects to `/feed`). It is every message to 
 
 **Remembered per viewer** (`localStorage`, failures ignored): the filters, and where the captain last read. The Unread divider marks the point where the captain last read, and stays for that visit.
 
-**Not done, by design.** System events (crew started or finished, merges) are not in the feed; `kind` and `payload` leave room for them. The ship page at `/ship/[name]` is a placeholder. Times are drawn only after the page runs, since the server's zone is not the captain's. The Feed badge shows the same count as Triage: open items waiting on the captain.
+**Not done, by design.** System events (crew started or finished, merges) are not in the feed; `kind` and `payload` leave room for them. The ship page at `/ship/[name]` is section 17. Times are drawn only after the page runs, since the server's zone is not the captain's. The Feed badge shows the same count as Triage: open items waiting on the captain.
+
+## 17. The Ship page: one conversation and the tools, built on a provisional `ship.profile`
+
+Tapping a ship's name on the Feed, Triage or Fleet opens `/ship/[name]`. The page has two tabs, and the conversation is the default (`?tab=tools` opens the other).
+
+**Conversation.** It is the Feed filtered to one ship: `captain.feed {ship}`, through the same `FeedThread` component the Feed uses, so polling, older pages, the pill and answer-in-place are one implementation. Ship-to-ship mail is off here, as it is by default on the Feed. Read marks stay the Feed's alone, so reading one ship's thread does not mark the rest read. The answer and dismiss actions are the Feed's (`src/lib/server/feed-actions.ts`).
+
+**Header.** The ship's place on the fleet map, from `fleet.snapshot`: machine (and whether it is reachable), presence, the crew running now with what each is doing, and the count of items that need the captain.
+
+**Tools (view only).** `ship.profile {ship}` is provisional and parsed in one place, `parseShipProfile` in `src/lib/shapes.ts`. Our guess at its shape: `machine`, `hosted`, `sleep {policy, idle_minutes}`, `first_mate {harness, options}` with options as a name-to-value object, `routes` keyed by kind (`first_mate`, `crew`, `errand`) each with `list` (`ship` or `fleet`) and `names`, `charter {actions}`, `permissions {fleet_mode, fleet_rules, ship_rules}`, and the tool bundles `skills`, `mcp_servers` and `plugins` as lists of `{name, description}`, `{name, url, credentials}` and `{name, description}`. Every field is optional. Sections: Model routes, Charter, Permissions, Skills, MCP servers, Plugins, Sleep and hosting. A list longer than five folds behind a count, and a search over the tool lists opens every match.
+
+**Secrets never reach the page.** An option whose name looks like a credential (`token`, `secret`, `key`, `password`, `credential`, `auth`) keeps only whether it is set. MCP servers keep credential names, whether Privateer sends them as a list or as an object, and never values. A URL loses any user name and password, and any secret-looking query value is hidden. The fixtures plant such values, and the tests assert they never render.
+
+**Names.** A ship name must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Anything else is a not-found page, and Privateer is not asked. A name Privateer reports as not found, and that the fleet does not place on a machine, is a not-found page too. Each tab says its own state: an older Privateer without `ship.profile` or `fleet.snapshot`, a read that failed, or a ship with no profile.
+
+**Waiting and unread.** An open notice or report is unread, not waiting on the captain, so it is labelled "Unread" in a quiet outline tag. "Waiting on you" stays for decisions, requests, approvals and needs-hands steps. The Feed's count and its "only waiting on me" filter follow the same rule (`isWaiting` in `src/lib/feed.ts`). The Triage badge is unchanged: it counts what Privateer lists as owed.
+
+**Fixtures.** `fixtures/ship-profile.json` holds four ships: `billing` (many skills and MCP servers, with planted secret-looking values), `chandlery`, `docs-site` (asleep), and `search-index` (on another machine). `fixtures/captain.feed.json` gains `f0001-billing-retry`, the decision Privateer lists as waiting for billing. The feed had omitted it, so no billing ask could be answered from the billing page.

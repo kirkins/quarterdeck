@@ -38,7 +38,9 @@ describe('the fixture feed', () => {
 			cursor = last.next;
 			pages += 1;
 		}
-		expect(pages).toBe(3);
+		// The fixture's size is not fixed: the pages must cover every visible entry.
+		const everything = ok(await source.feed({ limit: 1000, include_ship_mail: false }));
+		expect(pages).toBe(Math.ceil(everything.entries.length / PAGE_LIMIT));
 		expect(last.more).toBe(false);
 	});
 

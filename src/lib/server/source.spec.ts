@@ -171,7 +171,8 @@ describe('sendReply', () => {
 			routesShow: vi.fn(),
 			usage: vi.fn(),
 			report: vi.fn(),
-			feed: vi.fn()
+			feed: vi.fn(),
+			shipProfile: vi.fn()
 		};
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
@@ -225,7 +226,8 @@ describe('sendDismiss', () => {
 			routesShow: vi.fn(),
 			usage: vi.fn(),
 			report: vi.fn(),
-			feed: vi.fn()
+			feed: vi.fn(),
+			shipProfile: vi.fn()
 		};
 		const log = vi.fn();
 		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
@@ -243,7 +245,8 @@ describe('sendDismiss', () => {
 			routesShow: vi.fn(),
 			usage: vi.fn(),
 			report: vi.fn(),
-			feed: vi.fn()
+			feed: vi.fn(),
+			shipProfile: vi.fn()
 		};
 		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
 			sent: true,
@@ -476,5 +479,55 @@ describe('reports by id', () => {
 			content: '<h1>Audit</h1>'
 		});
 		await expect(source.report('nope')).rejects.toThrow(/not in the fixtures/);
+	});
+});
+
+describe('ship.profile', () => {
+	it('reads a profile with the ship name it was asked for, masking secrets', async () => {
+		const run = vi.fn(async () => ({
+			machine: 'atlas',
+			first_mate: { options: { api_key: 'do-not-show-this' } }
+		}));
+		const read = await new CliSource(run as never).shipProfile('billing');
+		expect(run).toHaveBeenCalledWith('ship.profile', { ship: 'billing' });
+		expect(read.status).toBe('ok');
+		if (read.status !== 'ok') return;
+		expect(read.value.ship).toBe('billing');
+		expect(JSON.stringify(read.value)).not.toContain('do-not-show-this');
+	});
+
+	it('maps an unknown ship to not_found, and an older Privateer to unsupported', async () => {
+		const unknownShip = new CliSource(async () => {
+			throw new PrivateerCommandError('ship.profile', 'ship not found: ghost');
+		});
+		expect(await unknownShip.shipProfile('ghost')).toEqual({ status: 'not_found' });
+
+		const older = new CliSource(async () => {
+			throw new PrivateerCommandError('ship.profile', 'unknown command ship.profile');
+		});
+		expect(await older.shipProfile('billing')).toEqual({ status: 'unsupported' });
+	});
+
+	it('rethrows any other failure', async () => {
+		const broken = new CliSource(async () => {
+			throw new PrivateerCommandError('ship.profile', 'database locked');
+		});
+		await expect(broken.shipProfile('billing')).rejects.toThrow('database locked');
+	});
+
+	it('reads the fixture profiles by name, and says not_found for a ship it lacks', async () => {
+		const source = new FixtureSource('fixtures', () => NOW);
+		const billing = await source.shipProfile('billing');
+		expect(billing.status).toBe('ok');
+		if (billing.status === 'ok') expect(billing.value.mcpServers.length).toBeGreaterThan(2);
+		expect(await source.shipProfile('ghost')).toEqual({ status: 'not_found' });
+		expect(await source.shipProfile('constructor')).toEqual({ status: 'not_found' });
+	});
+
+	it('reports an absent profile fixture as unsupported', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'qd-ship-'));
+		expect(await new FixtureSource(dir, () => NOW).shipProfile('billing')).toEqual({
+			status: 'unsupported'
+		});
 	});
 });
