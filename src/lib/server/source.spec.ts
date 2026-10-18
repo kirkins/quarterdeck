@@ -166,7 +166,9 @@ describe('sendReply', () => {
 			mode,
 			waiting: vi.fn(),
 			write: vi.fn(async () => ({ id: 'r' })),
-			snapshot: vi.fn()
+			snapshot: vi.fn(),
+			routesShow: vi.fn(),
+			usage: vi.fn()
 		};
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
@@ -212,7 +214,14 @@ describe('sendDismiss', () => {
 	const dismiss = { id: 'mail-9', note: 'Covered elsewhere' };
 
 	it('logs captain.dismiss and never writes in fixture mode', async () => {
-		const s = { mode: 'fixtures' as const, waiting: vi.fn(), write: vi.fn(), snapshot: vi.fn() };
+		const s = {
+			mode: 'fixtures' as const,
+			waiting: vi.fn(),
+			write: vi.fn(),
+			snapshot: vi.fn(),
+			routesShow: vi.fn(),
+			usage: vi.fn()
+		};
 		const log = vi.fn();
 		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
 		expect(s.write).not.toHaveBeenCalled();
@@ -225,7 +234,9 @@ describe('sendDismiss', () => {
 			mode: 'cli' as const,
 			waiting: vi.fn(),
 			write: vi.fn(async () => ({ ok: true })),
-			snapshot: vi.fn()
+			snapshot: vi.fn(),
+			routesShow: vi.fn(),
+			usage: vi.fn()
 		};
 		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
 			sent: true,
@@ -321,5 +332,101 @@ describe('fleet snapshot', () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'qd-fleet-'));
 		await writeFile(path.join(dir, 'captain.waiting.json'), '{}');
 		expect(await new FixtureSource(dir, () => NOW).snapshot()).toEqual({ status: 'unsupported' });
+	});
+});
+
+describe('spend reads (routes.show, usage.summary)', () => {
+	it('runs routes.show and parses the config and order lists', async () => {
+		const run = vi.fn(async () => ({
+			routes: { 'free-pool': { cost: 'free', note: 'Scouting' } },
+			crew: ['free-pool']
+		}));
+		const read = await new CliSource(run as never).routesShow();
+		expect(run).toHaveBeenCalledWith('routes.show', {});
+		expect(read).toMatchObject({
+			status: 'ok',
+			value: {
+				routes: [{ name: 'free-pool', cost: 'free', note: 'Scouting' }],
+				order: { crew: ['free-pool'] }
+			}
+		});
+	});
+
+	it('passes the period and grouping to usage.summary, leaving out an open end', async () => {
+		const run = vi.fn(async () => ({
+			since_ms: NOW - 24 * H,
+			group_by: 'ship',
+			groups: [{ key: 'billing', jobs: 2, usage: { input: 10, output: 5 }, gaps: [] }]
+		}));
+		const read = await new CliSource(run as never).usage({
+			since_ms: NOW - 24 * H,
+			group_by: 'ship'
+		});
+		expect(run).toHaveBeenCalledWith('usage.summary', { since_ms: NOW - 24 * H, group_by: 'ship' });
+		expect(read.status).toBe('ok');
+		if (read.status !== 'ok') return;
+		expect(read.value.groups[0]).toMatchObject({
+			key: 'billing',
+			jobs: 2,
+			usage: { totalTokens: 15 }
+		});
+	});
+
+	it('reports an older Privateer as unsupported for each, and rethrows real failures', async () => {
+		const unknown = new CliSource(async () => {
+			throw new PrivateerCommandError('usage.summary', 'unknown command usage.summary');
+		});
+		expect(await unknown.usage({ since_ms: NOW, group_by: 'day' })).toEqual({
+			status: 'unsupported'
+		});
+		expect(await unknown.routesShow()).toEqual({ status: 'unsupported' });
+
+		const broken = new CliSource(async () => {
+			throw new PrivateerExecError('usage.summary', 'privateer usage.summary timed out');
+		});
+		await expect(broken.usage({ since_ms: NOW, group_by: 'day' })).rejects.toThrow('timed out');
+	});
+
+	it('reads the routes and usage fixtures, and groups the usage records as usage.summary would', async () => {
+		const source = new FixtureSource('fixtures', () => NOW);
+		const routes = await source.routesShow();
+		expect(routes.status).toBe('ok');
+		if (routes.status === 'ok') {
+			expect(routes.value.order.crew).toEqual(['free-pool', 'plan-main', 'credits-reserve']);
+		}
+
+		const week = await source.usage({ since_ms: NOW - 7 * 24 * H, group_by: 'ship' });
+		expect(week.status).toBe('ok');
+		if (week.status !== 'ok') return;
+		const gapped = week.value.groups.find((g) => g.gaps.includes('ferry'));
+		expect(gapped?.key).toBe('analytics');
+		expect(gapped?.usage).toBeNull();
+		expect(week.value.groups.every((g) => g.jobs !== null && g.jobs > 0)).toBe(true);
+
+		const day = await source.usage({ since_ms: NOW - 24 * H, group_by: 'day' });
+		expect(day.status === 'ok' && day.value.groups.length).toBeGreaterThan(0);
+	});
+
+	it('shows a shorter period as no more tokens than a longer one', async () => {
+		const source = new FixtureSource('fixtures', () => NOW);
+		const total = async (since: number) => {
+			const read = await source.usage({ since_ms: since, group_by: 'route' });
+			if (read.status !== 'ok') throw new Error('expected usage');
+			return read.value.groups.reduce((n, g) => n + (g.usage?.totalTokens ?? 0), 0);
+		};
+		const day = await total(NOW - 24 * H);
+		const month = await total(NOW - 30 * 24 * H);
+		expect(day).toBeGreaterThan(0);
+		expect(month).toBeGreaterThan(day);
+	});
+
+	it('reports absent spend fixtures as unsupported', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'qd-spend-'));
+		await writeFile(path.join(dir, 'captain.waiting.json'), '{}');
+		const source = new FixtureSource(dir, () => NOW);
+		expect(await source.routesShow()).toEqual({ status: 'unsupported' });
+		expect(await source.usage({ since_ms: NOW, group_by: 'route' })).toEqual({
+			status: 'unsupported'
+		});
 	});
 });

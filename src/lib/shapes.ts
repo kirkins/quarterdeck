@@ -217,10 +217,20 @@ export interface FleetShip {
 	jobs: FleetJob[];
 }
 
+/**
+ * A model route on one machine. `cost` is "free", "plan" or "credits" as
+ * Privateer reports it; `state` is "available", "backing_off" or "capped".
+ * `until_ms` is when a backoff clears; `resets_at` is when a cap resets.
+ */
 export interface FleetRoute {
 	name: string;
+	harness: string | null;
+	model: string | null;
+	cost: string | null;
 	state: string | null;
 	until_ms: number | null;
+	resets_at: number | null;
+	last_error: string | null;
 }
 
 export interface FleetMachine {
@@ -277,10 +287,21 @@ function parseMachine(name: string, machine: Rec): FleetMachine {
 		routes: list(machine.routes).flatMap((raw) => {
 			const route = rec(raw);
 			const routeName = str(route?.name);
-			return route && routeName
-				? [{ name: routeName, state: str(route.state), until_ms: num(route.until_ms) }]
-				: [];
+			return route && routeName ? [parseRoute(routeName, route)] : [];
 		})
+	};
+}
+
+function parseRoute(name: string, route: Rec): FleetRoute {
+	return {
+		name,
+		harness: str(route.harness),
+		model: str(route.model),
+		cost: str(route.cost),
+		state: str(route.state),
+		until_ms: num(route.until_ms),
+		resets_at: num(route.resets_at),
+		last_error: str(route.last_error)
 	};
 }
 
@@ -308,4 +329,164 @@ function parseShip(name: string, ship: Rec): FleetShip {
 				: [];
 		})
 	};
+}
+
+/*
+ * The spend view (PROVISIONAL). Privateer's `routes.show` (config: cost, note,
+ * the order each list tries routes in) and `usage.summary` (token totals,
+ * fleet-wide) are not final. Like the fleet map, every field is optional and
+ * extras are ignored. Adjust these parsers alone; see docs/DECISIONS.md section 14.
+ */
+
+/** A route's configuration, as `routes.show` gives it. Its live state is on the fleet snapshot. */
+export interface RouteConfig {
+	name: string;
+	cost: string | null;
+	note: string | null;
+	options: string[];
+	manifest: string | null;
+	allowance_resets_utc: string | null;
+}
+
+export interface RoutesConfig {
+	routes: RouteConfig[];
+	/** Route names in the order each list tries them, e.g. crew, errand, first_mate. */
+	order: Record<string, string[]>;
+}
+
+/** Read `routes.show`: a `routes` object keyed by name, and order lists under `order` or at the top. */
+export function parseRoutesShow(result: unknown): RoutesConfig {
+	const root = rec(result);
+	const routes = rec(root?.routes) ?? {};
+	const order = rec(root?.order) ?? root ?? {};
+	return {
+		routes: Object.entries(routes).flatMap(([name, value]) => {
+			const route = rec(value);
+			return route && name
+				? [
+						{
+							name,
+							cost: str(route.cost),
+							note: str(route.note),
+							options: strings(route.options),
+							manifest: str(route.manifest),
+							allowance_resets_utc: str(route.allowance_resets_utc)
+						}
+					]
+				: [];
+		}),
+		order: {
+			crew: strings(order.crew),
+			errand: strings(order.errand),
+			first_mate: strings(order.first_mate)
+		}
+	};
+}
+
+/** Tokens for one slice of usage. A field is null where the harness reports nothing for it. */
+export interface UsageTotals {
+	input: number | null;
+	output: number | null;
+	cacheRead: number | null;
+	cacheWrite: number | null;
+	/** input + output + cacheRead + cacheWrite, as reported; null when nothing is reported. */
+	totalTokens: number | null;
+}
+
+export interface UsageGroup {
+	key: string;
+	jobs: number | null;
+	/** null when no harness in this group reports usage at all. */
+	usage: UsageTotals | null;
+	/** Harnesses in this group that report no usage. */
+	gaps: string[];
+}
+
+export interface UsageSummary {
+	since_ms: number | null;
+	until_ms: number | null;
+	group_by: string;
+	groups: UsageGroup[];
+}
+
+/** A usage object's totals; totalTokens is derived when Privateer does not send it. */
+export function parseUsageTotals(value: unknown): UsageTotals | null {
+	const usage = rec(value);
+	if (!usage) return null;
+	const input = num(usage.input);
+	const output = num(usage.output);
+	const cacheRead = num(usage.cacheRead);
+	const cacheWrite = num(usage.cacheWrite);
+	const parts = [input, output, cacheRead, cacheWrite].filter((n): n is number => n !== null);
+	const reported = num(usage.totalTokens);
+	return {
+		input,
+		output,
+		cacheRead,
+		cacheWrite,
+		totalTokens: reported ?? (parts.length > 0 ? parts.reduce((a, b) => a + b, 0) : null)
+	};
+}
+
+/** Read `usage.summary`. Each group carries its totals, its job count and its gaps. */
+export function parseUsageSummary(result: unknown): UsageSummary {
+	const root = rec(result);
+	return {
+		since_ms: num(root?.since_ms),
+		until_ms: num(root?.until_ms),
+		group_by: str(root?.group_by) ?? '',
+		groups: list(root?.groups).flatMap((raw) => {
+			const group = rec(raw);
+			const key = str(group?.key);
+			return group && key
+				? [
+						{
+							key,
+							jobs: num(group.jobs),
+							usage: parseUsageTotals(group.usage),
+							gaps: strings(group.gaps)
+						}
+					]
+				: [];
+		})
+	};
+}
+
+/**
+ * One usage record, as the fixtures hold it: a job's tokens at a moment, with
+ * the machine, ship and route it ran on. `usage` is null where the harness
+ * reports nothing.
+ */
+export interface UsageRecord {
+	ts_ms: number;
+	machine: string;
+	ship: string;
+	route: string;
+	harness: string;
+	jobs: number;
+	usage: UsageTotals | null;
+}
+
+export function parseUsageRecords(result: unknown): UsageRecord[] {
+	return list(rec(result)?.records).flatMap((raw) => {
+		const record = rec(raw);
+		const ts = num(record?.ts_ms);
+		const machine = str(record?.machine);
+		const ship = str(record?.ship);
+		const route = str(record?.route);
+		const harness = str(record?.harness);
+		return record && ts !== null && machine && ship && route && harness
+			? [
+					{
+						ts_ms: ts,
+						machine,
+						ship,
+						route,
+						harness,
+						jobs: num(record.jobs) ?? 0,
+						usage: parseUsageTotals(record.usage)
+					}
+				]
+			: [];
+	});
 }

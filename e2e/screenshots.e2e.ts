@@ -195,3 +195,42 @@ test.describe('fleet desktop', () => {
 		await page.screenshot({ path: `${dir}/fleet-desktop.png` });
 	});
 });
+
+async function openSpend(page: Page, theme: 'light' | 'dark') {
+	await page.context().addCookies([
+		{
+			name: 'qd_theme',
+			value: theme,
+			url: test.info().project.use.baseURL ?? 'http://127.0.0.1:4173'
+		}
+	]);
+	await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+	await page.goto('/spend?period=7d&group=route');
+	await expect(page.getByRole('heading', { level: 1, name: 'Spend' })).toBeVisible();
+	await page.evaluate(() => document.fonts.ready);
+}
+
+test.describe('spend phone', () => {
+	test.use({
+		viewport: { width: 390, height: 844 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true
+	});
+
+	for (const theme of ['light', 'dark'] as const) {
+		test(`spend, ${theme}`, async ({ page }) => {
+			await openSpend(page, theme);
+			await page.screenshot({ path: `${dir}/spend-phone-${theme}.png` });
+		});
+	}
+});
+
+test.describe('spend desktop', () => {
+	test.use({ viewport: { width: 1280, height: 900 } });
+
+	test('spend, light', async ({ page }) => {
+		await openSpend(page, 'light');
+		await page.screenshot({ path: `${dir}/spend-desktop.png` });
+	});
+});

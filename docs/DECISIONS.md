@@ -136,3 +136,25 @@ It is parsed in one place, `parseSnapshot` in `src/lib/shapes.ts`. Every field i
 **Refresh.** The page re-runs its load every 15 s while the tab is visible, and again on focus or when the tab becomes visible. Refreshes use `invalidate('quarterdeck:fleet')`, which re-runs only this page's load and leaves the component mounted, so the collapsed machines stay collapsed and the scroll position stays put.
 
 **Needs link to triage.** A ship's "items need you" link goes to `/triage?ship=<name>`. Triage reads that ship from the URL and filters to it, and the URL choice wins over the remembered filter.
+
+## 14. Spend view: read-only, built on provisional `routes.show` and `usage.summary`
+
+**The spend view** (`/spend`) shows two things. **Routes now** lists each model route in the order crew try them, with its cost class (free, plan or credits), its state on each machine (available, backing off, or capped, with a relative time until it clears), its last error on demand, and its note from `routes.show`. Throttled routes come first. **Usage** shows token totals for a period (24 h, 7 days or 30 days) grouped by route, ship, day or machine. It only reads. Nothing on the page changes the fleet or a route.
+
+**Provisional shapes.** Privateer has not shipped these yet, so Quarterdeck builds against guessed shapes and marks them provisional. Each is parsed in one place in `src/lib/shapes.ts`, with every field optional:
+
+- `fleet.snapshot` gains per machine `routes: [ { name, harness, model, cost, state, until_ms?, resets_at?, last_error? } ]`. It is the same parser the fleet map uses (`parseSnapshot`).
+- `routes.show {}` returns `{ routes: { <name>: { cost, note, options, manifest, allowance_resets_utc? } }, crew: [...], errand: [...], first_mate: [...] }`. The three lists are the order each tries routes in; the spend view uses the first list that names a route, crew first.
+- `usage.summary { since_ms, until_ms?, group_by }` returns `{ since_ms, until_ms, group_by, groups: [ { key, jobs, usage: { input, output, cacheRead, cacheWrite, totalTokens } | null, gaps: [harness] } ] }`. A harness that reports nothing has its fields null and is named in `gaps`. `totalTokens` is the sum of the four as reported, or the reported value when Privateer sends one.
+
+**Not reported.** Plan allowances and credit balances do not exist yet, so the view says "not reported" where they would go. No number is invented.
+
+**Cache tokens** are shown apart from input and output, and labelled as cache. They are never presented as spend.
+
+**Unsupported.** When the CLI refuses a command as unknown (`isUnknownCommand`), that section shows a calm "does not report … yet" state. Any other failure shows an error for that section only, so one failing read leaves the rest of the page up.
+
+**Fixtures.** `fixtures/routes-show.json` and `fixtures/usage-records.json` stand in for Privateer. `FixtureSource` groups the records the way `usage.summary` would (`summarizeRecords` in `src/lib/usage.ts`), so a period or grouping switch changes the view in fixture mode too. A fixture's `resets_at` is shifted with the other `*_ms` times, so a capped route stays capped in the fixture.
+
+**Sorting** (`buildRoutes` in `src/lib/spend.ts`). Throttled routes first (backing off or capped on any machine), then by try order, then by name. A route is listed even when no machine reports it, if `routes.show` names it.
+
+**Switches** are plain links (`?period=…&group=…`), so the page works without JavaScript. The page re-runs its load every 60 s while the tab is visible, and on focus or when the tab becomes visible.

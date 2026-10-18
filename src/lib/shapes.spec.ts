@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { assemble, parseCaptainWaiting, parseRuntimeNeeds, parseSnapshot } from './shapes.ts';
+import {
+	assemble,
+	parseCaptainWaiting,
+	parseRoutesShow,
+	parseRuntimeNeeds,
+	parseSnapshot,
+	parseUsageRecords,
+	parseUsageSummary
+} from './shapes.ts';
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
@@ -374,7 +382,16 @@ describe('parseSnapshot (provisional fleet.snapshot)', () => {
 		const [machine] = snap.machines;
 		expect(machine).toMatchObject({ name: 'atlas', reachable: true, changed_ms: NOW - 4000 });
 		expect(machine.routes).toEqual([
-			{ name: 'primary', state: 'backing_off', until_ms: NOW + 9 * MIN }
+			{
+				name: 'primary',
+				harness: null,
+				model: null,
+				cost: null,
+				state: 'backing_off',
+				until_ms: NOW + 9 * MIN,
+				resets_at: null,
+				last_error: null
+			}
 		]);
 		expect(machine.ships[0]).toMatchObject({
 			name: 'billing',
@@ -439,5 +456,185 @@ describe('parseSnapshot (provisional fleet.snapshot)', () => {
 		expect(snap.machines.map((m) => m.name)).toEqual(['calypso']);
 		expect(snap.machines[0].ships).toEqual([]);
 		expect(snap.needs).toEqual([]);
+	});
+});
+
+describe('parseSnapshot routes (provisional, for the spend view)', () => {
+	it('reads every route field, and leaves the ones Privateer omits null', () => {
+		const snap = parseSnapshot({
+			machines: [
+				{
+					name: 'atlas',
+					reachable: true,
+					routes: [
+						{
+							name: 'free-pool',
+							harness: 'tidewater',
+							model: 'small-free',
+							cost: 'free',
+							state: 'backing_off',
+							until_ms: NOW + 9 * MIN,
+							last_error: 'Upstream answered 429'
+						},
+						{ name: 'credits-reserve', cost: 'credits', state: 'available' },
+						{ state: 'available' }
+					]
+				}
+			]
+		});
+		expect(snap.machines[0].routes).toEqual([
+			{
+				name: 'free-pool',
+				harness: 'tidewater',
+				model: 'small-free',
+				cost: 'free',
+				state: 'backing_off',
+				until_ms: NOW + 9 * MIN,
+				resets_at: null,
+				last_error: 'Upstream answered 429'
+			},
+			{
+				name: 'credits-reserve',
+				harness: null,
+				model: null,
+				cost: 'credits',
+				state: 'available',
+				until_ms: null,
+				resets_at: null,
+				last_error: null
+			}
+		]);
+	});
+
+	it('reads resets_at for a capped route', () => {
+		const snap = parseSnapshot({
+			machines: [
+				{
+					name: 'boreas',
+					reachable: true,
+					routes: [{ name: 'plan-main', cost: 'plan', state: 'capped', resets_at: NOW + HOUR }]
+				}
+			]
+		});
+		expect(snap.machines[0].routes[0].resets_at).toBe(NOW + HOUR);
+	});
+});
+
+describe('parseRoutesShow', () => {
+	it('reads each route config and the try order lists', () => {
+		const config = parseRoutesShow({
+			routes: {
+				'plan-main': {
+					cost: 'plan',
+					note: 'Shared with the captain',
+					options: ['--large'],
+					manifest: 'routes/plan.toml'
+				}
+			},
+			crew: ['free-pool', 'plan-main'],
+			errand: ['plan-main'],
+			first_mate: []
+		});
+		expect(config.routes).toEqual([
+			{
+				name: 'plan-main',
+				cost: 'plan',
+				note: 'Shared with the captain',
+				options: ['--large'],
+				manifest: 'routes/plan.toml',
+				allowance_resets_utc: null
+			}
+		]);
+		expect(config.order).toEqual({
+			crew: ['free-pool', 'plan-main'],
+			errand: ['plan-main'],
+			first_mate: []
+		});
+	});
+
+	it('reads order lists under an order key too, and tolerates nothing at all', () => {
+		expect(parseRoutesShow({ order: { crew: ['a'] } }).order.crew).toEqual(['a']);
+		expect(parseRoutesShow(null)).toEqual({
+			routes: [],
+			order: { crew: [], errand: [], first_mate: [] }
+		});
+		expect(parseRoutesShow({ routes: { '': { cost: 'free' }, bad: 'nope' } }).routes).toEqual([]);
+	});
+});
+
+describe('parseUsageSummary', () => {
+	it('reads totals per group, keeping a null where the harness reports nothing', () => {
+		const summary = parseUsageSummary({
+			since_ms: NOW - 24 * HOUR,
+			group_by: 'ship',
+			groups: [
+				{
+					key: 'billing',
+					jobs: 3,
+					usage: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1 },
+					gaps: []
+				},
+				{ key: 'analytics', jobs: 2, usage: null, gaps: ['ferry'] },
+				{
+					key: 'docs',
+					jobs: 1,
+					usage: { input: 4, output: null, cacheRead: null, cacheWrite: null }
+				}
+			]
+		});
+		expect(summary.groups[0].usage).toEqual({
+			input: 100,
+			output: 20,
+			cacheRead: 5,
+			cacheWrite: 1,
+			totalTokens: 126
+		});
+		expect(summary.groups[1]).toEqual({ key: 'analytics', jobs: 2, usage: null, gaps: ['ferry'] });
+		expect(summary.groups[2].usage?.totalTokens).toBe(4);
+		expect(summary.group_by).toBe('ship');
+	});
+
+	it('keeps a reported totalTokens over the derived sum', () => {
+		const summary = parseUsageSummary({
+			groups: [{ key: 'x', usage: { input: 1, output: 2, totalTokens: 10 } }]
+		});
+		expect(summary.groups[0].usage?.totalTokens).toBe(10);
+	});
+
+	it('gives no totalTokens when no count is present', () => {
+		const summary = parseUsageSummary({ groups: [{ key: 'x', usage: {} }] });
+		expect(summary.groups[0].usage).toEqual({
+			input: null,
+			output: null,
+			cacheRead: null,
+			cacheWrite: null,
+			totalTokens: null
+		});
+	});
+
+	it('is empty and calm for a missing or malformed reply', () => {
+		expect(parseUsageSummary(undefined).groups).toEqual([]);
+		expect(parseUsageSummary({ groups: [{ jobs: 1 }, 7] }).groups).toEqual([]);
+	});
+});
+
+describe('parseUsageRecords', () => {
+	it('drops records missing their time, machine, ship, route or harness', () => {
+		const records = parseUsageRecords({
+			records: [
+				{
+					ts_ms: NOW,
+					machine: 'atlas',
+					ship: 'billing',
+					route: 'plan-main',
+					harness: 'tidewater',
+					jobs: 1,
+					usage: null
+				},
+				{ ts_ms: NOW, machine: 'atlas', ship: 'billing', route: 'plan-main' }
+			]
+		});
+		expect(records).toHaveLength(1);
+		expect(records[0].usage).toBeNull();
 	});
 });
