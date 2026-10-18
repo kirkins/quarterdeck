@@ -391,6 +391,8 @@
 			var(--elev-2);
 		border-bottom-left-radius: var(--radius-lg);
 	}
+	/* Open cards share one inset, so a stack of them lines up past the brass edge. */
+	.msg.open .bubble,
 	.bubble.ask {
 		gap: var(--s-3);
 		padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5);

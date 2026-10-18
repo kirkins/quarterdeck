@@ -244,7 +244,6 @@
 		padding-bottom: env(safe-area-inset-bottom);
 		background: var(--chrome);
 		backdrop-filter: saturate(1.6) blur(18px);
-		-webkit-backdrop-filter: saturate(1.6) blur(18px);
 		box-shadow: 0 -1px 0 var(--line);
 	}
 	nav ul {
@@ -351,7 +350,6 @@
 			padding: 0;
 			background: none;
 			backdrop-filter: none;
-			-webkit-backdrop-filter: none;
 			box-shadow: none;
 		}
 		nav ul {

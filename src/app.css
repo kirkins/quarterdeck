@@ -22,7 +22,7 @@
 	--surface-2: light-dark(#f7f4ed, #0c1724);
 	--surface-raised: light-dark(#ffffff, #142336);
 	--well: light-dark(#efebe1, #060e17);
-	--chrome: light-dark(rgb(244 241 234 / 0.86), rgb(8 18 29 / 0.82));
+	--chrome: light-dark(rgb(244 241 234 / 0.95), rgb(8 18 29 / 0.94));
 
 	/* Lines: hairlines carry most of the structure, so they are quiet */
 	--line: light-dark(rgb(15 29 46 / 0.1), rgb(196 214 235 / 0.1));
