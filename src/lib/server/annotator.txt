@@ -6,6 +6,10 @@
  * postMessage. The portal checks every message (src/lib/report.ts), so this
  * file is the frame's side of that contract, not a place to trust input.
  *
+ * Every message to the portal carries TOKEN, which the server writes in for
+ * this render alone. If the frame is navigated to another document, that
+ * document cannot know it, so the portal drops what it sends.
+ *
  * Offsets are character indexes into the flattened text, which puts a newline
  * between blocks. The portal matches quotes on that text, so both sides use
  * the same flattening (flatten below).
@@ -13,6 +17,8 @@
 (function () {
 	'use strict';
 
+	var TOKEN = '__QD_TOKEN__';
+	var XLINK = 'http://www.w3.org/1999/xlink';
 	var BLOCK = 'p,li,h1,h2,h3,h4,h5,h6,tr,pre,blockquote,td,th,dt,dd,figcaption,caption,hr';
 	var CONTEXT = 32;
 	var QUOTE = 2000;
@@ -25,6 +31,7 @@
 	var timer = 0;
 
 	function post(message) {
+		message.token = TOKEN;
 		window.parent.postMessage(message, '*');
 	}
 
@@ -290,11 +297,46 @@
 		timer = setTimeout(showSelection, 120);
 	});
 
+	/**
+	 * Whether a click lands on anything that would navigate this frame away
+	 * from the report: an HTML a or area, an SVG a (href or xlink:href), or any
+	 * element with an href (MathML). The path is walked, not just the target,
+	 * so text inside a link counts too.
+	 */
+	function inLink(event) {
+		var path = event.composedPath ? event.composedPath() : [];
+		for (var i = 0; i < path.length; i++) {
+			var el = path[i];
+			if (!(el instanceof Element)) continue;
+			var name = el.localName;
+			if (name === 'a' || name === 'area') return true;
+			if (el.hasAttribute('href') || el.hasAttributeNS(XLINK, 'href')) return true;
+		}
+		return false;
+	}
+
+	// Links do nothing here: following one would take the frame away from the
+	// report. This listens first (capture, on the window) for every click,
+	// middle click and Enter on a link, and form submits and drops are
+	// cancelled too, though the sandbox already refuses forms.
+	function stop(event) {
+		event.preventDefault();
+	}
+	['click', 'auxclick'].forEach(function (type) {
+		window.addEventListener(
+			type,
+			function (event) {
+				if (inLink(event)) event.preventDefault();
+			},
+			true
+		);
+	});
+	window.addEventListener('submit', stop, true);
+	window.addEventListener('dragover', stop, true);
+	window.addEventListener('drop', stop, true);
+
 	document.addEventListener('click', function (event) {
-		// A link would navigate this frame away from the report, so links do nothing here.
-		var link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-		if (link) event.preventDefault();
-		if (!link) showPill(event);
+		if (!inLink(event)) showPill(event);
 	});
 
 	document.addEventListener('scroll', hideAll, { passive: true });

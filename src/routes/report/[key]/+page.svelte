@@ -5,11 +5,14 @@
 	nothing in it can act as this page. Comments are made in the frame and
 	reach this page as postMessage; this page keeps them, saves a draft in
 	localStorage, and sends them all as one reply. Without JavaScript the
-	reader cannot annotate, but it still shows the report's title and state.
+	reader shows the report's title and state, but not the report: the frame
+	is built in the browser, so its guards are in place before it loads.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 	import { enhance, type SubmitFunction } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Icon from '#lib/components/Icon.svelte';
 	import {
@@ -62,6 +65,10 @@
 	let sheetOpen = $state(false);
 	let limitNote = $state<string | null>(null);
 	let restored = $state(false);
+	let mounted = $state(false);
+	/** The frame loaded a second document: something in the report navigated it away. */
+	let stopped = $state(false);
+	let reloading = $state(false);
 	let counter = 0;
 
 	const ask = $derived(data.ask);
@@ -111,7 +118,55 @@
 	onMount(() => {
 		restore();
 		restored = true;
+		mounted = true;
 	});
+
+	/**
+	 * Build the report's frame. It is made here rather than in the markup so
+	 * the order is certain: the sandbox and the load listener are in place
+	 * before the srcdoc is set and the frame joins the page. The first load is
+	 * the report. Any later load means the frame was navigated away from it,
+	 * so the frame is torn down and nothing more from it is heard.
+	 */
+	function reportFrame(srcdoc: string, title: string): Attachment<HTMLElement> {
+		return (host) => {
+			const frame = document.createElement('iframe');
+			frame.className = 'frame';
+			frame.title = `Report: ${title}`;
+			frame.setAttribute('sandbox', 'allow-scripts');
+			frame.referrerPolicy = 'no-referrer';
+			let loads = 0;
+			frame.addEventListener('load', () => {
+				loads += 1;
+				if (loads > 1) stopFrame();
+			});
+			frame.srcdoc = srcdoc;
+			host.append(frame);
+			frameEl = frame;
+			frameText = null;
+			return () => {
+				frame.remove();
+				if (frameEl === frame) frameEl = undefined;
+			};
+		};
+	}
+
+	function stopFrame() {
+		stopped = true;
+		frameEl = undefined;
+		frameText = null;
+	}
+
+	/** Render the report again, with a fresh nonce and token, and a new frame. */
+	async function reloadReport() {
+		reloading = true;
+		try {
+			await invalidateAll();
+			stopped = false;
+		} finally {
+			reloading = false;
+		}
+	}
 
 	// Keep the draft as the captain works, so a reload or a closed tab loses nothing.
 	$effect(() => {
@@ -129,9 +184,10 @@
 	});
 
 	// Tell the frame where every comment sits, whenever the comments or the text change.
+	// Only once the annotator has said hello with this render's token, so nothing goes to another document.
 	$effect(() => {
 		const marks = placed.flatMap(({ note, span }) => (span ? [{ id: note.id, ...span }] : []));
-		frameEl?.contentWindow?.postMessage({ type: 'marks', marks }, '*');
+		if (frameText !== null) frameEl?.contentWindow?.postMessage({ type: 'marks', marks }, '*');
 	});
 
 	function currentTheme(): 'light' | 'dark' | 'system' {
@@ -140,8 +196,10 @@
 	}
 
 	function onMessage(event: MessageEvent) {
-		if (!frameEl || event.source !== frameEl.contentWindow) return;
-		const message = parseFromFrame(event.data);
+		// Only the frame's own window, and only with this render's token: a document the frame
+		// was navigated to shares the window but cannot know the token.
+		if (stopped || !frameEl || event.source !== frameEl.contentWindow) return;
+		const message = parseFromFrame(event.data, data.frame?.token ?? '');
 		if (!message) return;
 		if (message.type === 'text') {
 			frameText = message.text;
@@ -192,7 +250,7 @@
 	}
 
 	function jump(id: string) {
-		frameEl?.contentWindow?.postMessage({ type: 'focus', id }, '*');
+		if (frameText !== null) frameEl?.contentWindow?.postMessage({ type: 'focus', id }, '*');
 	}
 
 	function excerpt(text: string, max = 240): string {
@@ -285,14 +343,29 @@
 							: 'comments are taken on requests and notices.'}
 					{/if}
 				</p>
-				<iframe
-					bind:this={frameEl}
-					class="frame"
-					title="Report: {ask.title}"
-					sandbox="allow-scripts"
-					referrerpolicy="no-referrer"
-					srcdoc={data.frame.srcdoc}
-				></iframe>
+				{#if stopped}
+					<div class="stopped" role="alert">
+						<Icon name="alert" size={24} />
+						<h2>This report tried to leave the page and was stopped</h2>
+						<p>
+							Something in it tried to load another page in its place. Quarterdeck closed it and
+							ignores anything it sends. Your comments are kept.
+						</p>
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick={reloadReport}
+							disabled={reloading}
+						>
+							<Icon name="refresh" size={16} />
+							{reloading ? 'Loading…' : 'Load the report again'}
+						</button>
+					</div>
+				{:else if mounted}
+					<div class="frame-box" {@attach reportFrame(data.frame.srcdoc, ask.title)}></div>
+				{:else}
+					<div class="frame-box loading">Loading the report…</div>
+				{/if}
 			</section>
 
 			{#if composing}
@@ -512,14 +585,49 @@
 		font-size: var(--text-sm);
 		color: var(--ink-3);
 	}
-	.frame {
-		display: block;
-		width: 100%;
+	.frame-box {
 		height: 62svh;
 		min-height: 22rem;
+		overflow: hidden;
 		border: 1px solid var(--line);
 		border-radius: var(--radius);
 		background: var(--surface);
+	}
+	.frame-box :global(.frame) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+	.loading {
+		display: grid;
+		place-items: center;
+		font-size: var(--text-sm);
+		color: var(--ink-3);
+	}
+	.stopped {
+		display: grid;
+		justify-items: start;
+		gap: var(--s-3);
+		padding: var(--s-6);
+		border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+		border-radius: var(--radius);
+		background: var(--warn-soft);
+		color: var(--ink-2);
+	}
+	.stopped > :global(.icon) {
+		color: var(--warn);
+	}
+	.stopped h2 {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--ink);
+	}
+	.stopped p {
+		margin: 0;
+		max-width: 38rem;
 	}
 
 	.notes {
@@ -703,7 +811,7 @@
 			grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
 			align-items: start;
 		}
-		.frame {
+		.frame-box {
 			height: max(32rem, calc(100svh - 15rem));
 		}
 		.notes {

@@ -3,7 +3,7 @@
  * This module is the one place their shape, limits and checks live. It is
  * shared by server and browser code, so no Node APIs here.
  *
- * Agreed with Privateer (see docs/DECISIONS.md, section 14):
+ * Agreed with Privateer (see docs/DECISIONS.md, section 15):
  *
  *   payload.report = { title, format: "markdown" | "html", content }       inline
  *   payload.report = { title, format, report_id }                         by reference
@@ -215,11 +215,13 @@ export type FromFrame =
 /**
  * Validate a message from the annotator frame. Everything else is dropped:
  * the portal acts as the captain, so nothing from the frame is trusted until
- * it has been checked here.
+ * it has been checked here. Every message must carry this render's token,
+ * which only the annotator was given: a document the frame was navigated to
+ * cannot know it.
  */
-export function parseFromFrame(data: unknown): FromFrame | null {
+export function parseFromFrame(data: unknown, token: string): FromFrame | null {
 	const msg = rec(data);
-	if (!msg) return null;
+	if (!msg || token === '' || msg.token !== token) return null;
 	if (msg.type === 'text') {
 		if (typeof msg.text !== 'string' || byteLength(msg.text) > REPORT_LIMITS.bytes * 2) return null;
 		return { type: 'text', text: msg.text };

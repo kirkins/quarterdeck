@@ -6,12 +6,37 @@
  * sending it answers it, so the tests run in order and this file runs before
  * triage, which reads the same fixtures.
  */
+import { createServer, type Server } from 'node:http';
 import { expect, test, type Frame, type Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
 const MARKDOWN = `/report/${encodeURIComponent('archive-sync\u0000f0010-archive-review')}`;
 const HTML = `/report/${encodeURIComponent('metrics-rollup\u0000f0011-rollup-report')}`;
+
+/**
+ * A local listener the HTML fixture's links and its encoded meta refresh point
+ * at (fixtures/report.get.json). If the frame ever follows one, it lands here.
+ */
+const TRAP_PORT = 4179;
+const trapped: string[] = [];
+let trap: Server;
+
+test.beforeAll(async () => {
+	trap = createServer((request, response) => {
+		trapped.push(request.url ?? '');
+		// A page that tries to talk to the portal as if it were the annotator, without the token.
+		response.setHeader('content-type', 'text/html');
+		response.end(
+			`<p>Elsewhere</p><script>parent.postMessage({ type: 'block', token: 'guess', anchor: { selector: '0', quote: 'Injected' } }, '*');</script>`
+		);
+	});
+	await new Promise<void>((done) => trap.listen(TRAP_PORT, '127.0.0.1', done));
+});
+
+test.afterAll(async () => {
+	await new Promise((done) => trap.close(done));
+});
 
 /** The report's frame, as a Playwright frame: its text can be selected and clicked. */
 async function frameOf(page: Page): Promise<Frame> {
@@ -139,6 +164,64 @@ test('a link in a report does nothing and a script in an HTML report does not ru
 		.poll(() => frame.evaluate(() => [...document.images].every((img) => img.naturalWidth === 0)))
 		.toBe(true);
 	expect(answered).toEqual([]);
+});
+
+test('the report cannot take the frame away: an encoded refresh, SVG links and a link', async ({
+	page
+}) => {
+	trapped.length = 0;
+	const requests: string[] = [];
+	page.on('request', (request) => {
+		if (request.url().includes(`:${TRAP_PORT}/`)) requests.push(request.url());
+	});
+
+	await page.goto(HTML);
+	let frame = await frameOf(page);
+	await expect(frame.getByRole('heading', { level: 1, name: 'Rollup audit' })).toBeVisible();
+
+	// The refresh was written as re&#102;resh, with a one-second delay: it must be gone.
+	expect(await frame.locator('meta[http-equiv]').count()).toBe(1); // the frame's own CSP
+	await frame.getByText('see the full chart').click();
+	await frame.getByText('raw numbers').click();
+	await frame.getByRole('link', { name: 'audit page' }).click();
+	await frame.getByRole('link', { name: 'audit page' }).press('Enter');
+	await page.waitForTimeout(1500);
+
+	frame = await frameOf(page);
+	await expect(frame.getByRole('heading', { level: 1, name: 'Rollup audit' })).toBeVisible();
+	await expect(page.getByRole('alert').filter({ hasText: 'tried to leave' })).toHaveCount(0);
+	expect(requests).toEqual([]);
+	expect(trapped).toEqual([]);
+});
+
+test('a frame that is navigated anyway is closed, its messages ignored, and can be loaded again', async ({
+	page
+}) => {
+	trapped.length = 0;
+	await page.goto(HTML);
+	const frame = await frameOf(page);
+	await expect(frame.getByRole('heading', { level: 1, name: 'Rollup audit' })).toBeVisible();
+
+	// Stand in for a way out not yet thought of: navigate the frame from outside its sandbox.
+	await frame
+		.evaluate((url) => {
+			location.href = url;
+		}, `http://127.0.0.1:${TRAP_PORT}/elsewhere`)
+		.catch(() => {
+			// The frame may already be gone when the call returns.
+		});
+
+	const warning = page.getByRole('alert').filter({ hasText: 'tried to leave the page' });
+	await expect(warning).toBeVisible();
+	await expect(page.locator('iframe.frame')).toHaveCount(0);
+	expect(trapped).toEqual(['/elsewhere']);
+	// The new document posted a comment request without the token: no composer opened.
+	await expect(page.getByRole('textbox', { name: 'Your comment' })).toHaveCount(0);
+
+	await warning.getByRole('button', { name: 'Load the report again' }).click();
+	await expect(warning).toHaveCount(0);
+	const again = await frameOf(page);
+	await expect(again.getByRole('heading', { level: 1, name: 'Rollup audit' })).toBeVisible();
 });
 
 test.describe('on a phone', () => {

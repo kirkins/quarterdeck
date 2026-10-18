@@ -67,7 +67,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			canComment: REPORT_KINDS.has(triageKind(item))
 		},
 		// The frame's document is built here, on the server, so the report never runs in this origin.
-		frame: { srcdoc: renderFrame(format, content), format }
+		frame: { ...renderFrame(format, content), format }
 	};
 };
 

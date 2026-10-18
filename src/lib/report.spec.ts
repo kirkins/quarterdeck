@@ -129,31 +129,49 @@ describe('findQuote', () => {
 });
 
 describe('parseFromFrame', () => {
+	const TOKEN = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+	/** A message as this render's annotator sends it: with the token. */
+	const signed = (message: Record<string, unknown>) => ({ ...message, token: TOKEN });
+	const parse = (data: unknown) => parseFromFrame(data, TOKEN);
+
 	it('accepts the three messages the frame sends', () => {
-		expect(parseFromFrame({ type: 'text', text: 'Hello' })).toEqual({
+		expect(parse(signed({ type: 'text', text: 'Hello' }))).toEqual({
 			type: 'text',
 			text: 'Hello'
 		});
 		expect(
-			parseFromFrame({ type: 'select', anchor: { quote: 'Hi', prefix: 'a', suffix: 'b' } })
+			parse(signed({ type: 'select', anchor: { quote: 'Hi', prefix: 'a', suffix: 'b' } }))
 		).toEqual({ type: 'select', anchor: { quote: 'Hi', prefix: 'a', suffix: 'b' } });
-		expect(parseFromFrame({ type: 'block', anchor: { selector: '1/0', quote: 'Hi' } })).toEqual({
+		expect(parse(signed({ type: 'block', anchor: { selector: '1/0', quote: 'Hi' } }))).toEqual({
 			type: 'block',
 			anchor: { selector: '1/0', quote: 'Hi' }
 		});
 	});
 
+	it('drops a message without this render’s token, as from a document the frame was sent to', () => {
+		const text = { type: 'text', text: 'Hello' };
+		const block = { type: 'block', anchor: { selector: '1/0', quote: 'Hi' } };
+		expect(parse(text)).toBeNull();
+		expect(parse(block)).toBeNull();
+		expect(parse({ ...text, token: 'f'.repeat(32) })).toBeNull();
+		expect(parse({ ...text, token: TOKEN.toUpperCase() })).toBeNull();
+		expect(parse({ ...text, token: [TOKEN] })).toBeNull();
+		// No token to expect (no render yet) accepts nothing, not everything.
+		expect(parseFromFrame({ ...text, token: '' }, '')).toBeNull();
+		expect(parseFromFrame(text, '')).toBeNull();
+	});
+
 	it('refuses a selection that carries a selector, and a block without one', () => {
-		expect(parseFromFrame({ type: 'select', anchor: { selector: '1', quote: 'x' } })).toBeNull();
-		expect(parseFromFrame({ type: 'block', anchor: { quote: 'x' } })).toBeNull();
+		expect(parse(signed({ type: 'select', anchor: { selector: '1', quote: 'x' } }))).toBeNull();
+		expect(parse(signed({ type: 'block', anchor: { quote: 'x' } }))).toBeNull();
 	});
 
 	it('refuses unknown types, non-objects and oversize quotes', () => {
-		expect(parseFromFrame({ type: 'navigate', href: 'https://example.invalid' })).toBeNull();
-		expect(parseFromFrame('text')).toBeNull();
-		expect(parseFromFrame(null)).toBeNull();
+		expect(parse(signed({ type: 'navigate', href: 'https://example.invalid' }))).toBeNull();
+		expect(parse('text')).toBeNull();
+		expect(parse(null)).toBeNull();
 		expect(
-			parseFromFrame({ type: 'select', anchor: { quote: 'x'.repeat(REPORT_LIMITS.quote + 1) } })
+			parse(signed({ type: 'select', anchor: { quote: 'x'.repeat(REPORT_LIMITS.quote + 1) } }))
 		).toBeNull();
 	});
 });
