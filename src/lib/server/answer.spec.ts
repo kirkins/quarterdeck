@@ -31,18 +31,14 @@ function question(overrides: Partial<MailItem> = {}, decision: Record<string, un
 }
 
 describe('buildReply', () => {
-	it('answers with an option: reply to the asker, correlated, label in the body', () => {
+	it('answers with an option: captain.reply keyed by the ask id, label in the body', () => {
 		const result = buildReply(question(), { option_id: 'smart' });
 		expect(result).toEqual({
 			ok: true,
 			args: {
-				from: 'captain',
-				to: 'billing',
-				kind: 'reply',
-				correlation: 'mail-1',
+				id: 'mail-1',
 				body: 'Smart retries',
-				payload: { answer: { option_id: 'smart' } },
-				task_id: 'billing-retries'
+				payload: { answer: { option_id: 'smart' } }
 			},
 			answered: { option_id: 'smart', label: 'Smart retries' }
 		});
@@ -99,9 +95,9 @@ describe('buildReply', () => {
 		expect(buildReply(answered, { text: 'again' }).ok).toBe(false);
 	});
 
-	it('carries task_id on the reply when the ask has one, and omits it when not', () => {
-		const withTask = buildReply(question(), { text: 'Own words' });
-		expect(withTask.ok && withTask.args.task_id).toBe('billing-retries');
+	it('sends only the id, body and payload: no routing fields, no task_id', () => {
+		const result = buildReply(question(), { text: 'Own words' });
+		expect(result.ok && Object.keys(result.args).sort()).toEqual(['body', 'id', 'payload']);
 		const withoutTask = buildReply(question({ task_id: null }), { option_id: 'smart' });
 		expect(withoutTask.ok && 'task_id' in withoutTask.args).toBe(false);
 	});
@@ -120,10 +116,7 @@ describe('buildReply', () => {
 		);
 		const result = buildReply(legacy, { option_id: 'choice-2', text: 'until Monday' });
 		expect(result.ok && result.args).toEqual({
-			from: 'captain',
-			to: 'mobile-app',
-			kind: 'reply',
-			correlation: 'old-1',
+			id: 'old-1',
 			body: 'Wait — until Monday',
 			payload: { answer: { text: 'Wait — until Monday' } }
 		});

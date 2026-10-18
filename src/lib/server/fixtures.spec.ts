@@ -51,7 +51,7 @@ describe('fixtures', () => {
 	it('cover every triage kind, both urgencies, overdue, and every section', async () => {
 		const rows = buildTriage(await items(), NOW).rows;
 		const kinds = new Set(rows.map((r) => triageKind(r.item)));
-		expect(kinds).toEqual(new Set(['decision', 'request', 'approval', 'blocker']));
+		expect(kinds).toEqual(new Set(['decision', 'request', 'approval', 'notice', 'blocker']));
 		expect(rows.filter((r) => r.urgency === 'high').length).toBeGreaterThanOrEqual(2);
 		expect(rows.filter((r) => r.overdue).length).toBeGreaterThanOrEqual(2);
 		expect(rows.some((r) => r.needsHands)).toBe(true);

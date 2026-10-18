@@ -10,8 +10,11 @@
 	import { enhance } from '$app/forms';
 	import { onMount, tick } from 'svelte';
 	import type { Question } from '#lib/decision.ts';
+	import { dismissLabel } from '#lib/dismiss.ts';
+	import type { Failure } from '#lib/form.ts';
 	import { formatAge, formatDeadline, urgencyOf } from '#lib/time.ts';
 	import Blocked from './Blocked.svelte';
+	import Dismiss from './Dismiss.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -23,8 +26,10 @@
 		/** False when the card already shows these (shared by every question in a group). */
 		showBlocked?: boolean;
 		showDeadline?: boolean;
-		/** A failed submission for this question, echoed back by the action. */
-		failure?: { error: string; option_id: string | null; text: string | null } | null;
+		/** A failed answer for this question, echoed back by the action. */
+		failure?: Failure | null;
+		/** A failed dismiss for this question. */
+		dismissFailure?: Failure | null;
 	}
 
 	let {
@@ -34,7 +39,8 @@
 		total = 1,
 		showBlocked = true,
 		showDeadline = true,
-		failure = null
+		failure = null,
+		dismissFailure = null
 	}: Props = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -158,11 +164,17 @@
 		<div class="done" role="status">
 			<Icon name="check" size={20} />
 			<div>
-				<p>
-					<strong>{a.label ?? 'Answered'}</strong>{#if a.text}<span class="done-text">
-							“{a.text}”</span
-						>{/if}
-				</p>
+				{#if a.dismissed}
+					<p>
+						<strong>Dismissed</strong>{#if a.text}<span class="done-text"> · {a.text}</span>{/if}
+					</p>
+				{:else}
+					<p>
+						<strong>{a.label ?? 'Answered'}</strong>{#if a.text}<span class="done-text">
+								“{a.text}”</span
+							>{/if}
+					</p>
+				{/if}
 				<p class="done-meta">
 					{a.sent ? `Sent to ${question.from}` : 'Logged, not sent'} · {formatAge(a.at_ms, now)}
 				</p>
@@ -190,6 +202,7 @@
 				};
 			}}
 		>
+			<input type="hidden" name="from" value={question.from} />
 			<input type="hidden" name="id" value={question.id} />
 
 			{#if question.options.length > 0}
@@ -307,6 +320,13 @@
 				<p class="error" role="alert"><Icon name="alert" size={16} />{shownError}</p>
 			{/if}
 		</form>
+
+		<Dismiss
+			from={question.from}
+			id={question.id}
+			label={dismissLabel('decision', question.hands_on !== null)}
+			failure={dismissFailure}
+		/>
 	{/if}
 </section>
 

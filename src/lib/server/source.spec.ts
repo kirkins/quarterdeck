@@ -2,17 +2,22 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { MailSendArgs } from './answer.ts';
-import { CliSource, FixtureSource, rebaseFixture, sendReply, type Source } from './source.ts';
+import type { ReplyArgs } from './answer.ts';
+import { buildDismiss } from './dismiss.ts';
+import {
+	CliSource,
+	FixtureSource,
+	rebaseFixture,
+	sendDismiss,
+	sendReply,
+	type Source
+} from './source.ts';
 
 const NOW = 1_800_000_000_000;
 const H = 3_600_000;
 
-const args: MailSendArgs = {
-	from: 'captain',
-	to: 'billing',
-	kind: 'reply',
-	correlation: 'mail-1',
+const args: ReplyArgs = {
+	id: 'mail-1',
 	body: 'Yes',
 	payload: { answer: { option_id: 'yes' } }
 };
@@ -69,10 +74,13 @@ describe('CliSource', () => {
 		expect(a?.urgency).toBe('high');
 	});
 
-	it('sends with mail.send', async () => {
+	it('writes captain.reply and captain.dismiss through the one write path', async () => {
 		const run = vi.fn(async () => ({ id: 'reply-1' }));
-		await new CliSource(run as never).send(args);
-		expect(run).toHaveBeenCalledWith('mail.send', args);
+		const source = new CliSource(run as never);
+		await source.write('captain.reply', args);
+		expect(run).toHaveBeenLastCalledWith('captain.reply', args);
+		await source.write('captain.dismiss', { id: 'a', note: 'Not needed' });
+		expect(run).toHaveBeenLastCalledWith('captain.dismiss', { id: 'a', note: 'Not needed' });
 	});
 });
 
@@ -116,14 +124,14 @@ describe('FixtureSource', () => {
 		]);
 	});
 
-	it('treats missing files as empty and never sends', async () => {
+	it('treats missing files as empty and never writes', async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'qd-empty-'));
 		const source = new FixtureSource(dir);
 		await expect(source.waiting()).resolves.toEqual({
 			items: [],
 			unavailable: 'runtime.needs is unavailable'
 		});
-		await expect(source.send()).rejects.toThrow(/never sends/);
+		await expect(source.write()).rejects.toThrow(/never writes/);
 	});
 });
 
@@ -152,7 +160,7 @@ describe('rebaseFixture', () => {
 
 describe('sendReply', () => {
 	function source(mode: Source['mode']) {
-		return { mode, waiting: vi.fn(), send: vi.fn(async () => ({ id: 'r' })) };
+		return { mode, waiting: vi.fn(), write: vi.fn(async () => ({ id: 'r' })) };
 	}
 	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
 
@@ -160,13 +168,13 @@ describe('sendReply', () => {
 		const s = source('fixtures');
 		const log = vi.fn();
 		await expect(sendReply(s, config, args, log)).resolves.toEqual({ sent: false });
-		expect(s.send).not.toHaveBeenCalled();
-		expect(log.mock.calls[0][0]).toContain(`mail.send ${JSON.stringify(args)}`);
+		expect(s.write).not.toHaveBeenCalled();
+		expect(log.mock.calls[0][0]).toContain(`captain.reply ${JSON.stringify(args)}`);
 		expect(JSON.parse(log.mock.calls[1][0].replace('[quarterdeck] would run: ', ''))).toEqual([
 			'/opt/privateer',
 			'--home',
 			'/srv/home',
-			'mail.send',
+			'captain.reply',
 			'--json',
 			JSON.stringify(args)
 		]);
@@ -178,7 +186,7 @@ describe('sendReply', () => {
 		await expect(sendReply(s, { ...config, allowSend: false }, args, log)).resolves.toEqual({
 			sent: false
 		});
-		expect(s.send).not.toHaveBeenCalled();
+		expect(s.write).not.toHaveBeenCalled();
 		expect(log.mock.calls[0][0]).toContain('QD_ALLOW_SEND');
 	});
 
@@ -188,6 +196,52 @@ describe('sendReply', () => {
 			sent: true,
 			result: { id: 'r' }
 		});
-		expect(s.send).toHaveBeenCalledWith(args);
+		expect(s.write).toHaveBeenCalledWith('captain.reply', args);
+	});
+});
+
+describe('sendDismiss', () => {
+	const config = { allowSend: true, privateerBin: '/opt/privateer', privateerHome: '/srv/home' };
+	const dismiss = { id: 'mail-9', note: 'Covered elsewhere' };
+
+	it('logs captain.dismiss and never writes in fixture mode', async () => {
+		const s = { mode: 'fixtures' as const, waiting: vi.fn(), write: vi.fn() };
+		const log = vi.fn();
+		await expect(sendDismiss(s, config, dismiss, log)).resolves.toEqual({ sent: false });
+		expect(s.write).not.toHaveBeenCalled();
+		expect(log.mock.calls[0][0]).toContain(`captain.dismiss ${JSON.stringify(dismiss)}`);
+		expect(log.mock.calls[1][0]).toContain('"captain.dismiss"');
+	});
+
+	it('writes captain.dismiss from the cli source when allowed', async () => {
+		const s = { mode: 'cli' as const, waiting: vi.fn(), write: vi.fn(async () => ({ ok: true })) };
+		await expect(sendDismiss(s, config, dismiss, vi.fn())).resolves.toEqual({
+			sent: true,
+			result: { ok: true }
+		});
+		expect(s.write).toHaveBeenCalledWith('captain.dismiss', dismiss);
+	});
+});
+
+describe('buildDismiss', () => {
+	const item = { id: 'mail-9', from: 's', to: 'captain', kind: 'request', payload: {} };
+
+	it('sends only the id when there is no note', () => {
+		expect(buildDismiss(item, '  ')).toEqual({ ok: true, args: { id: 'mail-9' }, note: null });
+	});
+
+	it('keeps a trimmed note', () => {
+		expect(buildDismiss(item, ' Done elsewhere ')).toEqual({
+			ok: true,
+			args: { id: 'mail-9', note: 'Done elsewhere' },
+			note: 'Done elsewhere'
+		});
+	});
+
+	it('refuses a note over the limit', () => {
+		expect(buildDismiss(item, 'x'.repeat(2001))).toEqual({
+			ok: false,
+			error: 'Keep the note under 2000 characters.'
+		});
 	});
 });

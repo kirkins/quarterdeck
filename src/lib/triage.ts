@@ -3,9 +3,9 @@
  * MailItem so the server and the browser agree on sorting, sections and
  * filters. No Node APIs here.
  */
-import { isDecisionMail, type MailItem } from '#lib/decision.ts';
+import { askKey, isDecisionMail, type MailItem } from '#lib/decision.ts';
 
-export type TriageKind = 'decision' | 'request' | 'approval' | 'blocker';
+export type TriageKind = 'decision' | 'request' | 'approval' | 'notice' | 'blocker';
 export type Section = 'now' | 'waiting' | 'later';
 export type Urgency = 'high' | 'normal' | 'low';
 
@@ -13,6 +13,7 @@ export const KIND_LABELS: Record<TriageKind, string> = {
 	decision: 'Decision',
 	request: 'Request',
 	approval: 'Approval',
+	notice: 'Notice',
 	blocker: 'Blocked'
 };
 
@@ -52,6 +53,7 @@ export interface Filter {
 /** What kind of ask this is, from the mail kind, its request kind and its payload. */
 export function triageKind(item: MailItem): TriageKind {
 	if (item.kind === 'blocker') return 'blocker';
+	if (item.kind === 'notice' || item.kind === 'report') return 'notice';
 	if (item.kind === 'approval' || item.request_kind === 'production_approval') return 'approval';
 	return isDecisionMail(item) ? 'decision' : 'request';
 }
@@ -110,8 +112,8 @@ export function compareRows(a: TriageRow, b: TriageRow): number {
 }
 
 /**
- * Every item not yet answered in this process, de-duplicated by sender and
- * id, most urgent first. `answered` is keyed by mail id, as the answers map is.
+ * Every item not yet answered or dismissed in this process, de-duplicated by
+ * sender and id, most urgent first. `answered` is keyed by `askKey`.
  */
 export function buildTriage(
 	items: readonly MailItem[],
@@ -121,9 +123,9 @@ export function buildTriage(
 	const seen = new Set<string>();
 	const rows: TriageRow[] = [];
 	for (const item of items) {
-		if (!item || typeof item.id !== 'string' || answered.has(item.id)) continue;
-		const key = `${item.from}\u0000${item.id}`;
-		if (seen.has(key)) continue;
+		if (!item || typeof item.id !== 'string') continue;
+		const key = askKey(item.from, item.id);
+		if (seen.has(key) || answered.has(key)) continue;
 		seen.add(key);
 		rows.push(rowOf(item, now));
 	}

@@ -6,7 +6,7 @@
  * matching open row, and counts are compared with what was there before. A retry
  * or a repeat then finds another row instead of one an earlier attempt answered.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -119,4 +119,81 @@ test('works at phone width without horizontal scroll', async ({ page }) => {
 		() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 	);
 	expect(overflow).toBeLessThanOrEqual(0);
+});
+
+/** The dismiss control on one row: its quiet summary, and the confirm form inside it. */
+function dismissOf(row: Locator) {
+	return {
+		summary: row.locator('details.dismiss > summary'),
+		note: row.locator('details.dismiss textarea[name="note"]'),
+		confirm: row.locator('details.dismiss form button[type="submit"]')
+	};
+}
+
+test('a request is dismissed only after the confirm step, with an optional note', async ({
+	page
+}) => {
+	await page.goto('/triage');
+	const before = await badge(page);
+	const row = page.locator('[data-kind="request"]:not(:has(.flag.hands))').first();
+	const id = await row.getAttribute('data-row');
+	await row.locator('button.head').click();
+	const dismiss = dismissOf(row);
+
+	await dismiss.summary.click();
+	await dismiss.note.fill('Covered by the billing reply.');
+	// Opening the confirm step and writing a note send nothing yet.
+	await expect(page.locator(`[data-row="${id}"]`)).toHaveCount(1);
+	await dismiss.confirm.click();
+
+	await expect(page.locator(`[data-row="${id}"]`)).toHaveCount(0);
+	await expect.poll(() => badge(page)).toBe(before - 1);
+});
+
+test('a cancelled dismiss leaves the item where it was', async ({ page }) => {
+	await page.goto('/triage');
+	const row = page.locator('[data-kind="notice"]').first();
+	const id = await row.getAttribute('data-row');
+	await row.locator('button.head').click();
+	const dismiss = dismissOf(row);
+
+	await dismiss.summary.click();
+	await expect(dismiss.confirm).toBeVisible();
+	// Closing the step again, with no submit, is a cancel.
+	await dismiss.summary.click();
+	await expect(dismiss.confirm).toBeHidden();
+	await expect(page.locator(`[data-row="${id}"]`)).toHaveCount(1);
+});
+
+test('a notice is marked read, and a needs-hands step closes with Done, nothing to add', async ({
+	page
+}) => {
+	await page.goto('/triage');
+	const notice = page.locator('[data-kind="notice"]').first();
+	const noticeId = await notice.getAttribute('data-row');
+	await notice.locator('button.head').click();
+	await expect(dismissOf(notice).summary).toHaveText('Mark read');
+	await dismissOf(notice).summary.click();
+	await dismissOf(notice).confirm.click();
+	await expect(page.locator(`[data-row="${noticeId}"]`)).toHaveCount(0);
+
+	const hands = page.locator('[data-row]:has(.flag.hands)').first();
+	const handsId = await hands.getAttribute('data-row');
+	await hands.locator('button.head').click();
+	await expect(dismissOf(hands).summary).toHaveText('Done, nothing to add');
+	await dismissOf(hands).summary.click();
+	await dismissOf(hands).confirm.click();
+	await expect(page.locator(`[data-row="${handsId}"]`)).toHaveCount(0);
+});
+
+test('a decision card can be dismissed from the row as well', async ({ page }) => {
+	await page.goto('/triage');
+	const row = page.locator('[data-kind="decision"]').first();
+	const id = await row.getAttribute('data-row');
+	await row.locator('button.head').click();
+	const dismiss = dismissOf(row.locator('[data-card]'));
+	await expect(dismiss.summary).toHaveText('Dismiss');
+	await dismiss.summary.click();
+	await dismiss.confirm.click();
+	await expect(page.locator(`[data-row="${id}"]`)).toHaveCount(0);
 });

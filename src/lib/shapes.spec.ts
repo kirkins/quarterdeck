@@ -3,6 +3,7 @@ import { assemble, parseCaptainWaiting, parseRuntimeNeeds } from './shapes.ts';
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
+const HOUR = 60 * MIN;
 
 /** A mail record as captain.waiting returns it (privateer src/mail.rs `message`). */
 function mail(overrides: Record<string, unknown> = {}) {
@@ -103,6 +104,85 @@ describe('parseRuntimeNeeds', () => {
 			actions: ['mail.send'],
 			asked_ms: NOW - MIN
 		});
+	});
+
+	it('reads urgency, deadline, asked time and mail id that Privateer now sends', () => {
+		const { items } = parseRuntimeNeeds(
+			{
+				available: true,
+				items: [
+					{
+						id: 'o:mail:m-9',
+						source: 'mail',
+						source_id: 'm-9',
+						kind: 'request',
+						ship: 'cdn-edge',
+						question: 'Retry the warm-up?',
+						task_id: 'cdn',
+						mail_id: 'm-9',
+						correlation: 'm-9',
+						urgency: 'high',
+						deadline_ms: NOW + HOUR,
+						asked_ms: NOW - 2 * MIN,
+						created_ms: NOW - 9 * MIN
+					}
+				]
+			},
+			NOW
+		);
+		expect(items[0]).toMatchObject({
+			id: 'm-9',
+			kind: 'request',
+			urgency: 'high',
+			deadline_ms: NOW + HOUR,
+			asked_ms: NOW - 2 * MIN,
+			age_ms: 2 * MIN
+		});
+	});
+
+	it('takes the mail id over the correlation, and keeps a notice a notice', () => {
+		const [item] = parseRuntimeNeeds(
+			{
+				available: true,
+				items: [
+					{
+						id: 'o:mail:n-1',
+						source: 'mail',
+						source_id: 'other',
+						kind: 'notice',
+						ship: 'backups',
+						question: 'Backup finished.',
+						mail_id: 'n-1',
+						correlation: 'n-1',
+						created_ms: NOW
+					}
+				]
+			},
+			NOW
+		).items;
+		expect(item).toMatchObject({ id: 'n-1', kind: 'notice', urgency: 'normal', deadline_ms: null });
+	});
+
+	it('defaults timing on needs from an older Privateer that sends none', () => {
+		const [item] = parseRuntimeNeeds(
+			{
+				available: true,
+				items: [
+					{
+						id: 'o:mail:m-4',
+						source: 'mail',
+						kind: 'decision',
+						ship: 'billing',
+						correlation: 'm-4',
+						question: 'Which?',
+						choices: ['A', 'B'],
+						created_ms: NOW - MIN
+					}
+				]
+			},
+			NOW
+		).items;
+		expect(item).toMatchObject({ urgency: 'normal', deadline_ms: null, asked_ms: NOW - MIN });
 	});
 
 	it('reads an approval with what is being granted, and no choices', () => {

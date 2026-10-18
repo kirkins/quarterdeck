@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MailItem } from '#lib/decision.ts';
+import { askKey, type MailItem } from '#lib/decision.ts';
 import {
 	buildTriage,
 	compareRows,
@@ -127,7 +127,7 @@ describe('compareRows', () => {
 
 describe('buildTriage', () => {
 	it('drops answered asks and duplicates, and lists the ships', () => {
-		const answered = new Map([['answered', { at_ms: NOW, sent: true }]]);
+		const answered = new Map([[askKey('billing', 'answered'), { at_ms: NOW, sent: true }]]);
 		const { rows, ships } = buildTriage(
 			[
 				item('answered'),
@@ -140,6 +140,21 @@ describe('buildTriage', () => {
 		);
 		expect(ids(rows).sort()).toEqual(['one', 'two']);
 		expect(ships).toEqual(['billing', 'storefront']);
+	});
+
+	it('keeps an id that another ship answered, and drops a dismissed one', () => {
+		const dismissed = new Map([[askKey('storefront', 'same'), { at_ms: NOW, sent: true }]]);
+		const { rows } = buildTriage(
+			[item('same', { from: 'storefront' }), item('same', { from: 'billing' })],
+			NOW,
+			dismissed
+		);
+		expect(rows.map((r) => r.item.from)).toEqual(['billing']);
+	});
+
+	it('shows notices and reports as notices, not requests', () => {
+		expect(triageKind(item('n', { kind: 'notice' }))).toBe('notice');
+		expect(triageKind(item('r', { kind: 'report' }))).toBe('notice');
 	});
 });
 
