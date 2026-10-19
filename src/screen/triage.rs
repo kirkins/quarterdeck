@@ -11,7 +11,7 @@ use data::captain::Item;
 use data::choices;
 use data::decision::{self, Answer, Choice};
 use data::privateer::{Error, Sent};
-use data::triage::{self, Section};
+use data::triage::{self, Filter, Section};
 use iced::widget::{
     button, checkbox, column, container, row, scrollable, space, text_input,
 };
@@ -22,8 +22,10 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Details};
 use crate::screen::reports;
-use crate::widget::{Column, Element, loading, markdown, text};
+use crate::widget::{Column, Element, Row, loading, markdown, text};
 use crate::{font, icon};
+
+type Style = fn(&Theme) -> iced::widget::text::Style;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -42,6 +44,12 @@ pub enum Message {
     SendDismiss(String),
     OpenLink(String),
     OpenReport(reports::Opened),
+    /// Narrow the list to one ship, or to all (None).
+    SetShip(Option<String>),
+    /// Narrow the list to one kind, or to all (None).
+    SetKind(Option<String>),
+    /// Copy an ask's hands-on step to the clipboard.
+    CopyStep(String),
 }
 
 pub enum Event {
@@ -53,6 +61,10 @@ pub enum Event {
     },
     OpenLink(String),
     OpenReport(reports::Opened),
+    /// The filter changed: it is saved with the layout.
+    FilterChanged,
+    /// Put this text on the clipboard.
+    Copy(String),
 }
 
 /// The captain's answer so far to one ask.
@@ -84,9 +96,32 @@ pub struct Triage {
     toggled: HashSet<String>,
     drafts: HashMap<String, Draft>,
     outcomes: HashMap<String, Outcome>,
+    filter: Filter,
+    /// Hands-on steps copied, until the ask is folded again.
+    copied: HashSet<String>,
 }
 
 impl Triage {
+    /// Triage narrowed as the captain left it.
+    pub fn with_filter(filter: Filter) -> Self {
+        Self {
+            filter,
+            ..Self::default()
+        }
+    }
+
+    pub fn filter(&self) -> Filter {
+        self.filter.clone()
+    }
+
+    /// Narrow Triage to one ship's asks, with every kind.
+    pub fn show_ship(&mut self, ship: String) {
+        self.filter = Filter {
+            ship: Some(ship),
+            kind: None,
+        };
+    }
+
     pub fn update(
         &mut self,
         message: Message,
@@ -94,10 +129,24 @@ impl Triage {
     ) -> Option<Event> {
         match message {
             Message::Expand(key) => {
+                self.copied.remove(&key);
                 if !self.toggled.remove(&key) {
                     self.toggled.insert(key);
                 }
                 None
+            }
+            Message::SetShip(ship) => {
+                self.filter.ship = ship;
+                Some(Event::FilterChanged)
+            }
+            Message::SetKind(kind) => {
+                self.filter.kind = kind;
+                Some(Event::FilterChanged)
+            }
+            Message::CopyStep(key) => {
+                let step = find_item(connection, &key)?.step.clone()?;
+                self.copied.insert(key);
+                Some(Event::Copy(step))
             }
             Message::Choose(key, option) => {
                 let draft = self.drafts.entry(key).or_default();
@@ -244,6 +293,9 @@ impl Triage {
 
         let mut list = Column::new().spacing(14);
 
+        if !waiting.waiting.is_empty() {
+            list = list.push(filters(&waiting.waiting, &self.filter));
+        }
         if !connection.sends() {
             list = list.push(
                 text(
@@ -272,7 +324,15 @@ impl Triage {
         }
 
         let now = connection::now_ms();
-        for (section, items) in triage::sections(&waiting.waiting, now) {
+        let shown = waiting.waiting.iter().filter(|i| self.filter.matches(i));
+        let sections = triage::sections(shown, now);
+        if sections.is_empty() && !waiting.waiting.is_empty() {
+            list = list.push(
+                text("Nothing matches these filters.")
+                    .style(theme::text::secondary),
+            );
+        }
+        for (section, items) in sections {
             list = list.push(section_title(section, items.len()));
             for item in items {
                 let key = triage::key(item);
@@ -342,9 +402,10 @@ impl Triage {
         if let Some(outcome) = outcome {
             header = header.push(outcome_label(outcome));
         }
-        header = header
-            .push(space().width(Length::Fill))
-            .push(text(due(item)).style(theme::text::tertiary));
+        header = header.push(space().width(Length::Fill)).push({
+            let (label, style) = due(item);
+            text(label).style(style)
+        });
 
         let header = button(header)
             .padding(0)
@@ -593,6 +654,12 @@ impl Triage {
                     Message::Done(key.clone()),
                     false,
                 ));
+                let copied = self.copied.contains(&key);
+                actions = actions.push(action(
+                    if copied { "Copied" } else { "Copy" },
+                    Message::CopyStep(key.clone()),
+                    false,
+                ));
             }
             actions = actions.push(space().width(Length::Fill)).push(action(
                 dismiss_label(item),
@@ -605,16 +672,20 @@ impl Triage {
     }
 }
 
-fn find<'a>(
-    connection: &'a Connection,
-    key: &str,
-) -> Option<(&'a Item, &'a Details)> {
-    let item = connection
+fn find_item<'a>(connection: &'a Connection, key: &str) -> Option<&'a Item> {
+    connection
         .waiting
         .as_ref()?
         .waiting
         .iter()
-        .find(|item| triage::key(item) == key)?;
+        .find(|item| triage::key(item) == key)
+}
+
+fn find<'a>(
+    connection: &'a Connection,
+    key: &str,
+) -> Option<(&'a Item, &'a Details)> {
+    let item = find_item(connection, key)?;
     // Blockers and approvals are read, never answered here.
     if triage::is_read_only(item) {
         return None;
@@ -817,20 +888,87 @@ fn section_title<'a>(section: Section, count: usize) -> Element<'a, Message> {
         .into()
 }
 
-/// How long ago an ask was made, or, when it has a deadline, how long is
-/// left (or how long ago it passed).
-fn due(item: &Item) -> String {
-    match item.mail.deadline_ms {
-        Some(deadline) => {
-            let left = deadline - connection::now_ms();
-            if left < 0 {
-                format!("overdue {}", ago(-left))
-            } else {
-                format!("due in {}", ago(left))
-            }
-        }
-        None => ago(item.age_ms),
+/// When an ask is due, in words and colour: overdue in red, due within a
+/// day in amber, and "No deadline" when it has none.
+fn due(item: &Item) -> (String, Style) {
+    let Some(deadline) = item.mail.deadline_ms else {
+        return ("No deadline".into(), theme::text::tertiary);
+    };
+    let left = deadline - connection::now_ms();
+    if left < 0 {
+        (format!("overdue {}", ago(-left)), theme::text::error)
+    } else if left <= triage::DAY_MS {
+        (format!("due in {}", ago(left)), theme::text::action)
+    } else {
+        (format!("due in {}", ago(left)), theme::text::tertiary)
     }
+}
+
+/// Chips to narrow the list by ship and by kind. The chosen chip clears
+/// its choice.
+fn filters<'a>(items: &[Item], filter: &Filter) -> Element<'a, Message> {
+    let mut ships: Vec<String> =
+        items.iter().map(|item| item.asker().to_owned()).collect();
+    if let Some(ship) = &filter.ship {
+        ships.push(ship.clone());
+    }
+    ships.sort();
+    ships.dedup();
+
+    let mut kinds: Vec<String> = items
+        .iter()
+        .map(|item| triage::kind_of(item).to_owned())
+        .collect();
+    if let Some(kind) = &filter.kind {
+        kinds.push(kind.clone());
+    }
+    kinds.sort();
+    kinds.dedup();
+
+    let mut ship_chips = Row::new().spacing(6).push(chip(
+        "All ships".into(),
+        filter.ship.is_none(),
+        Message::SetShip(None),
+    ));
+    for ship in ships {
+        let chosen = filter.ship.as_deref() == Some(ship.as_str());
+        let next = (!chosen).then(|| ship.clone());
+        ship_chips =
+            ship_chips.push(chip(ship, chosen, Message::SetShip(next)));
+    }
+
+    let mut kind_chips = Row::new().spacing(6).push(chip(
+        "All kinds".into(),
+        filter.kind.is_none(),
+        Message::SetKind(None),
+    ));
+    for kind in kinds {
+        let chosen = filter.kind.as_deref() == Some(kind.as_str());
+        let next = (!chosen).then(|| kind.clone());
+        kind_chips = kind_chips.push(chip(
+            kind.replace('_', " "),
+            chosen,
+            Message::SetKind(next),
+        ));
+    }
+
+    column![ship_chips.wrap(), kind_chips.wrap()]
+        .spacing(6)
+        .into()
+}
+
+fn chip<'a>(
+    label: String,
+    selected: bool,
+    message: Message,
+) -> Element<'a, Message> {
+    button(text(label).size(theme::TEXT_SIZE - 1.0))
+        .padding([2, 8])
+        .style(move |theme, status| {
+            theme::button::secondary(theme, status, selected)
+        })
+        .on_press(message)
+        .into()
 }
 
 /// A rough span of time: "now", "12m", "3h", "2d".

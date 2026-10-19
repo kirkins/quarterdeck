@@ -305,6 +305,9 @@ impl Quarterdeck {
                     )
                 }
                 Some(dashboard::Event::LayoutChanged) => self.save_layout(),
+                Some(dashboard::Event::Copy(text)) => {
+                    iced::clipboard::write(text)
+                }
                 Some(dashboard::Event::OpenSettings) => self.open_settings(),
                 Some(dashboard::Event::OpenLink(url)) => {
                     open_link(&url);

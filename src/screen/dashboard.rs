@@ -55,6 +55,8 @@ pub enum Event {
         command: &'static str,
         args: serde_json::Value,
     },
+    /// Put this text on the clipboard.
+    Copy(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -86,7 +88,7 @@ impl Dashboard {
         Self {
             panes,
             focus,
-            triage: Triage::default(),
+            triage: Triage::with_filter(saved.triage.clone()),
             answering: HashSet::new(),
             composer: feed::Composer::default(),
             reports: reports::Reports::default(),
@@ -104,6 +106,7 @@ impl Dashboard {
         data::Dashboard {
             layout: layout(&self.panes, self.panes.layout()),
             feed_only_waiting: false,
+            triage: self.triage.filter(),
         }
     }
 
@@ -207,6 +210,17 @@ impl Dashboard {
             }
             _ => None,
         }
+    }
+
+    /// Show Triage narrowed to one ship's asks.
+    fn open_triage(
+        &mut self,
+        ship: String,
+        connection: &Connection,
+    ) -> Option<Event> {
+        self.triage.show_ship(ship);
+        self.update(Message::Open(View::Triage), connection);
+        Some(Event::LayoutChanged)
     }
 
     /// Show a session in Live and read it now.
@@ -332,6 +346,9 @@ impl Dashboard {
                 fleet::Event::OpenShip(ship) => {
                     self.open_ship(ship, connection)
                 }
+                fleet::Event::OpenTriage(ship) => {
+                    self.open_triage(ship, connection)
+                }
             },
             Message::Live(message) => match self.live.update(message)? {
                 live::Event::Watch(ship) => Some(Event::WatchSession(ship)),
@@ -367,6 +384,8 @@ impl Dashboard {
                     triage::Event::OpenReport(opened) => {
                         self.open_report(opened, connection)
                     }
+                    triage::Event::FilterChanged => Some(Event::LayoutChanged),
+                    triage::Event::Copy(text) => Some(Event::Copy(text)),
                 }
             }
         }

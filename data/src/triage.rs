@@ -6,9 +6,39 @@
 
 use std::cmp::Reverse;
 
+use serde::{Deserialize, Serialize};
+
 use crate::captain::Item;
 
-const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+pub const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// The ship and kind Triage narrows its list to; none chosen shows all.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Filter {
+    pub ship: Option<String>,
+    pub kind: Option<String>,
+}
+
+impl Filter {
+    pub fn matches(&self, item: &Item) -> bool {
+        self.ship.as_deref().is_none_or(|ship| item.asker() == ship)
+            && self
+                .kind
+                .as_deref()
+                .is_none_or(|kind| kind_of(item) == kind)
+    }
+}
+
+/// An ask's kind as Triage filters by it: hands-on asks are their own kind,
+/// whatever mail they came in.
+pub fn kind_of(item: &Item) -> &str {
+    if item.step.is_some() {
+        "hands-on"
+    } else {
+        item.mail.kind.as_str()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Section {
@@ -45,8 +75,11 @@ pub fn section(item: &Item, now_ms: i64) -> Section {
 }
 
 /// Items in their sections, each sorted; empty sections left out.
-pub fn sections(items: &[Item], now_ms: i64) -> Vec<(Section, Vec<&Item>)> {
-    let mut sorted: Vec<&Item> = items.iter().collect();
+pub fn sections<'a>(
+    items: impl IntoIterator<Item = &'a Item>,
+    now_ms: i64,
+) -> Vec<(Section, Vec<&'a Item>)> {
+    let mut sorted: Vec<&Item> = items.into_iter().collect();
     sorted.sort_by_key(|item| {
         let high = item.mail.urgency.as_deref() == Some("high");
         let overdue = item.mail.deadline_ms.is_some_and(|d| d < now_ms);
@@ -116,6 +149,49 @@ mod tests {
             },
             ..Item::default()
         }
+    }
+
+    #[test]
+    fn a_filter_narrows_by_asker_and_kind() {
+        let mut decision = item("d", "normal", None, 1);
+        decision.mail.kind = "decision".into();
+        decision.mail.from = "scout".into();
+        let mut hands = item("h", "normal", None, 1);
+        hands.mail.kind = "request".into();
+        hands.mail.from = "scout".into();
+        hands.step = Some("log in".into());
+        let mut other = item("o", "normal", None, 1);
+        other.mail.kind = "decision".into();
+        other.mail.from = "relay".into();
+        let items = [decision, hands, other];
+
+        let shown = |filter: Filter| -> Vec<String> {
+            items
+                .iter()
+                .filter(|item| filter.matches(item))
+                .map(|item| item.mail.id.clone())
+                .collect()
+        };
+        assert_eq!(shown(Filter::default()), ["d", "h", "o"]);
+        let scout = Filter {
+            ship: Some("scout".into()),
+            kind: None,
+        };
+        assert_eq!(shown(scout.clone()), ["d", "h"]);
+        assert_eq!(
+            shown(Filter {
+                ship: Some("scout".into()),
+                kind: Some("hands-on".into()),
+            }),
+            ["h"]
+        );
+        assert_eq!(
+            shown(Filter {
+                ship: None,
+                kind: Some("decision".into()),
+            }),
+            ["d", "o"]
+        );
     }
 
     #[test]
