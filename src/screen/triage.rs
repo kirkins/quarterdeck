@@ -259,6 +259,12 @@ impl Triage {
                     .style(theme::text::error),
             );
         }
+        if let Some(reason) = &connection.needs_reason {
+            list = list.push(
+                text(format!("Blockers and approvals are not shown: {reason}"))
+                    .style(theme::text::tertiary),
+            );
+        }
         if waiting.waiting.is_empty() {
             list = list.push(
                 text("Nothing waits on you.").style(theme::text::secondary),
@@ -344,6 +350,10 @@ impl Triage {
             .padding(0)
             .style(theme::button::bare)
             .on_press(Message::Expand(key.clone()));
+
+        if triage::is_read_only(item) {
+            return column![header, read_only_view(item)].spacing(4).into();
+        }
 
         let (Some(details), true) = (details, open) else {
             // A decision leads with its question; any other ask with how it
@@ -605,7 +615,37 @@ fn find<'a>(
         .waiting
         .iter()
         .find(|item| triage::key(item) == key)?;
+    // Blockers and approvals are read, never answered here.
+    if triage::is_read_only(item) {
+        return None;
+    }
     Some((item, connection.details.get(key)?))
+}
+
+/// The text of a blocker or approval, with what Quarterdeck can say about
+/// it. Neither takes an answer here.
+fn read_only_view<'a>(item: &'a Item) -> Element<'a, Message> {
+    let payload = &item.mail.payload;
+    let note = if item.mail.kind == "blocker" {
+        let status = payload["status"].as_str().unwrap_or("blocked");
+        format!(
+            "Blocked ({status}). Quarterdeck offers nothing here: resolve it in Privateer."
+        )
+    } else {
+        format!(
+            "Approval to ship {} to {}. Grant or deny it in Privateer with approval.grant or approval.deny; Quarterdeck does not answer approvals.",
+            payload["artifact"].as_str().unwrap_or("this artifact"),
+            payload["environment"]
+                .as_str()
+                .unwrap_or("this environment"),
+        )
+    };
+    column![
+        text(preview(&item.mail.body, 400)).style(theme::text::primary),
+        text(note).style(theme::text::secondary),
+    ]
+    .spacing(4)
+    .into()
 }
 
 fn reply(

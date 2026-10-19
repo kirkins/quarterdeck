@@ -12,6 +12,7 @@ use data::decision::Card;
 use data::feed::{Page, Scope, Thread};
 use data::fleet::Snapshot;
 use data::markdown::{self, Document};
+use data::needs::{self, Needs};
 use data::privateer::{Client, Error, Sent};
 use data::report::Report;
 use data::session::Target;
@@ -38,6 +39,7 @@ pub enum Message {
         result: Result<Page, Error>,
     },
     Waited(u64, Result<Waiting, Error>),
+    Needed(u64, Result<Needs, Error>),
     FleetRead {
         generation: u64,
         since: bool,
@@ -86,8 +88,16 @@ pub struct Connection {
     poll: Duration,
     generation: u64,
     in_flight: bool,
-    /// The last answer that worked, kept while a later poll fails.
+    /// The last answer that worked, kept while a later poll fails. Asks from
+    /// `captain.waiting`, with blockers and approvals from `runtime.needs`.
     pub waiting: Option<Waiting>,
+    /// `captain.waiting` as last read, before the needs are merged in.
+    captain: Option<Waiting>,
+    /// `runtime.needs` as last read.
+    needs: Option<Needs>,
+    /// Why blockers and approvals are not shown, when they are not.
+    pub needs_reason: Option<String>,
+    reading_needs: bool,
     /// Each ask read once per answer, by its triage key.
     pub details: HashMap<String, Details>,
     pub error: Option<Error>,
@@ -187,6 +197,10 @@ impl Feed {
 /// Messages read per page.
 const FEED_PAGE: u32 = 30;
 
+/// Needs read per page, and the most pages read in one poll.
+const NEEDS_PAGE: u32 = 100;
+const NEEDS_PAGES: usize = 10;
+
 impl Connection {
     pub fn new(config: &config::Privateer) -> Self {
         Self {
@@ -195,6 +209,10 @@ impl Connection {
             generation: 0,
             in_flight: false,
             waiting: None,
+            captain: None,
+            needs: None,
+            needs_reason: None,
+            reading_needs: false,
             details: HashMap::new(),
             error: None,
             checked_ms: None,
@@ -276,6 +294,7 @@ impl Connection {
     pub fn poll(&mut self) -> Task<Message> {
         Task::batch([
             self.poll_waiting(),
+            self.poll_needs(),
             self.read_feed(Which::All, false),
             self.read_feed(Which::Ship, false),
             self.read_ships(),
@@ -536,6 +555,65 @@ impl Connection {
         )
     }
 
+    fn poll_needs(&mut self) -> Task<Message> {
+        if self.reading_needs {
+            return Task::none();
+        }
+        self.reading_needs = true;
+        let client = self.client.clone();
+        let generation = self.generation;
+        Task::perform(
+            async move {
+                // Privateer answers a page at a time, so read every page.
+                let mut all = Needs::default();
+                let mut after = None;
+                for _ in 0..NEEDS_PAGES {
+                    let mut args = json!({"limit": NEEDS_PAGE});
+                    if let Some(cursor) = &after {
+                        args["after"] = json!(cursor);
+                    }
+                    let value = client.run("runtime.needs", args).await?;
+                    let page = Needs::parse(value).map_err(|error| {
+                        Error::Command {
+                            command: "runtime.needs".into(),
+                            error: format!("unexpected answer: {error}"),
+                        }
+                    })?;
+                    if !page.available {
+                        return Ok(page);
+                    }
+                    all.available = true;
+                    all.items.extend(page.items);
+                    after = page.next_after;
+                    if after.is_none() {
+                        return Ok(all);
+                    }
+                }
+                all.next_after = after;
+                Ok(all)
+            },
+            move |result| Message::Needed(generation, result),
+        )
+    }
+
+    /// The asks as Triage shows them: captain.waiting's, with the needs that
+    /// it does not list. Kept from the last answers that worked.
+    fn assemble(&mut self) {
+        let Some(captain) = &self.captain else {
+            return;
+        };
+        let mut waiting = captain.clone();
+        if let Some(needs) = &self.needs {
+            needs::merge(&mut waiting, needs, now_ms());
+        }
+        self.details = waiting
+            .waiting
+            .iter()
+            .map(|item| (triage::key(item), Details::read(item)))
+            .collect();
+        self.waiting = Some(waiting);
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Poll => self.poll(),
@@ -729,14 +807,8 @@ impl Connection {
                 self.in_flight = false;
                 match result {
                     Ok(waiting) => {
-                        self.details = waiting
-                            .waiting
-                            .iter()
-                            .map(|item| {
-                                (triage::key(item), Details::read(item))
-                            })
-                            .collect();
-                        self.waiting = Some(waiting);
+                        self.captain = Some(waiting);
+                        self.assemble();
                         self.error = None;
                         self.checked_ms = Some(now_ms());
                     }
@@ -745,6 +817,32 @@ impl Connection {
                         self.error = Some(error);
                     }
                 }
+                Task::none()
+            }
+            Message::Needed(generation, result) => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                self.reading_needs = false;
+                match result {
+                    Ok(needs) => {
+                        self.needs_reason =
+                            match (needs.available, &needs.reason) {
+                                (true, _) => None,
+                                (false, Some(reason)) => Some(reason.clone()),
+                                (false, None) => {
+                                    Some("runtime.needs is unavailable".into())
+                                }
+                            };
+                        self.needs = Some(needs);
+                    }
+                    Err(error) => {
+                        log::warn!("{error}");
+                        self.needs = None;
+                        self.needs_reason = Some(error.to_string());
+                    }
+                }
+                self.assemble();
                 Task::none()
             }
         }
