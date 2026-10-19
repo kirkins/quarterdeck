@@ -38,6 +38,7 @@ const NEEDS_FIXTURE: &str = include_str!("../../fixtures/runtime.needs.json");
 const REPORTS_FIXTURE: &str = include_str!("../../fixtures/report.get.json");
 const ROUTES_FIXTURE: &str = include_str!("../../fixtures/routes.show.json");
 const USAGE_FIXTURE: &str = include_str!("../../fixtures/usage.records.json");
+const PROFILE_FIXTURE: &str = include_str!("../../fixtures/ship.profile.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Error {
@@ -162,6 +163,26 @@ fn fixture(command: &str, args: &Value) -> Result<Value, Error> {
                 command: command.to_owned(),
                 error: format!("no report {id} in the fleet"),
             });
+    }
+    if command == "ship.profile" {
+        let all: Value =
+            serde_json::from_str(PROFILE_FIXTURE).map_err(|_| {
+                Error::Parse {
+                    command: command.to_owned(),
+                }
+            })?;
+        let ship = args["ship"].as_str().unwrap_or_default();
+        let refused = |error: String| Error::Command {
+            command: command.to_owned(),
+            error,
+        };
+        return match all["ships"].get(ship) {
+            Some(Value::Object(profile)) => match profile.get("refused") {
+                Some(Value::String(why)) => Err(refused(why.clone())),
+                _ => Ok(Value::Object(profile.clone())),
+            },
+            _ => Err(refused(format!("unknown ship {ship}"))),
+        };
     }
     if command == "usage.summary" {
         let now_ms = std::time::SystemTime::now()

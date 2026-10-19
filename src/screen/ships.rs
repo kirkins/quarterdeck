@@ -1,6 +1,7 @@
 //! Ships: one first mate at a time. Its conversation with the captain (and,
 //! when asked, its other mail), what it is working on, its crew, and a line
-//! to write to it. Answers and reports work as in the Feed.
+//! to write to it. Answers and reports work as in the Feed. Its tools are a
+//! second tab.
 
 use std::collections::HashSet;
 
@@ -16,8 +17,8 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{Connection, Which};
 use crate::font;
-use crate::screen::feed;
 use crate::screen::triage::Triage;
+use crate::screen::{feed, tools};
 use crate::widget::{Column, Element, loading_line, text};
 
 /// The write key for a message to the open ship.
@@ -31,6 +32,16 @@ pub enum Message {
     /// Watch a first mate's or crew's live session, under this name.
     Watch(Target, String),
     Feed(feed::Message),
+    /// Show the conversation or the tools.
+    Tab(Tab),
+    Tools(tools::Message),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Tab {
+    #[default]
+    Conversation,
+    Tools,
 }
 
 pub enum Event {
@@ -43,6 +54,8 @@ pub enum Event {
 pub struct Ships {
     selected: Option<String>,
     ship_mail: bool,
+    tab: Tab,
+    tools: tools::Tools,
 }
 
 impl Ships {
@@ -54,9 +67,17 @@ impl Ships {
         })
     }
 
+    /// The ship whose tools are on the tab shown.
+    pub fn tools_ship(&self) -> Option<&str> {
+        self.selected.as_deref().filter(|_| self.tab == Tab::Tools)
+    }
+
     pub fn update(&mut self, message: Message) -> Option<Event> {
         match message {
             Message::Select(ship) => {
+                if self.selected.as_ref() != Some(&ship) {
+                    self.tools = tools::Tools::default();
+                }
                 self.selected = Some(ship);
                 self.scope().map(Event::Open)
             }
@@ -65,6 +86,15 @@ impl Ships {
                 self.scope().map(Event::Open)
             }
             Message::Watch(target, label) => Some(Event::Watch(target, label)),
+            // The tools are read once the tab is on screen.
+            Message::Tab(tab) => {
+                self.tab = tab;
+                None
+            }
+            Message::Tools(message) => {
+                self.tools.update(message);
+                None
+            }
             // The dashboard handles the conversation's own messages.
             Message::Feed(_) => None,
         }
@@ -84,6 +114,11 @@ impl Ships {
                     .style(theme::text::secondary),
             )
             .center(Length::Fill)
+            .into(),
+            Some(ship) if self.tab == Tab::Tools => column![
+                self.header(ship, connection),
+                self.tools.view(connection, ship).map(Message::Tools),
+            ]
             .into(),
             Some(ship) => column![
                 self.header(ship, connection),
@@ -189,12 +224,18 @@ impl Ships {
             title = title
                 .push(text(facts(machine, ship)).style(theme::text::tertiary));
         }
-        title = title.push(space().width(Length::Fill)).push(
-            checkbox(self.ship_mail)
-                .label("Ship and crew mail")
-                .on_toggle(Message::ShipMail)
-                .style(theme::checkbox::primary),
-        );
+        title = title
+            .push(space().width(Length::Fill))
+            .push(tab("Conversation", Tab::Conversation, self.tab))
+            .push(tab("Tools", Tab::Tools, self.tab));
+        if self.tab == Tab::Conversation {
+            title = title.push(
+                checkbox(self.ship_mail)
+                    .label("Ship and crew mail")
+                    .on_toggle(Message::ShipMail)
+                    .style(theme::checkbox::primary),
+            );
+        }
         if fleet.is_some_and(|(_, ship)| ship.hosted) {
             title = title.push(watch(
                 Target::first_mate(name),
@@ -290,6 +331,16 @@ fn crew<'a>(ship: &'a str, job: &'a Job) -> Element<'a, Message> {
         ));
     }
     line.into()
+}
+
+fn tab(label: &str, tab: Tab, shown: Tab) -> Element<'_, Message> {
+    button(text(label))
+        .padding([2, 10])
+        .style(move |theme, status| {
+            theme::button::secondary(theme, status, tab == shown)
+        })
+        .on_press(Message::Tab(tab))
+        .into()
 }
 
 fn watch<'a>(

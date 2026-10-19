@@ -260,6 +260,7 @@ impl Quarterdeck {
         let mut tasks = vec![self.apply(message)];
         if spend_may_change {
             tasks.push(self.read_spend(false));
+            tasks.push(self.read_tools(false));
         }
         if feed_may_appear {
             tasks.push(self.read_open_feed());
@@ -275,6 +276,17 @@ impl Quarterdeck {
         }
         self.connection
             .read_spend(self.dashboard.spend_query(), refresh)
+            .map(Message::Connection)
+    }
+
+    /// Read the open ship's tools while they are on screen: once per ship,
+    /// and again on `refresh` when the read failed.
+    fn read_tools(&mut self, refresh: bool) -> Task<Message> {
+        let Some(ship) = self.dashboard.tools_ship() else {
+            return Task::none();
+        };
+        self.connection
+            .read_profile(ship, refresh)
             .map(Message::Connection)
     }
 
@@ -319,9 +331,10 @@ impl Quarterdeck {
                         .map(Message::Connection);
                     Task::batch([read, self.save_layout()])
                 }
-                Some(dashboard::Event::Refresh) => {
-                    self.connection.poll().map(Message::Connection)
-                }
+                Some(dashboard::Event::Refresh) => Task::batch([
+                    self.connection.poll().map(Message::Connection),
+                    self.read_tools(true),
+                ]),
                 None => Task::none(),
             },
             Message::Settings(settings::Message::Reload) => {

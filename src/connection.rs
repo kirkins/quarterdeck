@@ -14,6 +14,7 @@ use data::fleet::Snapshot;
 use data::markdown::{self, Document};
 use data::needs::{self, Needs};
 use data::privateer::{Client, Error, Sent};
+use data::profile;
 use data::report::Report;
 use data::session::Target;
 use data::ships::{self, Ship};
@@ -56,6 +57,8 @@ pub enum Message {
         result: Result<Snapshot, Error>,
     },
     SpendRead(u64, SpendRead),
+    /// A ship's tools, read for this ship.
+    ProfileRead(u64, String, Result<profile::Read, Error>),
 }
 
 /// An answer for the Spend view.
@@ -127,6 +130,17 @@ pub struct Connection {
     reading_report: bool,
     pub fleet: Fleet,
     pub spend: Spend,
+    pub tools: Tools,
+}
+
+/// The open ship's tools, read when they are shown and again when the
+/// ship changes.
+#[derive(Default)]
+pub struct Tools {
+    /// The ship they are read for.
+    pub ship: Option<String>,
+    pub read: Option<Result<profile::Read, Error>>,
+    reading: bool,
 }
 
 /// The Spend view as read so far. Routes are read once; usage when the
@@ -246,6 +260,7 @@ impl Connection {
             reading_session: false,
             fleet: Fleet::default(),
             spend: Spend::default(),
+            tools: Tools::default(),
         }
     }
 
@@ -281,6 +296,7 @@ impl Connection {
             || (self.fleet.reading && self.fleet.snapshot.is_none())
             || (self.reading_session && self.screen.is_none())
             || self.reading_report
+            || (self.tools.reading && self.tools.read.is_none())
     }
 
     /// Point at a new config. Returns a poll when anything changed.
@@ -532,6 +548,40 @@ impl Connection {
             ));
         }
         Task::batch(reads)
+    }
+
+    /// A ship's tools, unless they are read for it already or being read;
+    /// with `refresh`, a read that failed is asked again.
+    pub fn read_profile(&mut self, ship: &str, refresh: bool) -> Task<Message> {
+        let tools = &mut self.tools;
+        if tools.ship.as_deref() == Some(ship) {
+            let failed = matches!(tools.read, Some(Err(_)));
+            if tools.reading || !(tools.read.is_none() || refresh && failed) {
+                return Task::none();
+            }
+        } else {
+            *tools = Tools {
+                ship: Some(ship.to_owned()),
+                ..Tools::default()
+            };
+        }
+        tools.reading = true;
+        let client = self.client.clone();
+        let generation = self.generation;
+        let ship = ship.to_owned();
+        Task::perform(
+            {
+                let ship = ship.clone();
+                async move {
+                    let answer =
+                        client.run("ship.profile", json!({"ship": ship})).await;
+                    profile::read(&ship, answer)
+                }
+            },
+            move |result| {
+                Message::ProfileRead(generation, ship.clone(), result)
+            },
+        )
     }
 
     /// The fleet's ships, until they have been read once.
@@ -900,6 +950,19 @@ impl Connection {
                         }
                     }
                 }
+            }
+            Message::ProfileRead(generation, ship, result) => {
+                let tools = &mut self.tools;
+                if generation == self.generation
+                    && tools.ship.as_deref() == Some(ship.as_str())
+                {
+                    tools.reading = false;
+                    if let Err(error) = &result {
+                        log::warn!("{error}");
+                    }
+                    tools.read = Some(result);
+                }
+                Task::none()
             }
             Message::Waited(generation, result) => {
                 if generation != self.generation {

@@ -16,6 +16,7 @@ pub mod fleet;
 pub mod markdown;
 pub mod needs;
 pub mod privateer;
+pub mod profile;
 pub mod report;
 pub mod session;
 pub mod ships;
