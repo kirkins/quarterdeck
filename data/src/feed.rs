@@ -26,6 +26,8 @@ pub struct Page {
 pub struct Entry {
     pub cursor: String,
     pub id: String,
+    /// The ship the captain is talking with.
+    pub ship: Option<String>,
     pub from: String,
     pub to: String,
     /// `request`, `decision`, `notice` or `reply`.
@@ -48,6 +50,16 @@ impl Entry {
         format!("{}/{}", self.from, self.id)
     }
 
+    /// The ship this message is with: as Privateer names it, else the side
+    /// that is not the captain.
+    pub fn ship(&self) -> &str {
+        match &self.ship {
+            Some(ship) if !ship.is_empty() => ship,
+            _ if self.from == "captain" => &self.to,
+            _ => &self.from,
+        }
+    }
+
     /// A notice the captain has not marked read: a report on it still takes
     /// comments.
     pub fn is_unread_notice(&self) -> bool {
@@ -64,6 +76,25 @@ impl Entry {
 impl Page {
     pub fn parse(value: Value) -> Result<Self, String> {
         serde_json::from_value(value).map_err(|error| error.to_string())
+    }
+}
+
+/// One ship's part of the history: its mail with the captain, and with
+/// `ship_mail` its other mail too (ship to ship, crew and runtime notices).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scope {
+    pub ship: String,
+    pub ship_mail: bool,
+}
+
+impl Scope {
+    /// Narrow a `captain.feed` read to this ship.
+    pub fn narrow(&self, mut args: Value) -> Value {
+        args["ship"] = Value::from(self.ship.as_str());
+        if self.ship_mail {
+            args["include_ship_mail"] = Value::Bool(true);
+        }
+        args
     }
 }
 
@@ -245,4 +276,27 @@ mod tests {
             Some("answered")
         );
     }
+
+    #[test]
+    fn a_ships_conversation_reads_only_that_ship_and_names_it() {
+        let thread = Thread::default();
+        let scope = Scope {
+            ship: "billing".into(),
+            ship_mail: true,
+        };
+        let args = scope.narrow(thread.newer_args(30, 1000));
+        assert_eq!(
+            args,
+            json!({"before": 1001, "limit": 30, "ship": "billing",
+                   "include_ship_mail": true})
+        );
+
+        let mut mine = entry("captain", "m1", 1, "c1");
+        mine.to = "billing".into();
+        assert_eq!(mine.ship(), "billing");
+        let mut between = entry("ops", "m2", 2, "c2");
+        between.ship = Some("billing".into());
+        assert_eq!(between.ship(), "billing");
+    }
+
 }

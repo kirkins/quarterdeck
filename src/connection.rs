@@ -9,7 +9,7 @@ use data::captain::Waiting;
 use data::choices;
 use data::config::{self, Source};
 use data::decision::Card;
-use data::feed::{Page, Thread};
+use data::feed::{Page, Scope, Thread};
 use data::fleet::Snapshot;
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
@@ -23,12 +23,16 @@ use serde_json::{Value, json};
 #[derive(Debug, Clone)]
 pub enum Message {
     Poll,
-    LoadOlder,
+    LoadOlder(Which),
     Ships(u64, Result<Vec<Ship>, Error>),
     ReportRead(u64, String, Result<Report, Error>),
     SessionRead(u64, Target, Result<Value, Error>),
     FeedRead {
         generation: u64,
+        which: Which,
+        /// The ship it was read for, so a read for a ship no longer open
+        /// is dropped.
+        scope: Option<Scope>,
         older: bool,
         result: Result<Page, Error>,
     },
@@ -81,6 +85,8 @@ pub struct Connection {
     /// When Privateer last answered, in ms since the epoch.
     pub checked_ms: Option<i64>,
     pub feed: Feed,
+    /// The open ship's conversation, in the Ships view.
+    pub ship_feed: Feed,
     /// Every ship the fleet knows, A to Z, read once per connection.
     pub ships: Vec<Ship>,
     /// The live session being watched: its last screen.
@@ -122,10 +128,19 @@ pub struct Screen {
     pub error: Option<String>,
 }
 
-/// The Feed as read so far: the conversation, each message's Markdown, and
-/// whether the last read worked.
+/// Which conversation: the Feed's, across every ship, or the open ship's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Which {
+    All,
+    Ship,
+}
+
+/// A conversation as read so far: its messages, each message's Markdown,
+/// and whether the last read worked.
 #[derive(Default)]
 pub struct Feed {
+    /// The ship it is narrowed to; none for the whole history.
+    pub scope: Option<Scope>,
     pub thread: Thread,
     pub bodies: HashMap<String, Document>,
     pub error: Option<Error>,
@@ -148,6 +163,7 @@ impl Connection {
             error: None,
             checked_ms: None,
             feed: Feed::default(),
+            ship_feed: Feed::default(),
             ships: Vec::new(),
             reading_ships: false,
             reports: HashMap::new(),
@@ -200,9 +216,36 @@ impl Connection {
     pub fn poll(&mut self) -> Task<Message> {
         Task::batch([
             self.poll_waiting(),
-            self.read_feed(false),
+            self.read_feed(Which::All, false),
+            self.read_feed(Which::Ship, false),
             self.read_ships(),
         ])
+    }
+
+    /// Narrow the ship conversation to `scope`, read anew when it changed.
+    pub fn open_ship(&mut self, scope: Scope) -> Task<Message> {
+        if self.ship_feed.scope.as_ref() == Some(&scope) {
+            return Task::none();
+        }
+        self.ship_feed = Feed {
+            scope: Some(scope),
+            ..Feed::default()
+        };
+        self.read_feed(Which::Ship, false)
+    }
+
+    pub fn feed(&self, which: Which) -> &Feed {
+        match which {
+            Which::All => &self.feed,
+            Which::Ship => &self.ship_feed,
+        }
+    }
+
+    fn feed_mut(&mut self, which: Which) -> &mut Feed {
+        match which {
+            Which::All => &mut self.feed,
+            Which::Ship => &mut self.ship_feed,
+        }
     }
 
     /// The screen of a first mate's or crew's live session, unless a read
@@ -314,8 +357,11 @@ impl Connection {
 
     /// Read new mail, or the newest page when nothing is read yet; with
     /// `older`, the page before the oldest message read.
-    fn read_feed(&mut self, older: bool) -> Task<Message> {
-        let feed = &mut self.feed;
+    fn read_feed(&mut self, which: Which, older: bool) -> Task<Message> {
+        let feed = self.feed_mut(which);
+        if which == Which::Ship && feed.scope.is_none() {
+            return Task::none();
+        }
         let args = if older {
             if feed.reading_older {
                 return Task::none();
@@ -332,6 +378,11 @@ impl Connection {
             feed.reading_newer = true;
             feed.thread.newer_args(FEED_PAGE, now_ms())
         };
+        let scope = feed.scope.clone();
+        let args = match &scope {
+            Some(scope) => scope.narrow(args),
+            None => args,
+        };
         let client = self.client.clone();
         let generation = self.generation;
         Task::perform(
@@ -344,6 +395,8 @@ impl Connection {
             },
             move |result| Message::FeedRead {
                 generation,
+                which,
+                scope: scope.clone(),
                 older,
                 result,
             },
@@ -372,7 +425,7 @@ impl Connection {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Poll => self.poll(),
-            Message::LoadOlder => self.read_feed(true),
+            Message::LoadOlder(which) => self.read_feed(which, true),
             Message::SessionRead(generation, target, result) => {
                 if generation != self.generation {
                     return Task::none();
@@ -444,13 +497,18 @@ impl Connection {
             }
             Message::FeedRead {
                 generation,
+                which,
+                scope,
                 older,
                 result,
             } => {
                 if generation != self.generation {
                     return Task::none();
                 }
-                let feed = &mut self.feed;
+                let feed = self.feed_mut(which);
+                if feed.scope != scope {
+                    return Task::none();
+                }
                 if older {
                     feed.reading_older = false;
                 } else {

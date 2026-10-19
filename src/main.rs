@@ -262,10 +262,13 @@ impl Quarterdeck {
                 Some(dashboard::Event::ReadReport(id)) => {
                     self.connection.read_report(id).map(Message::Connection)
                 }
-                Some(dashboard::Event::LoadOlder) => self
+                Some(dashboard::Event::LoadOlder(which)) => self
                     .connection
-                    .update(connection::Message::LoadOlder)
+                    .update(connection::Message::LoadOlder(which))
                     .map(Message::Connection),
+                Some(dashboard::Event::OpenShip(scope)) => {
+                    self.connection.open_ship(scope).map(Message::Connection)
+                }
                 Some(dashboard::Event::Refresh) => {
                     self.connection.poll().map(Message::Connection)
                 }
@@ -398,9 +401,11 @@ impl Quarterdeck {
         }
     }
 
-    /// The Fleet pane, or Live with its list of sessions, is on screen.
+    /// The Fleet pane, or Live or Ships with their lists, is on screen.
     fn fleet_shown(&self) -> bool {
-        self.dashboard.shows(View::Fleet) || self.dashboard.shows(View::Live)
+        [View::Fleet, View::Live, View::Ships]
+            .into_iter()
+            .any(|view| self.dashboard.shows(view))
     }
 
     fn save_layout(&self) -> Task<Message> {

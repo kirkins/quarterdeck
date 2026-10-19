@@ -8,9 +8,9 @@ use iced::{Alignment, Length, Padding};
 
 use crate::Theme;
 use crate::appearance::theme;
-use crate::connection::{self, Connection};
+use crate::connection::{self, Connection, Which};
 use crate::screen::triage::{self, Triage};
-use crate::screen::{feed, fleet, live, reports};
+use crate::screen::{feed, fleet, live, reports, ships};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -30,6 +30,7 @@ pub enum Message {
     Reports(reports::Message),
     Live(live::Message),
     Fleet(fleet::Message),
+    Ships(ships::Message),
 }
 
 /// What the app must do after an update.
@@ -38,7 +39,9 @@ pub enum Event {
     OpenSettings,
     Refresh,
     OpenLink(String),
-    LoadOlder,
+    LoadOlder(Which),
+    /// Read this ship's own conversation.
+    OpenShip(data::feed::Scope),
     /// Fetch a stored report.
     ReadReport(String),
     /// Read a ship's live session now.
@@ -66,6 +69,9 @@ pub struct Dashboard {
     reports: reports::Reports,
     live: live::Live,
     fleet: fleet::Fleet,
+    ships: ships::Ships,
+    /// Writing to the ship open in Ships.
+    ship_composer: feed::Composer,
 }
 
 impl Dashboard {
@@ -82,6 +88,8 @@ impl Dashboard {
             reports: reports::Reports::default(),
             live: live::Live::default(),
             fleet: fleet::Fleet::default(),
+            ships: ships::Ships::default(),
+            ship_composer: feed::Composer::default(),
         }
     }
 
@@ -123,6 +131,63 @@ impl Dashboard {
         }
     }
 
+    /// A message from a conversation: the Feed's, or the open ship's.
+    fn feed_message(
+        &mut self,
+        which: Which,
+        message: feed::Message,
+        connection: &Connection,
+    ) -> Option<Event> {
+        match message {
+            feed::Message::LoadOlder => Some(Event::LoadOlder(which)),
+            feed::Message::OpenLink(url) => Some(Event::OpenLink(url)),
+            feed::Message::Answer(key) => {
+                if !self.answering.remove(&key) {
+                    self.answering.insert(key);
+                }
+                None
+            }
+            feed::Message::OpenReport(opened) => {
+                self.open_report(opened, connection)
+            }
+            feed::Message::OpenShip(ship) => self.open_ship(ship, connection),
+            feed::Message::Compose(message) => {
+                let (composer, key) = match which {
+                    Which::All => (&mut self.composer, feed::COMPOSE_KEY),
+                    Which::Ship => {
+                        (&mut self.ship_composer, ships::COMPOSE_KEY)
+                    }
+                };
+                let (command, args) = composer.update(message)?;
+                Some(Event::Write {
+                    key: key.to_owned(),
+                    command,
+                    args,
+                })
+            }
+            feed::Message::Triage(message) => {
+                self.update(Message::Triage(message), connection)
+            }
+        }
+    }
+
+    /// Show a ship's own conversation and work in Ships.
+    fn open_ship(
+        &mut self,
+        ship: String,
+        connection: &Connection,
+    ) -> Option<Event> {
+        let opened = self.ships.update(ships::Message::Select(ship));
+        self.update(Message::Open(View::Ships), connection);
+        match opened {
+            Some(ships::Event::Open(scope)) => {
+                self.ship_composer.address(&scope.ship);
+                Some(Event::OpenShip(scope))
+            }
+            _ => None,
+        }
+    }
+
     /// Show a session in Live and read it now.
     fn watch(
         &mut self,
@@ -152,6 +217,8 @@ impl Dashboard {
             self.reports.written(result);
         } else if key == feed::COMPOSE_KEY {
             self.composer.written(result);
+        } else if key == ships::COMPOSE_KEY {
+            self.ship_composer.written(result);
         } else {
             self.triage.written(key, result);
         }
@@ -222,19 +289,27 @@ impl Dashboard {
             }
             Message::OpenSettings => Some(Event::OpenSettings),
             Message::Refresh => Some(Event::Refresh),
-            Message::Feed(feed::Message::LoadOlder) => Some(Event::LoadOlder),
-            Message::Feed(feed::Message::OpenLink(url)) => {
-                Some(Event::OpenLink(url))
+            Message::Feed(message) => {
+                self.feed_message(Which::All, message, connection)
             }
-            Message::Feed(feed::Message::Answer(key)) => {
-                if !self.answering.remove(&key) {
-                    self.answering.insert(key);
+            Message::Ships(ships::Message::Feed(message)) => {
+                self.feed_message(Which::Ship, message, connection)
+            }
+            Message::Ships(message) => match self.ships.update(message)? {
+                ships::Event::Open(scope) => {
+                    self.ship_composer.address(&scope.ship);
+                    Some(Event::OpenShip(scope))
                 }
-                None
-            }
+                ships::Event::Watch(target, label) => {
+                    self.watch(target, label, connection)
+                }
+            },
             Message::Fleet(message) => match self.fleet.update(message)? {
                 fleet::Event::Watch(target, label) => {
                     self.watch(target, label, connection)
+                }
+                fleet::Event::OpenShip(ship) => {
+                    self.open_ship(ship, connection)
                 }
             },
             Message::Live(message) => match self.live.update(message)? {
@@ -257,20 +332,6 @@ impl Dashboard {
                     }
                     reports::Event::OpenLink(url) => Some(Event::OpenLink(url)),
                 }
-            }
-            Message::Feed(feed::Message::OpenReport(opened)) => {
-                self.open_report(opened, connection)
-            }
-            Message::Feed(feed::Message::Compose(message)) => {
-                let (command, args) = self.composer.update(message)?;
-                Some(Event::Write {
-                    key: feed::COMPOSE_KEY.to_owned(),
-                    command,
-                    args,
-                })
-            }
-            Message::Feed(feed::Message::Triage(message)) => {
-                self.update(Message::Triage(message), connection)
             }
             Message::Triage(message) => {
                 match self.triage.update(message, connection)? {
@@ -453,6 +514,16 @@ impl Dashboard {
                     theme,
                 )
                 .map(Message::Feed),
+                View::Ships => self
+                    .ships
+                    .view(
+                        connection,
+                        &self.triage,
+                        &self.answering,
+                        &self.ship_composer,
+                        theme,
+                    )
+                    .map(Message::Ships),
                 view => placeholder(view),
             };
 

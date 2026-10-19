@@ -4,4 +4,5 @@ pub mod fleet;
 pub mod live;
 pub mod reports;
 pub mod settings;
+pub mod ships;
 pub mod triage;
