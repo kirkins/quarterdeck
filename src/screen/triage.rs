@@ -22,7 +22,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Details};
 use crate::screen::reports;
-use crate::widget::{Column, Element, markdown, text};
+use crate::widget::{Column, Element, loading, markdown, text};
 use crate::{font, icon};
 
 #[derive(Debug, Clone)]
@@ -221,6 +221,9 @@ impl Triage {
         theme: &'a Theme,
     ) -> Element<'a, Message> {
         let Some(waiting) = &connection.waiting else {
+            if connection.error.is_none() {
+                return loading("Asking Privateer what waits on you");
+            }
             let message = match &connection.error {
                 Some(error) => error.to_string(),
                 None if connection.is_loading() => "Asking Privateer...".into(),

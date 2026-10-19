@@ -19,7 +19,7 @@ use crate::connection::{Connection, Which};
 use crate::font;
 use crate::screen::reports;
 use crate::screen::triage::{self, Triage};
-use crate::widget::{Column, Element, markdown, text};
+use crate::widget::{Column, Element, loading, markdown, text};
 use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
@@ -255,6 +255,9 @@ pub fn conversation<'a>(
     let feed = connection.feed(which);
 
     if feed.thread.is_empty() {
+        if feed.loading() {
+            return loading("Reading the conversation");
+        }
         let message = match &feed.error {
             Some(error)
                 if error.to_string().contains("unknown captain command") =>
@@ -262,9 +265,7 @@ pub fn conversation<'a>(
                 "This Privateer has no captain.feed yet.".to_owned()
             }
             Some(error) => error.to_string(),
-            None if feed.thread.more_older || which == Which::All => {
-                "Reading the conversation...".to_owned()
-            }
+            None if which == Which::All => "No messages yet.".to_owned(),
             None => "No messages with this ship yet.".to_owned(),
         };
         return container(text(message).style(theme::text::secondary))

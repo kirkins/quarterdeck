@@ -16,7 +16,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{Connection, Screen};
 use crate::font;
-use crate::widget::{Column, Element, text};
+use crate::widget::{Column, Element, loading, loading_line, text};
 
 /// The write key for typing into a session.
 pub const LIVE_KEY: &str = "live";
@@ -121,12 +121,7 @@ impl Live {
                 (Some(target), Some(screen)) if &screen.target == target => {
                     self.screen(screen, theme)
                 }
-                (Some(_), _) => container(
-                    text("Reading the session...")
-                        .style(theme::text::secondary),
-                )
-                .center(Length::Fill)
-                .into(),
+                (Some(_), _) => loading("Reading the session"),
             };
 
         row![
@@ -147,6 +142,12 @@ impl Live {
         connection: &'a Connection,
     ) -> Column<'a, Message> {
         let mut list = Column::new().spacing(2);
+        if connection.fleet.snapshot.is_none() && connection.ships.is_empty() {
+            if connection.ships_loading() || connection.fleet_loading() {
+                list = list.push(loading_line("Reading ships"));
+            }
+            return list;
+        }
         let Some(snapshot) = &connection.fleet.snapshot else {
             for ship in &connection.ships {
                 list = list.push(self.pick(

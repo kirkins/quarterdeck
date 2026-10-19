@@ -13,7 +13,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection};
 use crate::font;
-use crate::widget::{Column, Element, Row, text};
+use crate::widget::{Column, Element, Row, loading, text};
 
 type Style = fn(&Theme) -> iced::widget::text::Style;
 
@@ -58,6 +58,9 @@ impl Fleet {
     ) -> Element<'a, Message> {
         let fleet = &connection.fleet;
         let Some(snapshot) = &fleet.snapshot else {
+            if fleet.error.is_none() {
+                return loading("Reading the fleet");
+            }
             let message = match &fleet.error {
                 Some(error) if error.to_string().contains("unknown") => {
                     "This Privateer does not offer a fleet view yet.".to_owned()

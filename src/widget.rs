@@ -48,6 +48,39 @@ pub fn text<'a>(
         .shaping(font::shaping_for_text(fragment.as_ref()))
 }
 
+/// Something being read: a turning spinner and what is being read. The
+/// spinner turns while the app redraws, which it does often while anything
+/// loads.
+pub fn loading_line<'a, Message: 'a>(
+    label: impl Into<String>,
+) -> Element<'a, Message> {
+    const FRAMES: [&str; 10] =
+        ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    let frame = FRAMES[(now / 100 % FRAMES.len() as u128) as usize];
+    iced::widget::row![
+        text(frame)
+            .font(font::MONO.clone())
+            .style(crate::appearance::theme::text::action),
+        text(label.into()).style(crate::appearance::theme::text::secondary),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// [`loading_line`] in the middle of the space it has.
+pub fn loading<'a, Message: 'a>(
+    label: impl Into<String>,
+) -> Element<'a, Message> {
+    iced::widget::container(loading_line(label))
+        .padding(16)
+        .center(iced::Length::Fill)
+        .into()
+}
+
 pub mod button {
     use super::Element;
     use crate::appearance::theme;
