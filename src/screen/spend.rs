@@ -1,11 +1,14 @@
-//! Spend: the model routes in the order crew try them, and the tokens used
-//! over a period, grouped by route, ship, day or machine. It only reads.
-//! Cache tokens are shown apart and never as spend; what Privateer does not
-//! report is said to be not reported.
+//! Spend: the model routes in the order crew try them, with each machine's
+//! state now, and the tokens used over a period, grouped by route, ship, day
+//! or machine. It only reads. Cache tokens are shown apart and never as
+//! spend; what Privateer does not report is said to be not reported.
 
+use std::collections::BTreeSet;
+
+use data::fleet::RouteState;
 use data::privateer::Error;
 use data::spend::{
-    self, Counted, Grouping, Listed, Period, Query, Routes, Summary,
+    self, Counted, Grouping, Live, Period, Query, Routes, Summary,
 };
 use iced::widget::{
     button, column, container, progress_bar, responsive, row, rule, scrollable,
@@ -14,7 +17,7 @@ use iced::{Alignment, Length};
 
 use crate::Theme;
 use crate::appearance::theme;
-use crate::connection::{Connection, now_ms};
+use crate::connection::{Connection, Fleet, now_ms};
 use crate::font;
 use crate::widget::{Column, Element, Row, text};
 
@@ -25,11 +28,15 @@ const WIDE: f32 = 1000.0;
 pub enum Message {
     Period(Period),
     Grouping(Grouping),
+    /// Open or close a route's last error.
+    LastError(String),
 }
 
 #[derive(Default)]
 pub struct Spend {
     query: Query,
+    /// The routes whose last error is open.
+    errors: BTreeSet<String>,
 }
 
 impl Spend {
@@ -42,6 +49,11 @@ impl Spend {
         match message {
             Message::Period(period) => self.query.period = period,
             Message::Grouping(grouping) => self.query.grouping = grouping,
+            Message::LastError(name) => {
+                if !self.errors.remove(&name) {
+                    self.errors.insert(name);
+                }
+            }
         }
     }
 
@@ -53,10 +65,17 @@ impl Spend {
         responsive(move |size| {
             let now = now_ms();
             let spend = &connection.spend;
-            let routes =
-                column![heading("Routes"), routes(spend.routes.as_ref(), now)]
-                    .spacing(12)
-                    .padding(12);
+            let routes = column![
+                heading("Routes"),
+                routes(
+                    spend.routes.as_ref(),
+                    &connection.fleet,
+                    &self.errors,
+                    now
+                )
+            ]
+            .spacing(12)
+            .padding(12);
             let usage = column![
                 heading("Usage"),
                 self.switches(),
@@ -158,56 +177,89 @@ fn unread<'a>(error: &Error, what: &str) -> Element<'a, Message> {
 
 fn routes<'a>(
     read: Option<&'a Result<Routes, Error>>,
+    fleet: &'a Fleet,
+    errors: &'a BTreeSet<String>,
     now: i64,
 ) -> Element<'a, Message> {
-    let routes = match read {
-        None => return faint("Reading the routes..."),
+    let mut list = Column::new().spacing(10);
+    match read {
+        None => list = list.push(faint("Reading the routes...")),
         // Without a routes file, routes.show answers null.
         Some(Err(Error::Parse { .. })) => {
-            return quiet(
+            list = list.push(quiet(
                 "No routes file: crew keep their first mate's route and \
                  errands the ship's own.",
-            );
+            ));
         }
-        Some(Err(error)) => return unread(error, "routes"),
-        Some(Ok(routes)) => routes,
-    };
-
-    let mut list = Column::new().spacing(10).push(faint(
-        "In the order crew try them. Whether a route is backing off or \
-         capped is not shown here yet.",
-    ));
-    for listed in routes.listed() {
-        list = list.push(route(listed, now));
+        Some(Err(error)) => list = list.push(unread(error, "routes")),
+        Some(Ok(_)) => {}
     }
-    let own = routes.own_lists();
-    if !own.is_empty() {
-        let mut ships = row![faint("Ships with route lists of their own:")]
-            .spacing(6)
-            .align_y(Alignment::Center);
-        for ship in own {
-            ships = ships.push(
-                text(ship).style(move |theme| theme::text::seeded(theme, ship)),
+    match (&fleet.snapshot, &fleet.error) {
+        (None, None) => list = list.push(faint("Reading live route state...")),
+        (None, Some(error)) => {
+            list = list.push(unread(error, "live route state"));
+        }
+        (Some(_), Some(error)) => {
+            list = list.push(
+                text(format!("Showing what was read before: {error}"))
+                    .style(theme::text::error),
             );
         }
-        list = list.push(ships.wrap());
+        (Some(_), None) => {}
+    }
+
+    let declared = match read {
+        Some(Ok(routes)) => Some(routes),
+        _ => None,
+    };
+    let rows = Routes::rows(declared, fleet.snapshot.as_ref());
+    if rows.is_empty() && (declared.is_some() || fleet.snapshot.is_some()) {
+        list = list.push(quiet("No routes are set."));
+    }
+    if !rows.is_empty() {
+        list = list.push(faint(
+            "In the order crew try them; routes held off on any machine are \
+             first.",
+        ));
+    }
+    for row in rows {
+        list = list.push(route(row, errors, now));
+    }
+    if let Some(routes) = declared {
+        let own = routes.own_lists();
+        if !own.is_empty() {
+            let mut ships = row![faint("Ships with route lists of their own:")]
+                .spacing(6)
+                .align_y(Alignment::Center);
+            for ship in own {
+                ships = ships.push(
+                    text(ship)
+                        .style(move |theme| theme::text::seeded(theme, ship)),
+                );
+            }
+            list = list.push(ships.wrap());
+        }
     }
     list.into()
 }
 
-fn route<'a>(listed: Listed<'a>, now: i64) -> Element<'a, Message> {
-    let route = listed.route;
-    let mut header = row![text(listed.name).font(font::MONO_BOLD.clone())]
+fn route<'a>(
+    row: spend::Row<'a>,
+    errors: &'a BTreeSet<String>,
+    now: i64,
+) -> Element<'a, Message> {
+    let cost = row.cost();
+    let mut header = row![text(row.name).font(font::MONO_BOLD.clone())]
         .spacing(10)
         .align_y(Alignment::Center);
-    header = header.push(text(route.cost().label()).style(theme::text::action));
-    if let Some(tier) = route.tier {
+    header = header.push(text(cost.label()).style(theme::text::action));
+    if let Some(tier) = row.declared.and_then(|route| route.tier) {
         header = header.push(faint(format!("tier {tier}")));
     }
     let places: Vec<String> = [
-        ("crew", listed.crew),
-        ("errand", listed.errand),
-        ("first mate", listed.first_mate),
+        ("crew", row.crew),
+        ("errand", row.errand),
+        ("first mate", row.first_mate),
     ]
     .into_iter()
     .filter_map(|(kind, at)| at.map(|at| format!("{kind} {at}")))
@@ -219,20 +271,88 @@ fn route<'a>(listed: Listed<'a>, now: i64) -> Element<'a, Message> {
     }));
 
     let mut lines = column![header].spacing(2);
-    if let Some(note) = &route.note {
-        lines = lines.push(quiet(note.as_str()));
+    if let Some(note) = row.declared.and_then(|route| route.note.as_deref()) {
+        lines = lines.push(quiet(note));
     }
+    // Each machine's state; the declared allowance stands in when none reports one.
+    let mut live_allowance = false;
+    for live in &row.live {
+        let allowance =
+            live.allowance.and_then(|a| spend::live_allowance(a, now));
+        live_allowance |= allowance.is_some();
+        lines = lines.push(machine(live, allowance, now));
+    }
+
+    let failed: Vec<&Live> =
+        row.live.iter().filter(|l| l.error.is_some()).collect();
+    if !failed.is_empty() {
+        let open = errors.contains(row.name);
+        lines = lines.push(
+            button(text(if open {
+                "Hide last error"
+            } else {
+                "Last error"
+            }))
+            .padding([2, 8])
+            .style(move |theme, status| {
+                theme::button::secondary(theme, status, open)
+            })
+            .on_press(Message::LastError(row.name.to_owned())),
+        );
+        if open {
+            for live in failed {
+                let error = live.error.unwrap_or_default();
+                lines = lines.push(faint(format!("{}: {error}", live.machine)));
+            }
+        }
+    }
+
     let mut facts = Vec::new();
-    if let Some(allowance) = route.allowance(now) {
+    if !live_allowance
+        && let Some(allowance) =
+            row.declared.and_then(|route| route.allowance(now))
+    {
         facts.push(allowance);
     }
-    if let Some(budget) = route.budget() {
+    if let Some(budget) = cost.budget() {
         facts.push(budget.to_owned());
     }
     if !facts.is_empty() {
         lines = lines.push(faint(facts.join("; ")));
     }
     lines.into()
+}
+
+/// One machine's state for a route, with its identity and allowance.
+fn machine<'a>(
+    live: &Live<'a>,
+    allowance: Option<String>,
+    now: i64,
+) -> Element<'a, Message> {
+    let style = if live.state.is_throttled() {
+        theme::text::error
+    } else if live.state == RouteState::Unknown {
+        theme::text::tertiary
+    } else {
+        theme::text::primary
+    };
+    let mut line = column![
+        row![
+            text(live.machine).font(font::MONO_BOLD.clone()),
+            text(live.label(now)).style(style),
+        ]
+        .spacing(8)
+    ]
+    .spacing(2);
+    let mut detail = Vec::new();
+    if let Some(identity) = live.identity {
+        detail.push(format!("route {identity}"));
+    }
+    detail.extend(allowance);
+    if !detail.is_empty() {
+        line = line.push(faint(detail.join("; ")));
+    }
+    line.into()
 }
 
 fn usage<'a>(
