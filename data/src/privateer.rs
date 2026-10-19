@@ -34,6 +34,7 @@ const WAITING_FIXTURE: &str =
     include_str!("../../fixtures/captain.waiting.json");
 const FEED_FIXTURE: &str = include_str!("../../fixtures/captain.feed.json");
 const FLEET_FIXTURE: &str = include_str!("../../fixtures/fleet.snapshot.json");
+const NEEDS_FIXTURE: &str = include_str!("../../fixtures/runtime.needs.json");
 const REPORTS_FIXTURE: &str = include_str!("../../fixtures/report.get.json");
 const ROUTES_FIXTURE: &str = include_str!("../../fixtures/routes.show.json");
 const USAGE_FIXTURE: &str = include_str!("../../fixtures/usage.records.json");
@@ -177,6 +178,7 @@ fn fixture(command: &str, args: &Value) -> Result<Value, Error> {
         "routes.show" => ROUTES_FIXTURE,
         "captain.feed" => FEED_FIXTURE,
         "fleet.snapshot" => FLEET_FIXTURE,
+        "runtime.needs" => NEEDS_FIXTURE,
         "ship.list" => {
             r#"{"ships": [{"name": "billing"}, {"name": "status-page"}, {"name": "chandlery"}]}"#
         }

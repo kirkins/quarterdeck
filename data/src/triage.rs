@@ -71,6 +71,14 @@ pub fn sections(items: &[Item], now_ms: i64) -> Vec<(Section, Vec<&Item>)> {
     out
 }
 
+/// Blockers and approvals are read here, never answered: Quarterdeck offers
+/// nothing on a blocker, and approvals are granted or denied in Privateer.
+pub fn is_read_only(item: &Item) -> bool {
+    item.mail.kind == "blocker"
+        || item.mail.kind == "approval"
+        || item.mail.request_kind.as_deref() == Some("production_approval")
+}
+
 fn asked_ms(item: &Item) -> i64 {
     if item.asked_ms > 0 {
         item.asked_ms

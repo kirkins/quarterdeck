@@ -14,6 +14,7 @@ pub mod environment;
 pub mod feed;
 pub mod fleet;
 pub mod markdown;
+pub mod needs;
 pub mod privateer;
 pub mod report;
 pub mod session;
