@@ -8,7 +8,7 @@
 //! written. It is keyed by sender and id, so it is never shown twice and
 //! the later version wins.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -163,6 +163,40 @@ impl Thread {
         self.merge(page.entries);
     }
 
+    /// Add the newest page of open items, read on a refresh asked for
+    /// messages `before` `before_ms`. It moves neither cursor: a late copy
+    /// merges where it was written and forward reads start where they did.
+    /// An open entry the page does not list was answered or dismissed
+    /// elsewhere, as far back as the page reaches: with `open_only` it
+    /// leaves the view, otherwise it is marked closed.
+    pub fn add_open(&mut self, page: Page, before_ms: i64, open_only: bool) {
+        let reach = if page.more {
+            page.entries.first().map(|entry| entry.created_ms)
+        } else {
+            Some(i64::MIN)
+        };
+        if let Some(reach) = reach {
+            let listed: HashSet<String> =
+                page.entries.iter().map(Entry::key).collect();
+            let gone = |key: &String, entry: &Entry| {
+                !listed.contains(key)
+                    && entry.state.as_deref() == Some("open")
+                    && entry.created_ms > reach
+                    && entry.created_ms < before_ms
+            };
+            if open_only {
+                self.entries.retain(|key, entry| !gone(key, entry));
+            } else {
+                for (key, entry) in self.entries.iter_mut() {
+                    if gone(key, entry) {
+                        entry.state = Some("closed".into());
+                    }
+                }
+            }
+        }
+        self.merge(page.entries);
+    }
+
     fn merge(&mut self, entries: Vec<Entry>) {
         for entry in entries {
             self.entries.insert(entry.key(), entry);
@@ -238,6 +272,121 @@ mod tests {
         });
         assert_eq!(ids(&thread), ["m1", "m2", "late", "m3", "m5"]);
         assert_eq!(thread.older_args(15), None);
+    }
+
+    #[test]
+    fn an_open_refresh_merges_a_late_copy_and_moves_no_cursor() {
+        let mut thread = Thread::default();
+        let mut ask = entry("scout", "a1", 20, "c2");
+        ask.state = Some("open".into());
+        thread.add_newer(Page {
+            entries: vec![ask.clone(), entry("b", "m3", 30, "c3")],
+            more: true,
+        });
+
+        // A desk copy written before the cursor, and the ask still open.
+        let mut late = entry("desk", "l1", 5, "c0");
+        late.state = Some("open".into());
+        thread.add_open(
+            Page {
+                entries: vec![late, ask],
+                more: false,
+            },
+            10_000,
+            false,
+        );
+        assert_eq!(ids(&thread), ["l1", "a1", "m3"]);
+        assert_eq!(thread.newer_args(15, 9999)["after"], "c3");
+        assert_eq!(
+            thread.older_args(15),
+            Some(json!({"before": "c2", "limit": 15}))
+        );
+    }
+
+    #[test]
+    fn an_open_refresh_closes_what_was_answered_within_its_reach() {
+        let open = |id: &str, created: i64, cursor: &str| {
+            let mut e = entry("a", id, created, cursor);
+            e.state = Some("open".into());
+            e
+        };
+        let held = || {
+            let mut thread = Thread::default();
+            thread.add_newer(Page {
+                entries: vec![
+                    open("x", 10, "c1"),
+                    open("y", 20, "c2"),
+                    open("z", 40, "c3"),
+                    open("w", 150, "c4"),
+                ],
+                more: false,
+            });
+            thread
+        };
+        let state = |thread: &Thread, id: &str| {
+            thread.get(&format!("a/{id}")).unwrap().state.clone()
+        };
+
+        // The page lists x and z and reaches all the way back: y was
+        // answered and is closed. w was written after the refresh asked,
+        // so it stays open.
+        let mut thread = held();
+        thread.add_open(
+            Page {
+                entries: vec![open("x", 10, "c1"), open("z", 40, "c3")],
+                more: false,
+            },
+            100,
+            false,
+        );
+        assert_eq!(ids(&thread), ["x", "y", "z", "w"]);
+        assert_eq!(state(&thread, "y").as_deref(), Some("closed"));
+        assert_eq!(state(&thread, "x").as_deref(), Some("open"));
+        assert_eq!(state(&thread, "w").as_deref(), Some("open"));
+
+        // A page that stops at z reaches back no further than z, so y is
+        // not judged by it.
+        let mut thread = held();
+        thread.add_open(
+            Page {
+                entries: vec![open("z", 40, "c3")],
+                more: true,
+            },
+            100,
+            false,
+        );
+        assert_eq!(state(&thread, "x").as_deref(), Some("open"));
+        assert_eq!(state(&thread, "y").as_deref(), Some("open"));
+        assert_eq!(state(&thread, "z").as_deref(), Some("open"));
+        assert_eq!(state(&thread, "w").as_deref(), Some("open"));
+    }
+
+    #[test]
+    fn an_open_only_refresh_drops_what_was_answered_within_its_reach() {
+        let open = |id: &str, created: i64, cursor: &str| {
+            let mut e = entry("a", id, created, cursor);
+            e.state = Some("open".into());
+            e
+        };
+        let mut thread = Thread::default();
+        thread.add_newer(Page {
+            entries: vec![
+                open("x", 10, "c1"),
+                open("y", 20, "c2"),
+                open("z", 40, "c3"),
+                open("w", 150, "c4"),
+            ],
+            more: false,
+        });
+        thread.add_open(
+            Page {
+                entries: vec![open("x", 10, "c1"), open("z", 40, "c3")],
+                more: false,
+            },
+            100,
+            true,
+        );
+        assert_eq!(ids(&thread), ["x", "z", "w"]);
     }
 
     #[test]

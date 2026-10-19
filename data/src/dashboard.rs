@@ -87,6 +87,9 @@ pub enum Layout {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Dashboard {
     pub layout: Layout,
+    /// The Feed shows only the open items: kept with the layout.
+    #[serde(default)]
+    pub feed_only_waiting: bool,
 }
 
 impl Default for Dashboard {
@@ -98,6 +101,7 @@ impl Default for Dashboard {
                 a: Box::new(Layout::Pane { view: View::Triage }),
                 b: Box::new(Layout::Pane { view: View::Feed }),
             },
+            feed_only_waiting: false,
         }
     }
 }
@@ -159,6 +163,7 @@ mod tests {
                     view: View::Reports,
                 }),
             },
+            feed_only_waiting: true,
         };
         saved.clone().save_to(&path).await.unwrap();
         assert_eq!(Dashboard::load_from(&path).await, saved);

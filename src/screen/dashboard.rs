@@ -43,6 +43,8 @@ pub enum Event {
     LoadOlder(Which),
     /// Read this ship's own conversation.
     OpenShip(data::feed::Scope),
+    /// Show only the open items in the Feed, or all of it.
+    FeedOnlyWaiting(bool),
     /// Fetch a stored report.
     ReadReport(String),
     /// Read a ship's live session now.
@@ -96,10 +98,12 @@ impl Dashboard {
         }
     }
 
-    /// The layout to save.
+    /// The layout to save. The Feed's choice is added by the app, which
+    /// holds the connection it lives in.
     pub fn saved(&self) -> data::Dashboard {
         data::Dashboard {
             layout: layout(&self.panes, self.panes.layout()),
+            feed_only_waiting: false,
         }
     }
 
@@ -148,6 +152,7 @@ impl Dashboard {
     ) -> Option<Event> {
         match message {
             feed::Message::LoadOlder => Some(Event::LoadOlder(which)),
+            feed::Message::OnlyWaiting(on) => Some(Event::FeedOnlyWaiting(on)),
             feed::Message::OpenLink(url) => Some(Event::OpenLink(url)),
             feed::Message::Answer(key) => {
                 if !self.answering.remove(&key) {

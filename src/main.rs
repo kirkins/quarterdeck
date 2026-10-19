@@ -152,6 +152,8 @@ enum Message {
     Animate,
     /// Read the Spend pane's usage again.
     SpendTick,
+    /// Read the open items again, while the Feed is shown.
+    FeedTick,
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
@@ -208,6 +210,7 @@ impl Quarterdeck {
         };
 
         let mut connection = Connection::new(&config.privateer);
+        connection.feed.open_only = dashboard_load.feed_only_waiting;
         let first_poll = connection.poll();
 
         let mut quarterdeck = Quarterdeck {
@@ -251,12 +254,17 @@ impl Quarterdeck {
             message,
             Message::Dashboard(_) | Message::ConfigReloaded(Ok(_))
         );
-        let task = self.apply(message);
+        // The Feed pane may have come on screen: its open items are read.
+        let feed_may_appear = matches!(message, Message::Dashboard(_))
+            && !self.dashboard.shows(View::Feed);
+        let mut tasks = vec![self.apply(message)];
         if spend_may_change {
-            Task::batch([task, self.read_spend(false)])
-        } else {
-            task
+            tasks.push(self.read_spend(false));
         }
+        if feed_may_appear {
+            tasks.push(self.read_open_feed());
+        }
+        Task::batch(tasks)
     }
 
     /// Read what the Spend pane shows, while it is on screen: the routes
@@ -273,6 +281,7 @@ impl Quarterdeck {
     fn apply(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::SpendTick => self.read_spend(true),
+            Message::FeedTick => self.read_open_feed(),
             Message::Dashboard(message) => match self
                 .dashboard
                 .update(message, &self.connection)
@@ -302,6 +311,13 @@ impl Quarterdeck {
                     .map(Message::Connection),
                 Some(dashboard::Event::OpenShip(scope)) => {
                     self.connection.open_ship(scope).map(Message::Connection)
+                }
+                Some(dashboard::Event::FeedOnlyWaiting(on)) => {
+                    let read = self
+                        .connection
+                        .set_open_only(on)
+                        .map(Message::Connection);
+                    Task::batch([read, self.save_layout()])
                 }
                 Some(dashboard::Event::Refresh) => {
                     self.connection.poll().map(Message::Connection)
@@ -412,7 +428,8 @@ impl Quarterdeck {
             }
             window::Event::Focused => {
                 self.main_window.focused = true;
-                Task::none()
+                // Coming back is when a late copy is worth reading.
+                self.read_open_feed()
             }
             window::Event::Unfocused => {
                 self.main_window.focused = false;
@@ -421,7 +438,7 @@ impl Quarterdeck {
             window::Event::CloseRequested => {
                 // Save where things were, then quit.
                 let window = data::Window::from(self.main_window);
-                let layout = self.dashboard.saved();
+                let layout = self.saved_layout();
                 Task::future(async move {
                     if let Err(error) = window.save().await {
                         log::warn!("could not save the window: {error}");
@@ -445,7 +462,23 @@ impl Quarterdeck {
     }
 
     fn save_layout(&self) -> Task<Message> {
-        Task::perform(self.dashboard.saved().save(), Message::Saved)
+        Task::perform(self.saved_layout().save(), Message::Saved)
+    }
+
+    /// The layout to save, with the Feed's choice of open items.
+    fn saved_layout(&self) -> data::Dashboard {
+        data::Dashboard {
+            feed_only_waiting: self.connection.feed.open_only,
+            ..self.dashboard.saved()
+        }
+    }
+
+    /// Read the open items again, when the Feed is on screen.
+    fn read_open_feed(&mut self) -> Task<Message> {
+        if !self.dashboard.shows(View::Feed) {
+            return Task::none();
+        }
+        self.connection.read_open().map(Message::Connection)
     }
 
     fn open_settings(&mut self) -> Task<Message> {
@@ -521,6 +554,14 @@ impl Quarterdeck {
             if self.fleet_shown() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::FleetTick)
+            } else {
+                Subscription::none()
+            },
+            // The open items are read again while the Feed is shown, so a
+            // late desk copy appears.
+            if self.dashboard.shows(View::Feed) {
+                iced::time::every(connection::OPEN_EVERY)
+                    .map(|_| Message::FeedTick)
             } else {
                 Subscription::none()
             },

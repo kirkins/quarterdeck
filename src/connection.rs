@@ -35,7 +35,17 @@ pub enum Message {
         /// The ship it was read for, so a read for a ship no longer open
         /// is dropped.
         scope: Option<Scope>,
+        /// Whether it was read for the open items only.
+        open_only: bool,
         older: bool,
+        result: Result<Page, Error>,
+    },
+    /// The open items over the whole history, read on a refresh.
+    FeedOpenRead {
+        generation: u64,
+        /// The time bound asked for: messages written after it were not
+        /// judged by the refresh.
+        before: i64,
         result: Result<Page, Error>,
     },
     Waited(u64, Result<Waiting, Error>),
@@ -178,6 +188,9 @@ pub enum Which {
 pub struct Feed {
     /// The ship it is narrowed to; none for the whole history.
     pub scope: Option<Scope>,
+    /// Only the open items, asked of Privateer, so the whole history is
+    /// covered and not only the pages read.
+    pub open_only: bool,
     /// A read has worked at least once.
     pub loaded: bool,
     pub thread: Thread,
@@ -185,6 +198,7 @@ pub struct Feed {
     pub error: Option<Error>,
     reading_newer: bool,
     pub reading_older: bool,
+    reading_open: bool,
 }
 
 impl Feed {
@@ -200,6 +214,12 @@ const FEED_PAGE: u32 = 30;
 /// Needs read per page, and the most pages read in one poll.
 const NEEDS_PAGE: u32 = 100;
 const NEEDS_PAGES: usize = 10;
+
+/// Open items read per refresh: the newest page of what is still open.
+const OPEN_PAGE: u32 = 200;
+
+/// The open items are read again this often while the Feed is shown.
+pub const OPEN_EVERY: Duration = Duration::from_secs(180);
 
 impl Connection {
     pub fn new(config: &config::Privateer) -> Self {
@@ -271,6 +291,10 @@ impl Connection {
         }
         *self = Self {
             generation: self.generation + 1,
+            feed: Feed {
+                open_only: self.feed.open_only,
+                ..Feed::default()
+            },
             ..Self::new(config)
         };
         self.poll()
@@ -299,6 +323,48 @@ impl Connection {
             self.read_feed(Which::Ship, false),
             self.read_ships(),
         ])
+    }
+
+    /// Show only the open items in the Feed, or the whole history again. The
+    /// Feed is read anew from its newest page when the choice changes.
+    pub fn set_open_only(&mut self, open_only: bool) -> Task<Message> {
+        if self.feed.open_only == open_only {
+            return Task::none();
+        }
+        self.feed = Feed {
+            open_only,
+            ..Feed::default()
+        };
+        self.read_feed(Which::All, false)
+    }
+
+    /// Read the open items over the whole history, to merge in what a late
+    /// copy brought. It moves no cursor, so it is not a poll.
+    pub fn read_open(&mut self) -> Task<Message> {
+        let feed = &mut self.feed;
+        if feed.reading_open || feed.loading() {
+            return Task::none();
+        }
+        feed.reading_open = true;
+        let before = now_ms() + 1;
+        let client = self.client.clone();
+        let generation = self.generation;
+        let args =
+            json!({"open_only": true, "before": before, "limit": OPEN_PAGE});
+        Task::perform(
+            async move {
+                let value = client.run("captain.feed", args).await?;
+                Page::parse(value).map_err(|error| Error::Command {
+                    command: "captain.feed".into(),
+                    error: format!("unexpected answer: {error}"),
+                })
+            },
+            move |result| Message::FeedOpenRead {
+                generation,
+                before,
+                result,
+            },
+        )
     }
 
     /// Narrow the ship conversation to `scope`, read anew when it changed.
@@ -512,10 +578,15 @@ impl Connection {
             feed.thread.newer_args(FEED_PAGE, now_ms())
         };
         let scope = feed.scope.clone();
+        let open_only = feed.open_only;
         let args = match &scope {
             Some(scope) => scope.narrow(args),
             None => args,
         };
+        let mut args = args;
+        if open_only {
+            args["open_only"] = json!(true);
+        }
         let client = self.client.clone();
         let generation = self.generation;
         Task::perform(
@@ -530,6 +601,7 @@ impl Connection {
                 generation,
                 which,
                 scope: scope.clone(),
+                open_only,
                 older,
                 result,
             },
@@ -692,6 +764,7 @@ impl Connection {
                 generation,
                 which,
                 scope,
+                open_only,
                 older,
                 result,
             } => {
@@ -699,7 +772,7 @@ impl Connection {
                     return Task::none();
                 }
                 let feed = self.feed_mut(which);
-                if feed.scope != scope {
+                if feed.scope != scope || feed.open_only != open_only {
                     return Task::none();
                 }
                 if older {
@@ -722,6 +795,34 @@ impl Connection {
                         }
                         feed.loaded = true;
                         feed.error = None;
+                    }
+                    Err(error) => {
+                        log::warn!("{error}");
+                        feed.error = Some(error);
+                    }
+                }
+                Task::none()
+            }
+            Message::FeedOpenRead {
+                generation,
+                before,
+                result,
+            } => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                let feed = &mut self.feed;
+                feed.reading_open = false;
+                match result {
+                    Ok(page) => {
+                        for entry in &page.entries {
+                            feed.bodies.insert(
+                                entry.key(),
+                                markdown::parse(&entry.body, None),
+                            );
+                        }
+                        let open_only = feed.open_only;
+                        feed.thread.add_open(page, before, open_only);
                     }
                     Err(error) => {
                         log::warn!("{error}");
