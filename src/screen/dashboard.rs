@@ -61,6 +61,10 @@ pub enum Event {
     },
     /// Put this text on the clipboard.
     Copy(String),
+    /// Open the file picker for a composer.
+    PickFiles(Which),
+    /// Read where the ships run: files wait on it.
+    ReadFleet,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -139,6 +143,31 @@ impl Dashboard {
         self.shows(View::Live).then(|| self.live.target()).flatten()
     }
 
+    /// Files picked or dropped, for the composer `which`.
+    pub fn attach(which: Which, paths: Vec<std::path::PathBuf>) -> Message {
+        let attached = feed::Message::Compose(feed::Compose::Attached(paths));
+        match which {
+            Which::All => Message::Feed(attached),
+            Which::Ship => Message::Ships(ships::Message::Feed(attached)),
+        }
+    }
+
+    /// The composer a file dropped onto the window goes to: the focused
+    /// pane's, else the Feed's or a ship's on screen.
+    pub fn drop_target(&self) -> Option<Which> {
+        let focused = self
+            .focus
+            .and_then(|pane| self.panes.get(pane))
+            .map(|pane| pane.view);
+        match focused {
+            Some(View::Feed) => Some(Which::All),
+            Some(View::Ships) => Some(Which::Ship),
+            _ if self.shows(View::Feed) => Some(Which::All),
+            _ if self.shows(View::Ships) => Some(Which::Ship),
+            _ => None,
+        }
+    }
+
     /// Whether a view's pane is on screen: open, and not behind a
     /// maximized pane.
     pub fn shows(&self, view: View) -> bool {
@@ -213,12 +242,19 @@ impl Dashboard {
                         (&mut self.ship_composer, ships::COMPOSE_KEY)
                     }
                 };
-                let (command, args) = composer.update(message)?;
-                Some(Event::Write {
-                    key: key.to_owned(),
-                    command,
-                    args,
-                })
+                let fleet = connection.fleet.snapshot.as_ref();
+                match composer.update(message, fleet) {
+                    Some(feed::Out::Write(command, args)) => {
+                        Some(Event::Write {
+                            key: key.to_owned(),
+                            command,
+                            args,
+                        })
+                    }
+                    Some(feed::Out::Pick) => Some(Event::PickFiles(which)),
+                    None => (composer.has_attachments() && fleet.is_none())
+                        .then_some(Event::ReadFleet),
+                }
             }
             feed::Message::Triage(message) => {
                 self.update(Message::Triage(message), connection)
