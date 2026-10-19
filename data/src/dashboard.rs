@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::environment;
+use crate::triage::Filter;
 
 const FILE_NAME: &str = "dashboard.json";
 
@@ -90,6 +91,9 @@ pub struct Dashboard {
     /// The Feed shows only the open items: kept with the layout.
     #[serde(default)]
     pub feed_only_waiting: bool,
+    /// The ship and kind Triage is narrowed to, kept with the layout.
+    #[serde(default)]
+    pub triage: Filter,
 }
 
 impl Default for Dashboard {
@@ -102,6 +106,7 @@ impl Default for Dashboard {
                 b: Box::new(Layout::Pane { view: View::Feed }),
             },
             feed_only_waiting: false,
+            triage: Filter::default(),
         }
     }
 }
@@ -164,6 +169,10 @@ mod tests {
                 }),
             },
             feed_only_waiting: true,
+            triage: Filter {
+                ship: Some("scout".into()),
+                kind: Some("decision".into()),
+            },
         };
         saved.clone().save_to(&path).await.unwrap();
         assert_eq!(Dashboard::load_from(&path).await, saved);

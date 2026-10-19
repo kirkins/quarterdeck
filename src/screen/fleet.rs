@@ -25,11 +25,14 @@ pub enum Message {
     Watch(Target, String),
     /// Open a ship's own conversation and work.
     OpenShip(String),
+    /// Open Triage narrowed to the asks a ship's needs name.
+    OpenTriage(String),
 }
 
 pub enum Event {
     Watch(Target, String),
     OpenShip(String),
+    OpenTriage(String),
 }
 
 #[derive(Default)]
@@ -42,6 +45,7 @@ impl Fleet {
         match message {
             Message::Watch(target, label) => Some(Event::Watch(target, label)),
             Message::OpenShip(ship) => Some(Event::OpenShip(ship)),
+            Message::OpenTriage(ship) => Some(Event::OpenTriage(ship)),
             Message::Toggle(machine) => {
                 if !self.folded.remove(&machine) {
                     self.folded.insert(machine);
@@ -301,16 +305,12 @@ fn ship_view<'a>(
             theme::text::tertiary,
         ));
     }
-    if board.needs > 0 {
-        facts.push((
-            count(board.needs, "needs you", "need you"),
-            theme::text::highlight_indicator,
-        ));
-    }
-
     let mut head = row![name, dotted(facts)]
         .spacing(12)
         .align_y(Alignment::Center);
+    if board.needs > 0 {
+        head = head.push(needs_link(&ship.name, board.needs));
+    }
     if ship.hosted && !dim {
         head = head.push(space().width(Length::Fill)).push(watch(
             Target::first_mate(ship.name.as_str()),
@@ -406,6 +406,19 @@ fn job_view<'a>(
             .push(text(wait_label(wait, now)).style(theme::text::tertiary));
     }
     lines.into()
+}
+
+/// A ship's count of what needs the captain, which opens Triage for it.
+fn needs_link<'a>(ship: &str, needs: usize) -> Element<'a, Message> {
+    button(
+        text(count(needs, "needs you", "need you"))
+            .size(theme::TEXT_SIZE - 1.0)
+            .style(theme::text::highlight_indicator),
+    )
+    .padding([1, 8])
+    .style(|theme, status| theme::button::secondary(theme, status, false))
+    .on_press(Message::OpenTriage(ship.to_owned()))
+    .into()
 }
 
 /// A button that opens a session in Live.
