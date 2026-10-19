@@ -23,10 +23,13 @@ pub enum Message {
     Toggle(String),
     /// Watch a first mate's or crew's live session, under this name.
     Watch(Target, String),
+    /// Open a ship's own conversation and work.
+    OpenShip(String),
 }
 
 pub enum Event {
     Watch(Target, String),
+    OpenShip(String),
 }
 
 #[derive(Default)]
@@ -38,6 +41,7 @@ impl Fleet {
     pub fn update(&mut self, message: Message) -> Option<Event> {
         match message {
             Message::Watch(target, label) => Some(Event::Watch(target, label)),
+            Message::OpenShip(ship) => Some(Event::OpenShip(ship)),
             Message::Toggle(machine) => {
                 if !self.folded.remove(&machine) {
                     self.folded.insert(machine);
@@ -266,6 +270,10 @@ fn ship_view<'a>(
     } else {
         name.style(move |theme| theme::text::seeded(theme, &ship.name))
     };
+    let name = button(name)
+        .padding(0)
+        .style(theme::button::bare)
+        .on_press(Message::OpenShip(ship.name.clone()));
 
     let presence = ship.presence;
     let mut label = presence.as_str().to_owned();

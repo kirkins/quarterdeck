@@ -15,7 +15,7 @@ use iced::{Alignment, Length, Padding};
 
 use crate::Theme;
 use crate::appearance::theme;
-use crate::connection::Connection;
+use crate::connection::{Connection, Which};
 use crate::font;
 use crate::screen::reports;
 use crate::screen::triage::{self, Triage};
@@ -32,6 +32,8 @@ pub enum Message {
     Triage(triage::Message),
     Compose(Compose),
     OpenReport(reports::Opened),
+    /// Open a ship's own conversation, by its name.
+    OpenShip(String),
 }
 
 /// Writing to a ship.
@@ -94,6 +96,15 @@ impl Composer {
         None
     }
 
+    /// Write to this ship.
+    pub fn address(&mut self, ship: &str) {
+        if self.to.as_deref() != Some(ship) {
+            self.to = Some(ship.to_owned());
+            self.confirming = false;
+            self.last = None;
+        }
+    }
+
     fn ready(&self) -> bool {
         self.to.is_some() && !self.content.text().trim().is_empty()
     }
@@ -117,12 +128,28 @@ impl Composer {
         });
     }
 
-    fn view<'a>(&'a self, ships: &'a [Ship]) -> Element<'a, Message> {
-        let names: Vec<String> = ships.iter().map(|s| s.name.clone()).collect();
-        let to = pick_list(self.to.clone(), names, String::clone)
-            .on_select(|ship| Message::Compose(Compose::To(ship)))
-            .placeholder("Ship")
-            .padding([4, 8]);
+    /// The composer; with `ships`, a pick of whom to write to, else it
+    /// writes to the ship it was addressed to.
+    pub fn view<'a>(
+        &'a self,
+        ships: Option<&'a [Ship]>,
+    ) -> Element<'a, Message> {
+        let to: Element<'a, Message> = match ships {
+            Some(ships) => {
+                let names: Vec<String> =
+                    ships.iter().map(|s| s.name.clone()).collect();
+                pick_list(self.to.clone(), names, String::clone)
+                    .on_select(|ship| Message::Compose(Compose::To(ship)))
+                    .placeholder("Ship")
+                    .padding([4, 8])
+                    .into()
+            }
+            None => {
+                text(format!("To {}", self.to.as_deref().unwrap_or_default()))
+                    .style(theme::text::secondary)
+                    .into()
+            }
+        };
 
         let ask = checkbox(self.ask)
             .label("Ask for an answer")
@@ -211,19 +238,21 @@ pub fn view<'a>(
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     column![
-        conversation(connection, triage, answering, theme),
-        composer.view(&connection.ships),
+        conversation(connection, Which::All, triage, answering, theme),
+        composer.view(Some(&connection.ships)),
     ]
     .into()
 }
 
-fn conversation<'a>(
+/// A conversation, oldest at the top: the whole history, or one ship's.
+pub fn conversation<'a>(
     connection: &'a Connection,
+    which: Which,
     triage: &'a Triage,
     answering: &'a HashSet<String>,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
-    let feed = &connection.feed;
+    let feed = connection.feed(which);
 
     if feed.thread.is_empty() {
         let message = match &feed.error {
@@ -233,7 +262,10 @@ fn conversation<'a>(
                 "This Privateer has no captain.feed yet.".to_owned()
             }
             Some(error) => error.to_string(),
-            None => "Reading the conversation...".to_owned(),
+            None if feed.thread.more_older || which == Which::All => {
+                "Reading the conversation...".to_owned()
+            }
+            None => "No messages with this ship yet.".to_owned(),
         };
         return container(text(message).style(theme::text::secondary))
             .padding(16)
@@ -279,12 +311,8 @@ fn conversation<'a>(
         let panel = answering
             .contains(&key)
             .then(|| answer_panel(&key, connection, triage));
-        list = list.push(message_view(
-            entry,
-            connection.feed.bodies.get(&key),
-            panel,
-            theme,
-        ));
+        list =
+            list.push(message_view(entry, feed.bodies.get(&key), panel, theme));
     }
 
     scrollable(list).anchor_bottom().height(Length::Fill).into()
@@ -297,17 +325,20 @@ fn message_view<'a>(
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let mine = entry.from == "captain";
-    let sender: Element<'a, Message> = if mine {
-        text(format!("You → {}", entry.to))
-            .font(font::MONO_BOLD.clone())
-            .into()
+    let mut header = row![].spacing(8).align_y(Alignment::Center);
+    if mine {
+        header = header
+            .push(text("You →").font(font::MONO_BOLD.clone()))
+            .push(ship_name(&entry.to));
     } else {
-        text(entry.from.as_str())
-            .style(move |theme| theme::text::seeded(theme, &entry.from))
-            .into()
-    };
-
-    let mut header = row![sender].spacing(8).align_y(Alignment::Center);
+        header = header.push(ship_name(&entry.from));
+        // Mail between ships, shown in a ship's own conversation.
+        if entry.to != "captain" {
+            header = header
+                .push(text("→").style(theme::text::tertiary))
+                .push(ship_name(&entry.to));
+        }
+    }
     if let Some(label) = state_label(entry) {
         header = header.push(label);
     }
@@ -370,6 +401,19 @@ fn message_view<'a>(
         Padding::default()
     };
     container(content).padding(padding).into()
+}
+
+/// A ship's name, in its colour, that opens its own conversation.
+pub fn ship_name<'a>(ship: &'a str) -> Element<'a, Message> {
+    button(
+        text(ship)
+            .font(font::MONO_BOLD.clone())
+            .style(move |theme| theme::text::seeded(theme, ship)),
+    )
+    .padding(0)
+    .style(theme::button::bare)
+    .on_press(Message::OpenShip(ship.to_owned()))
+    .into()
 }
 
 /// The answer controls under an ask. An ask that is open in the Feed but

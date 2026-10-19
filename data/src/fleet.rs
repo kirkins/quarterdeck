@@ -65,6 +65,15 @@ pub struct Ship {
     /// Whether its first mate runs in a terminal host, so has a session.
     #[serde(deserialize_with = "lenient")]
     pub hosted: bool,
+    /// The first mate's harness, such as `claude` or `pi`.
+    #[serde(deserialize_with = "lenient")]
+    pub harness: Option<String>,
+    /// Mail the ship has not read yet.
+    #[serde(deserialize_with = "lenient")]
+    pub unread: u64,
+    /// Requests the ship has open with others.
+    #[serde(deserialize_with = "lenient")]
+    pub open_requests: u64,
     #[serde(deserialize_with = "lenient")]
     pub presence: Presence,
     pub presence_since_ms: Option<i64>,
@@ -235,6 +244,17 @@ struct Wire {
 pub type Since = HashMap<String, i64>;
 
 impl Snapshot {
+    /// A ship by name, with the machine it is on.
+    pub fn ship(&self, name: &str) -> Option<(&Machine, &Ship)> {
+        self.machines.iter().find_map(|machine| {
+            machine
+                .ships
+                .iter()
+                .find(|ship| ship.name == name)
+                .map(|ship| (machine, ship))
+        })
+    }
+
     /// Read a snapshot. Entries without a name, or that cannot be read, are
     /// left out; an answer with no machines list is refused.
     pub fn parse(value: Value) -> Result<Self, String> {
