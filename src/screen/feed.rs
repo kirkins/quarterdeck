@@ -15,7 +15,7 @@ use iced::{Alignment, Length, Padding};
 
 use crate::Theme;
 use crate::appearance::theme;
-use crate::connection::{Connection, Which};
+use crate::connection::{self, Connection, Which};
 use crate::font;
 use crate::screen::reports;
 use crate::screen::triage::{self, Triage};
@@ -27,6 +27,10 @@ pub enum Message {
     LoadOlder,
     /// Show only the open items, asked of Privateer over the whole history.
     OnlyWaiting(bool),
+    /// Narrow the Feed to one ship, or to every ship with `None`.
+    ShipFilter(Option<String>),
+    /// Show the mail between ships too, in the Feed or a ship's own.
+    ShipMail(bool),
     /// Show or hide the answer controls under an open ask, by its key.
     Answer(String),
     OpenLink(String),
@@ -232,6 +236,9 @@ fn compose_button<'a>(
     press.into()
 }
 
+/// The ship picker's first choice: every ship.
+const ALL_SHIPS: &str = "All ships";
+
 pub fn view<'a>(
     connection: &'a Connection,
     triage: &'a Triage,
@@ -239,12 +246,36 @@ pub fn view<'a>(
     composer: &'a Composer,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
-    let only_waiting = checkbox(connection.feed(Which::All).open_only)
+    let feed = connection.feed(Which::All);
+    let (ship, ship_mail) = feed
+        .scope
+        .as_ref()
+        .map_or((None, false), |scope| (scope.ship.clone(), scope.ship_mail));
+
+    let names: Vec<String> = std::iter::once(ALL_SHIPS.to_owned())
+        .chain(connection.ships.iter().map(|ship| ship.name.clone()))
+        .collect();
+    let picked = ship.unwrap_or_else(|| ALL_SHIPS.to_owned());
+    let ship_pick = pick_list(Some(picked), names, String::clone)
+        .on_select(|name| {
+            Message::ShipFilter((name != ALL_SHIPS).then_some(name))
+        })
+        .padding([4, 8]);
+    let mail = checkbox(ship_mail)
+        .label("Ship-to-ship mail")
+        .on_toggle(Message::ShipMail)
+        .style(theme::checkbox::primary);
+    let only_waiting = checkbox(feed.open_only)
         .label("Only waiting on me")
         .on_toggle(Message::OnlyWaiting)
         .style(theme::checkbox::primary);
     column![
-        container(only_waiting).padding([4, 12]),
+        container(
+            row![ship_pick, mail, only_waiting]
+                .spacing(12)
+                .align_y(Alignment::Center)
+        )
+        .padding([4, 12]),
         conversation(connection, Which::All, triage, answering, theme),
         composer.view(Some(&connection.ships)),
     ]
@@ -300,6 +331,8 @@ pub fn conversation<'a>(
         );
     }
 
+    let replies = feed.thread.replies();
+    let now = connection::now_ms();
     let mut day = None;
     for entry in feed.thread.entries() {
         let when = local(entry.created_ms);
@@ -317,20 +350,74 @@ pub fn conversation<'a>(
             }
         }
         let key = entry.key();
-        let panel = answering
-            .contains(&key)
+        let sent = triage.sent(&key);
+        let asked = entry
+            .correlation
+            .as_ref()
+            .and_then(|ask| feed.thread.get(&format!("{}/{ask}", entry.to)));
+        let notes =
+            Notes::of(entry, replies.get(&key).copied(), asked, sent, now);
+        let panel = (answering.contains(&key) && !sent)
             .then(|| answer_panel(&key, connection, triage));
-        list =
-            list.push(message_view(entry, feed.bodies.get(&key), panel, theme));
+        let mark = awaits_read(entry)
+            .then(|| triage.mark_panel(&key, &entry.id).map(Message::Triage));
+        list = list.push(message_view(
+            entry,
+            feed.bodies.get(&key),
+            notes,
+            panel,
+            mark,
+            theme,
+        ));
     }
 
     scrollable(list).anchor_bottom().height(Length::Fill).into()
 }
 
+/// What the feed says about a message beside its body.
+#[derive(Default)]
+struct Notes {
+    /// An answer was sent from here, so the ask is closed in place.
+    sent: bool,
+    /// What became of a closed ask, or of a notice marked read.
+    outcome: Option<String>,
+    /// "N comments on <title>", for a message that carries comments.
+    comments: Option<String>,
+    /// The captain's own words with its comments, in place of the body.
+    note: Option<String>,
+}
+
+impl Notes {
+    fn of(
+        entry: &Entry,
+        reply: Option<&Entry>,
+        asked: Option<&Entry>,
+        sent: bool,
+        now: i64,
+    ) -> Self {
+        let comments = entry.comments_line(asked);
+        Self {
+            sent,
+            outcome: entry
+                .outcome(reply, now)
+                .filter(|_| !(sent && entry.is_open_ask())),
+            note: comments.as_ref().and_then(|_| entry.captain_note()),
+            comments,
+        }
+    }
+}
+
+/// A notice to the captain nobody has marked read.
+fn awaits_read(entry: &Entry) -> bool {
+    entry.to == "captain" && entry.is_unread_notice()
+}
+
 fn message_view<'a>(
     entry: &'a Entry,
     body: Option<&'a data::markdown::Document>,
+    notes: Notes,
     panel: Option<Element<'a, Message>>,
+    mark: Option<Element<'a, Message>>,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let mine = entry.from == "captain";
@@ -348,7 +435,11 @@ fn message_view<'a>(
                 .push(ship_name(&entry.to));
         }
     }
-    if let Some(label) = state_label(entry) {
+    if awaits_read(entry) {
+        header =
+            header.push(text("Unread").style(theme::text::highlight_indicator));
+    }
+    if let Some(label) = state_label(entry, &notes) {
         header = header.push(label);
     }
     header = header.push(space().width(Length::Fill)).push(
@@ -361,12 +452,21 @@ fn message_view<'a>(
     );
 
     let mut content = column![header].spacing(4);
-    match body {
-        Some(document) => {
+    match (notes.comments, notes.note) {
+        (Some(comments), note) => {
             content =
-                content.push(markdown(document, theme, Message::OpenLink));
+                content.push(text(comments).style(theme::text::secondary));
+            if let Some(note) = note {
+                content = content.push(text(note));
+            }
         }
-        None => content = content.push(text(entry.body.as_str())),
+        (None, _) => match body {
+            Some(document) => {
+                content =
+                    content.push(markdown(document, theme, Message::OpenLink));
+            }
+            None => content = content.push(text(entry.body.clone())),
+        },
     }
     let takes_comments = entry.is_open_ask() || entry.is_unread_notice();
     if let Some(opened) = reports::Opened::from_mail(
@@ -384,7 +484,7 @@ fn message_view<'a>(
                 .on_press(Message::OpenReport(opened)),
         );
     }
-    if entry.is_open_ask() {
+    if entry.is_open_ask() && !notes.sent {
         let open = panel.is_some();
         content = content.push(
             button(text(if open { "Hide" } else { "Answer" }))
@@ -401,6 +501,9 @@ fn message_view<'a>(
         if let Some(panel) = panel {
             content = content.push(panel);
         }
+    }
+    if let Some(mark) = mark {
+        content = content.push(mark);
     }
 
     // The captain's own messages sit indented, as a reply does in a chat.
@@ -443,25 +546,27 @@ fn answer_panel<'a>(
     }
 }
 
-/// What became of an ask; nothing for a notice or a reply.
-fn state_label<'a>(entry: &'a Entry) -> Option<Element<'a, Message>> {
-    if !matches!(entry.kind.as_str(), "request" | "decision") {
-        return None;
+/// Where an ask stands, or what became of a closed one; nothing for a
+/// plain message that nothing happened to.
+fn state_label<'a>(
+    entry: &'a Entry,
+    notes: &Notes,
+) -> Option<Element<'a, Message>> {
+    if entry.is_open_ask() {
+        return Some(if notes.sent {
+            text(format!("Answer sent to {}", entry.ship()))
+                .style(theme::text::success)
+                .into()
+        } else {
+            text(format!("{}, waiting on you", entry.kind))
+                .style(theme::text::error)
+                .into()
+        });
     }
-    let label = match entry.state.as_deref() {
-        Some("open") => {
-            return Some(
-                text(format!("{}, waiting on you", entry.kind))
-                    .style(theme::text::error)
-                    .into(),
-            );
-        }
-        Some("answered") => "answered",
-        Some("dismissed") => "dismissed",
-        Some(other) => other,
-        None => return None,
-    };
-    Some(text(label).style(theme::text::tertiary).into())
+    notes
+        .outcome
+        .as_ref()
+        .map(|words| text(words.clone()).style(theme::text::tertiary).into())
 }
 
 fn local(ms: i64) -> Option<DateTime<Local>> {

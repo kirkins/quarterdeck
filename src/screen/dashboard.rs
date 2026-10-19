@@ -45,6 +45,8 @@ pub enum Event {
     OpenShip(data::feed::Scope),
     /// Show only the open items in the Feed, or all of it.
     FeedOnlyWaiting(bool),
+    /// Read the Feed narrowed to this part of the history.
+    FeedScope(data::feed::Scope),
     /// Fetch a stored report.
     ReadReport(String),
     /// Read a ship's live session now.
@@ -164,6 +166,17 @@ impl Dashboard {
         match message {
             feed::Message::LoadOlder => Some(Event::LoadOlder(which)),
             feed::Message::OnlyWaiting(on) => Some(Event::FeedOnlyWaiting(on)),
+            feed::Message::ShipFilter(ship) if which == Which::All => {
+                let mut scope = self.feed_scope(connection);
+                scope.ship = ship;
+                Some(Event::FeedScope(scope))
+            }
+            feed::Message::ShipMail(on) if which == Which::All => {
+                let mut scope = self.feed_scope(connection);
+                scope.ship_mail = on;
+                Some(Event::FeedScope(scope))
+            }
+            feed::Message::ShipFilter(_) | feed::Message::ShipMail(_) => None,
             feed::Message::OpenLink(url) => Some(Event::OpenLink(url)),
             feed::Message::Answer(key) => {
                 if !self.answering.remove(&key) {
@@ -195,6 +208,18 @@ impl Dashboard {
         }
     }
 
+    /// The part of the history the Feed reads now.
+    fn feed_scope(&self, connection: &Connection) -> data::feed::Scope {
+        connection
+            .feed(Which::All)
+            .scope
+            .clone()
+            .unwrap_or(data::feed::Scope {
+                ship: None,
+                ship_mail: false,
+            })
+    }
+
     /// Show a ship's own conversation and work in Ships.
     fn open_ship(
         &mut self,
@@ -205,7 +230,8 @@ impl Dashboard {
         self.update(Message::Open(View::Ships), connection);
         match opened {
             Some(ships::Event::Open(scope)) => {
-                self.ship_composer.address(&scope.ship);
+                self.ship_composer
+                    .address(scope.ship.as_deref().unwrap_or_default());
                 Some(Event::OpenShip(scope))
             }
             _ => None,
@@ -332,7 +358,8 @@ impl Dashboard {
             }
             Message::Ships(message) => match self.ships.update(message)? {
                 ships::Event::Open(scope) => {
-                    self.ship_composer.address(&scope.ship);
+                    self.ship_composer
+                        .address(scope.ship.as_deref().unwrap_or_default());
                     Some(Event::OpenShip(scope))
                 }
                 ships::Event::Watch(target, label) => {
@@ -439,6 +466,10 @@ impl Dashboard {
                     text(waiting.to_string())
                         .style(theme::text::highlight_indicator),
                 );
+            }
+            if view == View::Feed && waiting > 0 {
+                label = label
+                    .push(icon::dot().style(theme::text::highlight_indicator));
             }
 
             button(label)
