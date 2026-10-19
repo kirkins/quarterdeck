@@ -298,5 +298,4 @@ mod tests {
         between.ship = Some("billing".into());
         assert_eq!(between.ship(), "billing");
     }
-
 }
