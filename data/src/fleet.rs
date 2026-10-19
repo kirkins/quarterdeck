@@ -62,6 +62,9 @@ pub struct Machine {
 pub struct Ship {
     pub name: String,
     pub machine: Option<String>,
+    /// Whether its first mate runs in a terminal host, so has a session.
+    #[serde(deserialize_with = "lenient")]
+    pub hosted: bool,
     #[serde(deserialize_with = "lenient")]
     pub presence: Presence,
     pub presence_since_ms: Option<i64>,
@@ -144,6 +147,10 @@ pub struct Job {
     pub doing: Option<Doing>,
     #[serde(deserialize_with = "lenient")]
     pub wait: Option<Wait>,
+    /// `live` for a hosted crew's own session, `viewer` for the view of a
+    /// headless one; none when it has no session to watch.
+    #[serde(deserialize_with = "lenient")]
+    pub session: Option<String>,
 }
 
 impl Job {
@@ -524,6 +531,11 @@ mod tests {
             Some("capacity")
         );
         assert!(queued.is_waiting() && !queued.is_running());
+        // A hosted first mate, and a crew with a session of its own, can be
+        // watched live.
+        assert!(billing.hosted);
+        assert_eq!(queued.session, None);
+        assert_eq!(billing.jobs[1].session.as_deref(), Some("live"));
         assert_eq!(snapshot.needs.len(), 3);
     }
 
@@ -536,7 +548,8 @@ mod tests {
             ],
             "ships": [
                 {"name": "a", "machine": "here", "presence": "drifting",
-                 "jobs": [{"id": "j", "state": "orphaned", "wait": "odd"}]},
+                 "jobs": [{"id": "j", "state": "orphaned", "wait": "odd",
+                           "session": 3}]},
                 {"name": "b", "machine": "here", "presence": null},
                 {"name": "lost", "machine": "elsewhere"}
             ]
@@ -549,6 +562,7 @@ mod tests {
         assert_eq!(ships[1].presence, Presence::Unknown);
         assert!(ships[0].jobs[0].is_orphaned());
         assert_eq!(ships[0].jobs[0].wait, None);
+        assert_eq!(ships[0].jobs[0].session, None);
 
         assert!(Snapshot::parse(json!({"ships": []})).is_err());
     }

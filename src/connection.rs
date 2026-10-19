@@ -14,6 +14,7 @@ use data::fleet::Snapshot;
 use data::markdown::{self, Document};
 use data::privateer::{Client, Error, Sent};
 use data::report::Report;
+use data::session::Target;
 use data::ships::{self, Ship};
 use data::triage;
 use iced::Task;
@@ -25,7 +26,7 @@ pub enum Message {
     LoadOlder,
     Ships(u64, Result<Vec<Ship>, Error>),
     ReportRead(u64, String, Result<Report, Error>),
-    SessionRead(u64, String, Result<Value, Error>),
+    SessionRead(u64, Target, Result<Value, Error>),
     FeedRead {
         generation: u64,
         older: bool,
@@ -109,11 +110,13 @@ const FLEET_EVERY_MS: i64 = 15_000;
 
 /// A live session's last screen.
 pub struct Screen {
-    pub ship: String,
+    pub target: Target,
     /// The screen as read, to tell whether it changed: some hosts report
     /// no revision.
     pub raw: String,
     pub agent_status: String,
+    /// A view of a headless crew: typed lines go to its first mate.
+    pub viewer: bool,
     pub lines: Vec<Vec<data::ansi::Run>>,
     /// Why there is no screen: no live session, or an older Privateer.
     pub error: Option<String>,
@@ -202,29 +205,22 @@ impl Connection {
         ])
     }
 
-    /// The screen of `ship`'s live session, unless a read is under way.
-    pub fn read_session(&mut self, ship: &str) -> Task<Message> {
+    /// The screen of a first mate's or crew's live session, unless a read
+    /// is under way.
+    pub fn read_session(&mut self, target: &Target) -> Task<Message> {
         if self.reading_session {
             return Task::none();
         }
         self.reading_session = true;
         let client = self.client.clone();
         let generation = self.generation;
-        let ship = ship.to_owned();
+        let target = target.clone();
+        let mut args = target.args();
+        args["lines"] = json!(200);
         Task::perform(
-            {
-                let ship = ship.clone();
-                async move {
-                    client
-                        .run(
-                            "session.read",
-                            json!({"ship": ship, "lines": 200}),
-                        )
-                        .await
-                }
-            },
+            async move { client.run("session.read", args).await },
             move |result| {
-                Message::SessionRead(generation, ship.clone(), result)
+                Message::SessionRead(generation, target.clone(), result)
             },
         )
     }
@@ -377,7 +373,7 @@ impl Connection {
         match message {
             Message::Poll => self.poll(),
             Message::LoadOlder => self.read_feed(true),
-            Message::SessionRead(generation, ship, result) => {
+            Message::SessionRead(generation, target, result) => {
                 if generation != self.generation {
                     return Task::none();
                 }
@@ -389,7 +385,7 @@ impl Connection {
                             read["agent_status"].as_str().unwrap_or("unknown");
                         // An unchanged screen is not read into lines again.
                         if let Some(current) = &self.screen
-                            && current.ship == ship
+                            && current.target == target
                             && current.error.is_none()
                             && current.raw == raw
                             && current.agent_status == status
@@ -397,17 +393,19 @@ impl Connection {
                             return Task::none();
                         }
                         Screen {
-                            ship,
+                            target,
                             raw: raw.to_owned(),
                             agent_status: status.to_owned(),
+                            viewer: read["viewer"] == json!(true),
                             lines: data::ansi::parse(raw),
                             error: None,
                         }
                     }
                     Err(error) => Screen {
-                        ship,
+                        target,
                         raw: String::new(),
                         agent_status: "unknown".into(),
+                        viewer: false,
                         lines: Vec::new(),
                         error: Some(match &error {
                             Error::Command { error, .. }

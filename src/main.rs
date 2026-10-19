@@ -255,9 +255,10 @@ impl Quarterdeck {
                     open_link(&url);
                     Task::none()
                 }
-                Some(dashboard::Event::WatchSession(ship)) => {
-                    self.connection.read_session(&ship).map(Message::Connection)
-                }
+                Some(dashboard::Event::WatchSession(target)) => self
+                    .connection
+                    .read_session(&target)
+                    .map(Message::Connection),
                 Some(dashboard::Event::ReadReport(id)) => {
                     self.connection.read_report(id).map(Message::Connection)
                 }
@@ -320,14 +321,16 @@ impl Quarterdeck {
             Message::Saved(Ok(())) => Task::none(),
             Message::Window(id, event) => self.window_event(id, event),
             Message::SessionTick => match self.dashboard.watching() {
-                Some(ship) => {
-                    let ship = ship.to_owned();
-                    self.connection.read_session(&ship).map(Message::Connection)
+                Some(target) => {
+                    let target = target.clone();
+                    self.connection
+                        .read_session(&target)
+                        .map(Message::Connection)
                 }
                 None => Task::none(),
             },
             Message::FleetTick => {
-                if self.dashboard.shows(View::Fleet) {
+                if self.fleet_shown() {
                     self.connection.read_fleet().map(Message::Connection)
                 } else {
                     Task::none()
@@ -395,6 +398,11 @@ impl Quarterdeck {
         }
     }
 
+    /// The Fleet pane, or Live with its list of sessions, is on screen.
+    fn fleet_shown(&self) -> bool {
+        self.dashboard.shows(View::Fleet) || self.dashboard.shows(View::Live)
+    }
+
     fn save_layout(&self) -> Task<Message> {
         Task::perform(self.dashboard.saved().save(), Message::Saved)
     }
@@ -459,9 +467,9 @@ impl Quarterdeck {
             } else {
                 Subscription::none()
             },
-            // The fleet is read every 15 s while its pane is on screen; the
-            // tick also keeps its times fresh.
-            if self.dashboard.shows(View::Fleet) {
+            // The fleet is read every 15 s while its pane, or Live's list of
+            // sessions, is on screen; the tick also keeps its times fresh.
+            if self.fleet_shown() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::FleetTick)
             } else {

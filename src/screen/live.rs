@@ -1,13 +1,15 @@
-//! Live: a ship's first mate as it works, its terminal screen with colours,
-//! and a line to type into it. Typing is a write: it goes through the
-//! guarded path, so nothing reaches the session while sending is off.
+//! Live: a first mate or one of its crew as they work, their terminal
+//! screen with colours, and a line to type into it. Typing is a write: it
+//! goes through the guarded path, so nothing reaches the session while
+//! sending is off.
 
 use data::ansi::{self, Colour, Run};
 use data::privateer::{Error, Sent};
+use data::session::Target;
 use iced::widget::{
     button, column, container, rich_text, row, scrollable, span, text_input,
 };
-use iced::{Alignment, Color, Length};
+use iced::{Alignment, Color, Length, Padding};
 use serde_json::{Value, json};
 
 use crate::Theme;
@@ -21,7 +23,8 @@ pub const LIVE_KEY: &str = "live";
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Pick(String),
+    /// Watch a session, under the name to show for it.
+    Pick(Target, String),
     Input(String),
     Send,
     /// A key such as `Enter`, `Escape` or `C-c`.
@@ -29,8 +32,8 @@ pub enum Message {
 }
 
 pub enum Event {
-    /// Read this ship's screen now.
-    Watch(String),
+    /// Read this session's screen now.
+    Watch(Target),
     Write {
         command: &'static str,
         args: Value,
@@ -39,24 +42,26 @@ pub enum Event {
 
 #[derive(Default)]
 pub struct Live {
-    ship: Option<String>,
+    target: Option<Target>,
+    label: String,
     input: String,
     sending: bool,
     last: Option<(bool, String)>,
 }
 
 impl Live {
-    /// The ship being watched.
-    pub fn ship(&self) -> Option<&str> {
-        self.ship.as_deref()
+    /// The session being watched.
+    pub fn target(&self) -> Option<&Target> {
+        self.target.as_ref()
     }
 
     pub fn update(&mut self, message: Message) -> Option<Event> {
         match message {
-            Message::Pick(ship) => {
-                self.ship = Some(ship.clone());
+            Message::Pick(target, label) => {
+                self.target = Some(target.clone());
+                self.label = label;
                 self.last = None;
-                Some(Event::Watch(ship))
+                Some(Event::Watch(target))
             }
             Message::Input(value) => {
                 self.input = value;
@@ -70,11 +75,14 @@ impl Live {
         }
     }
 
-    fn write(&mut self, mut args: Value) -> Option<Event> {
+    fn write(&mut self, input: Value) -> Option<Event> {
         if self.sending {
             return None;
         }
-        args["ship"] = json!(self.ship.clone()?);
+        let mut args = self.target.as_ref()?.args();
+        for (key, value) in input.as_object()? {
+            args[key] = value.clone();
+        }
         self.sending = true;
         Some(Event::Write {
             command: "session.send",
@@ -102,32 +110,15 @@ impl Live {
         connection: &'a Connection,
         theme: &'a Theme,
     ) -> Element<'a, Message> {
-        let ships =
-            Column::with_children(connection.ships.iter().map(|ship| {
-                let picked = self.ship.as_deref() == Some(ship.name.as_str());
-                button(text(ship.name.as_str()).style({
-                    let name = ship.name.clone();
-                    move |theme| theme::text::seeded(theme, &name)
-                }))
-                .width(Length::Fill)
-                .padding([3, 8])
-                .style(move |theme, status| {
-                    theme::button::sidebar_buffer(theme, status, picked, picked)
-                })
-                .on_press(Message::Pick(ship.name.clone()))
-                .into()
-            }))
-            .spacing(2);
-
         let screen: Element<'a, Message> =
-            match (&self.ship, &connection.screen) {
+            match (&self.target, &connection.screen) {
                 (None, _) => container(
-                    text("Pick a ship to see its first mate's live session.")
+                    text("Pick a first mate or crew to see its live session.")
                         .style(theme::text::secondary),
                 )
                 .center(Length::Fill)
                 .into(),
-                (Some(ship), Some(screen)) if &screen.ship == ship => {
+                (Some(target), Some(screen)) if &screen.target == target => {
                     self.screen(screen, theme)
                 }
                 (Some(_), _) => container(
@@ -139,12 +130,95 @@ impl Live {
             };
 
         row![
-            scrollable(ships).width(160).height(Length::Fill),
+            scrollable(self.sessions(connection))
+                .width(200)
+                .height(Length::Fill),
             column![screen, self.input_bar()].width(Length::Fill),
         ]
         .spacing(8)
         .padding(8)
         .into()
+    }
+
+    /// Every session there is to watch: machine, then ship, then the crew
+    /// with a session of their own. Before the fleet is read, the ships.
+    fn sessions<'a>(
+        &'a self,
+        connection: &'a Connection,
+    ) -> Column<'a, Message> {
+        let mut list = Column::new().spacing(2);
+        let Some(snapshot) = &connection.fleet.snapshot else {
+            for ship in &connection.ships {
+                list = list.push(self.pick(
+                    Target::first_mate(ship.name.as_str()),
+                    ship.name.clone(),
+                    0,
+                ));
+            }
+            return list;
+        };
+        let machines = snapshot.machines.len();
+        for machine in &snapshot.machines {
+            if machines > 1 {
+                list = list.push(
+                    container(
+                        text(machine.name.as_str())
+                            .font(font::MONO_BOLD.clone())
+                            .style(theme::text::tertiary),
+                    )
+                    .padding(Padding::default().top(6).left(4)),
+                );
+            }
+            for ship in &machine.ships {
+                list = list.push(self.pick(
+                    Target::first_mate(ship.name.as_str()),
+                    ship.name.clone(),
+                    0,
+                ));
+                for job in ship.jobs.iter().filter(|j| j.session.is_some()) {
+                    let task = job
+                        .task_title
+                        .as_deref()
+                        .or(job.task_id.as_deref())
+                        .unwrap_or(job.id.as_str());
+                    list = list.push(self.pick(
+                        Target::crew(ship.name.as_str(), job.id.as_str()),
+                        format!("{} › {task}", ship.name),
+                        1,
+                    ));
+                }
+            }
+        }
+        list
+    }
+
+    fn pick<'a>(
+        &self,
+        target: Target,
+        label: String,
+        depth: u32,
+    ) -> Element<'a, Message> {
+        let picked = self.target.as_ref() == Some(&target);
+        let name: Element<'a, Message> = if target.job.is_some() {
+            let task =
+                label.split_once(" › ").map_or(label.as_str(), |(_, t)| t);
+            text(format!("└ {task}"))
+                .style(theme::text::secondary)
+                .into()
+        } else {
+            let ship = target.ship.clone();
+            text(target.ship.clone())
+                .style(move |theme| theme::text::seeded(theme, &ship))
+                .into()
+        };
+        button(name)
+            .width(Length::Fill)
+            .padding(Padding::from([3, 8]).left(8 + 12 * depth))
+            .style(move |theme, status| {
+                theme::button::sidebar_buffer(theme, status, picked, picked)
+            })
+            .on_press(Message::Pick(target, label))
+            .into()
     }
 
     fn screen<'a>(
@@ -160,7 +234,7 @@ impl Live {
             .center(Length::Fill)
             .into();
         }
-        let status = text(format!("{}: {}", screen.ship, screen.agent_status))
+        let status = text(format!("{}: {}", self.label, screen.agent_status))
             .style(match screen.agent_status.as_str() {
                 "working" => theme::text::success,
                 "blocked" => theme::text::error,
@@ -176,8 +250,15 @@ impl Live {
             .size(theme::TEXT_SIZE)
             .into()
         }));
+        let mut head = row![status].spacing(12).align_y(Alignment::Center);
+        if screen.viewer {
+            head = head.push(
+                text("A view of a headless crew: what you type goes to its first mate.")
+                    .style(theme::text::tertiary),
+            );
+        }
         column![
-            status,
+            head,
             container(scrollable(lines).anchor_bottom().height(Length::Fill))
                 .padding(8)
                 .width(Length::Fill)
@@ -190,7 +271,7 @@ impl Live {
 
     fn input_bar(&self) -> Element<'_, Message> {
         let mut bar = row![].spacing(6).align_y(Alignment::Center);
-        if self.ship.is_some() {
+        if self.target.is_some() {
             bar = bar
                 .push(
                     text_input(

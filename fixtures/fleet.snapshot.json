@@ -173,6 +173,7 @@
 					"spawned_ms": 1792299660000,
 					"started_ms": 1792299700000,
 					"model_route": "free-pool",
+					"session": "live",
 					"doing": {
 						"text": "Checking the tone against the style notes",
 						"at_ms": 1792299960000,
