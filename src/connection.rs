@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use data::answered::{self, Answered};
 use data::captain::Waiting;
 use data::choices;
 use data::config::{self, Source};
@@ -62,6 +63,8 @@ pub enum Message {
     SpendRead(u64, SpendRead),
     /// A ship's tools, read for this ship.
     ProfileRead(u64, String, Result<profile::Read, Error>),
+    /// The asks closed lately, read for Triage's answered list.
+    AnsweredRead(u64, Result<Vec<Answered>, Error>),
 }
 
 /// An answer for the Spend view.
@@ -134,7 +137,24 @@ pub struct Connection {
     pub fleet: Fleet,
     pub spend: Spend,
     pub tools: Tools,
+    pub answers: Answers,
 }
+
+/// What the captain answered lately, read while Triage is shown: every
+/// minute, and soon after an ask leaves the waiting list.
+#[derive(Default)]
+pub struct Answers {
+    /// The last list read that worked.
+    pub list: Option<Vec<Answered>>,
+    pub error: Option<Error>,
+    asked_ms: Option<i64>,
+    reading: bool,
+    /// An ask closed since the last read: read again at the next tick.
+    stale: bool,
+}
+
+/// The answered list is read at most this often while nothing closes.
+const ANSWERED_EVERY_MS: i64 = 60_000;
 
 /// The open ship's tools, read when they are shown and again when the
 /// ship changes.
@@ -265,6 +285,7 @@ impl Connection {
             fleet: Fleet::default(),
             spend: Spend::default(),
             tools: Tools::default(),
+            answers: Answers::default(),
         }
     }
 
@@ -499,6 +520,50 @@ impl Connection {
                 result,
             },
         )
+    }
+
+    /// The asks closed lately, when due: never read, an ask closed since
+    /// the last read, or a minute gone by.
+    pub fn read_answered(&mut self) -> Task<Message> {
+        let answers = &mut self.answers;
+        let due = answers.stale
+            || answers
+                .asked_ms
+                .is_none_or(|at| now_ms() - at >= ANSWERED_EVERY_MS);
+        if !due || answers.reading {
+            return Task::none();
+        }
+        answers.reading = true;
+        answers.stale = false;
+        let now = now_ms();
+        answers.asked_ms = Some(now);
+        let client = self.client.clone();
+        let generation = self.generation;
+        Task::perform(
+            async move {
+                let page = |value: Value| {
+                    Page::parse(value).map_err(|error| Error::Command {
+                        command: "captain.feed".into(),
+                        error: format!("unexpected answer: {error}"),
+                    })
+                };
+                let closed = client
+                    .run("captain.feed", answered::closed_args(now))
+                    .await
+                    .and_then(page)?;
+                let newest = client
+                    .run("captain.feed", answered::replies_args(now))
+                    .await
+                    .and_then(page)?;
+                Ok(answered::recent(&closed, &newest, now))
+            },
+            move |result| Message::AnsweredRead(generation, result),
+        )
+    }
+
+    /// An answer was just sent: the answered list is read at the next tick.
+    pub fn answered_changed(&mut self) {
+        self.answers.stale = true;
     }
 
     /// A stored report, read once; it is kept until the connection changes.
@@ -996,6 +1061,23 @@ impl Connection {
                 }
                 Task::none()
             }
+            Message::AnsweredRead(generation, result) => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                self.answers.reading = false;
+                match result {
+                    Ok(list) => {
+                        self.answers.list = Some(list);
+                        self.answers.error = None;
+                    }
+                    Err(error) => {
+                        log::warn!("{error}");
+                        self.answers.error = Some(error);
+                    }
+                }
+                Task::none()
+            }
             Message::Waited(generation, result) => {
                 if generation != self.generation {
                     return Task::none();
@@ -1003,6 +1085,21 @@ impl Connection {
                 self.in_flight = false;
                 match result {
                     Ok(waiting) => {
+                        // An ask that left the list was closed, here or
+                        // elsewhere: the answered list is read again.
+                        if let Some(before) = &self.captain {
+                            let listed: std::collections::HashSet<String> =
+                                waiting
+                                    .waiting
+                                    .iter()
+                                    .map(triage::key)
+                                    .collect();
+                            if before.waiting.iter().any(|item| {
+                                !listed.contains(&triage::key(item))
+                            }) {
+                                self.answers.stale = true;
+                            }
+                        }
                         self.captain = Some(waiting);
                         self.assemble();
                         self.error = None;
