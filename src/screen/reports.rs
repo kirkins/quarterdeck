@@ -6,8 +6,10 @@ use std::collections::HashMap;
 
 use data::markdown::{self, Document};
 use data::privateer::{Error, Sent};
-use data::report::{self, Attached, Comment};
-use iced::widget::{button, column, container, row, scrollable, text_input};
+use data::report::{self, Attached, Comment, SentComment};
+use iced::widget::{
+    button, column, container, row, scrollable, text_editor, text_input,
+};
 use iced::{Alignment, Length};
 use serde_json::Value;
 
@@ -27,6 +29,8 @@ pub struct Opened {
     pub key: String,
     pub mail_id: String,
     pub from: String,
+    /// `request`, `decision` or `notice`: comments answer an ask.
+    pub kind: String,
     /// Whether the thread still takes the captain's comments.
     pub open: bool,
     pub attached: Attached,
@@ -37,6 +41,7 @@ impl Opened {
     pub fn from_mail(
         from: &str,
         id: &str,
+        kind: &str,
         open: bool,
         payload: &Value,
     ) -> Option<Self> {
@@ -44,6 +49,7 @@ impl Opened {
             key: format!("{from}/{id}"),
             mail_id: id.to_owned(),
             from: from.to_owned(),
+            kind: kind.to_owned(),
             open,
             attached: Attached::of(payload)?,
         })
@@ -55,7 +61,7 @@ pub enum Message {
     Open(Opened),
     Close,
     CommentOn(usize),
-    Edit(String),
+    Edit(text_editor::Action),
     Save,
     CancelEdit,
     Remove(usize),
@@ -86,10 +92,13 @@ pub struct Reports {
     /// also saved to the drafts file.
     comments: HashMap<String, Vec<Comment>>,
     /// The block being commented on, and the text so far.
-    editing: Option<(usize, String)>,
+    editing: Option<(usize, text_editor::Content)>,
     note: String,
     confirming: bool,
-    sending: bool,
+    /// The report whose comments are on their way, and those comments.
+    sending: Option<(String, Vec<Comment>)>,
+    /// Comments sent from here, by report, as kept in the sent file.
+    sent_here: HashMap<String, Vec<SentComment>>,
     source: bool,
     last: Option<(bool, String)>,
 }
@@ -105,6 +114,10 @@ impl Reports {
                 let drafts =
                     report::load_drafts(&report::drafts_path(), &opened.key);
                 self.comments.insert(opened.key.clone(), drafts);
+                self.sent_here.insert(
+                    opened.key.clone(),
+                    report::load_sent(&report::sent_path(), &opened.key),
+                );
                 let read = match &opened.attached {
                     Attached::Inline { content, .. } => {
                         self.inline = Some(markdown::parse(content, None));
@@ -128,20 +141,29 @@ impl Reports {
                     .current_comments()
                     .iter()
                     .find(|c| c.selector == block(index));
-                let text = existing.map(|c| c.text.clone()).unwrap_or_default();
-                self.editing = Some((index, text));
+                let text = existing.map_or("", |c| c.text.as_str());
+                self.editing =
+                    Some((index, text_editor::Content::with_text(text)));
             }
-            Message::Edit(value) => {
-                if let Some((_, text)) = &mut self.editing {
-                    *text = value;
+            Message::Edit(action) => {
+                if let Some((_, content)) = &mut self.editing {
+                    content.perform(action);
                 }
             }
             Message::Save => {
-                let (index, comment) = self.editing.take()?;
+                if self
+                    .editing
+                    .as_ref()
+                    .is_some_and(|(_, content)| too_long(&content.text()))
+                {
+                    return None;
+                }
+                let (index, content) = self.editing.take()?;
+                let comment = content.text();
                 let quote = self
                     .document(connection)
-                    .and_then(|doc| doc.nodes.get(index).cloned())
-                    .map(|node| Document { nodes: vec![node] }.plain_text())
+                    .and_then(|doc| doc.nodes.get(index))
+                    .map(block_text)
                     .unwrap_or_default();
                 let key = self.current.as_ref()?.key.clone();
                 let comments = self.comments.entry(key.clone()).or_default();
@@ -168,7 +190,7 @@ impl Reports {
             }
             Message::Cancel => self.confirming = false,
             Message::Send => {
-                if self.sending {
+                if self.sending.is_some() {
                     return None;
                 }
                 let current = self.current.as_ref()?;
@@ -184,7 +206,10 @@ impl Reports {
                         return None;
                     }
                 };
-                self.sending = true;
+                self.sending = Some((
+                    current.key.clone(),
+                    self.current_comments().to_vec(),
+                ));
                 return Some(Event::Write {
                     command: "captain.reply",
                     args,
@@ -199,14 +224,29 @@ impl Reports {
     /// What became of the comments. Sent, they are cleared; held or refused,
     /// they are kept as drafts.
     pub fn written(&mut self, result: Result<Sent, Error>) {
-        self.sending = false;
+        let sending = self.sending.take();
         self.confirming = false;
-        let key = self.current.as_ref().map(|c| c.key.clone());
         self.last = Some(match result {
             Ok(Sent::Sent(_)) => {
-                if let Some(key) = key {
+                if let Some((key, sent)) = sending {
                     self.comments.remove(&key);
                     self.persist(&key);
+                    let now = crate::connection::now_ms();
+                    let sent: Vec<SentComment> =
+                        sent.iter().map(|c| SentComment::of(c, now)).collect();
+                    if let Err(error) =
+                        report::keep_sent(&report::sent_path(), &key, &sent)
+                    {
+                        log::warn!("could not keep the sent comments: {error}");
+                    }
+                    self.sent_here.entry(key.clone()).or_default().extend(sent);
+                    // An ask is answered by its comments: it takes no more.
+                    if let Some(current) =
+                        self.current.as_mut().filter(|c| c.key == key)
+                        && current.kind != "notice"
+                    {
+                        current.open = false;
+                    }
                 }
                 self.note.clear();
                 (true, "Sent.".to_owned())
@@ -237,6 +277,27 @@ impl Reports {
             .as_ref()
             .and_then(|c| self.comments.get(&c.key))
             .map_or(&[], Vec::as_slice)
+    }
+
+    /// The comments already sent on the open report: those the feed shows,
+    /// then any sent from here that it does not show.
+    fn sent(
+        &self,
+        current: &Opened,
+        connection: &Connection,
+    ) -> Vec<SentComment> {
+        let mut sent = report::sent_on(
+            connection.feed.thread.entries(),
+            &current.from,
+            &current.mail_id,
+        );
+        if let Some(kept) = self.sent_here.get(&current.key) {
+            let missing: Vec<SentComment> =
+                report::missing_from(kept, &sent).cloned().collect();
+            sent.extend(missing);
+            sent.sort_by_key(|c| c.sent_ms);
+        }
+        sent
     }
 
     fn document<'a>(
@@ -299,6 +360,31 @@ impl Reports {
 
         let mut body = Column::new().spacing(10);
         let is_html = self.format(connection) == Some("html");
+        let document = self.document(connection).filter(|_| !is_html);
+        let blocks: Vec<String> = document
+            .map(|d| d.nodes.iter().map(block_text).collect())
+            .unwrap_or_default();
+        let mut placed: Vec<Vec<SentComment>> = vec![Vec::new(); blocks.len()];
+        let mut unplaced = Vec::new();
+        for comment in self.sent(current, connection) {
+            match report::place(&comment, &blocks) {
+                Some(index) => placed[index].push(comment),
+                None => unplaced.push(comment),
+            }
+        }
+        if (is_html || document.is_some()) && !unplaced.is_empty() {
+            body = body.push(
+                text(if is_html {
+                    "Comments sent on this report:"
+                } else {
+                    "Comments sent on text no longer in this report:"
+                })
+                .style(theme::text::secondary),
+            );
+            for comment in unplaced {
+                body = body.push(sent_view(comment, true));
+            }
+        }
         if is_html {
             body = body.push(
                 text("This report is HTML. Quarterdeck shows Markdown reports only, so it is not drawn.")
@@ -321,12 +407,15 @@ impl Reports {
                     .push(text(self.raw(connection)).font(font::MONO.clone()));
             }
         } else {
-            match self.document(connection) {
+            match document {
                 Some(document) => {
-                    for (index, node) in document.nodes.iter().enumerate() {
+                    for ((index, node), sent) in
+                        document.nodes.iter().enumerate().zip(placed)
+                    {
                         body = body.push(self.block(
                             index,
                             node,
+                            sent,
                             current.open,
                             theme,
                         ));
@@ -361,7 +450,7 @@ impl Reports {
         column![
             container(header).padding([8, 12]),
             scrollable(container(body).padding(12)).height(Length::Fill),
-            self.footer(current),
+            self.footer(current, connection),
         ]
         .into()
     }
@@ -384,6 +473,7 @@ impl Reports {
         &'a self,
         index: usize,
         node: &'a markdown::Node,
+        sent: Vec<SentComment>,
         open: bool,
         theme: &'a Theme,
     ) -> Element<'a, Message> {
@@ -403,20 +493,37 @@ impl Reports {
             );
         }
         let mut content = column![line].spacing(6);
+        for comment in sent {
+            content = content.push(sent_view(comment, false));
+        }
 
         match &self.editing {
             Some((editing, value)) if *editing == index => {
+                let written = value.text();
+                let mut actions = row![
+                    small_button("Save", Message::Save, true),
+                    small_button("Cancel", Message::CancelEdit, false),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center);
+                if too_long(&written) {
+                    actions = actions.push(
+                        text(format!(
+                            "{} characters; a comment holds at most {}.",
+                            written.trim().chars().count(),
+                            report::MAX_COMMENT_CHARS
+                        ))
+                        .style(theme::text::error),
+                    );
+                }
                 content = content.push(
                     column![
-                        text_input("Your comment on this block", value)
-                            .on_input(Message::Edit)
-                            .on_submit(Message::Save)
+                        text_editor(value)
+                            .placeholder("Your comment on this block")
+                            .on_action(Message::Edit)
+                            .height(Length::Shrink)
                             .padding(6),
-                        row![
-                            small_button("Save", Message::Save, true),
-                            small_button("Cancel", Message::CancelEdit, false),
-                        ]
-                        .spacing(6),
+                        actions,
                     ]
                     .spacing(6),
                 );
@@ -455,16 +562,26 @@ impl Reports {
         content.into()
     }
 
-    fn footer<'a>(&'a self, current: &'a Opened) -> Element<'a, Message> {
+    fn footer<'a>(
+        &'a self,
+        current: &'a Opened,
+        connection: &'a Connection,
+    ) -> Element<'a, Message> {
         let count = self.current_comments().len();
         let mut bar = row![].spacing(8).align_y(Alignment::Center);
+        let mut warning = answers(&current.kind);
         if !current.open {
+            let answered = current.kind != "notice"
+                && !self.sent(current, connection).is_empty();
             bar = bar.push(
-                text(
-                    "This report's thread is closed, so it takes no comments.",
-                )
+                text(if answered {
+                    "Your comments answered this ask, so it takes no more."
+                } else {
+                    "This report's thread is closed, so it takes no comments."
+                })
                 .style(theme::text::tertiary),
             );
+            warning = None;
         } else if self.confirming {
             bar = bar
                 .push(text(format!(
@@ -497,12 +614,19 @@ impl Reports {
                 .style(|theme, status| {
                     theme::button::primary(theme, status, false)
                 });
-            if count > 0 && !self.sending {
+            if count > 0 && self.sending.is_none() {
                 send = send.on_press(Message::Confirm);
             }
             bar = bar.push(send);
         }
         let mut footer = column![bar].spacing(4);
+        if let Some(warning) = warning {
+            footer = footer.push(text(warning).style(if self.confirming {
+                theme::text::error
+            } else {
+                theme::text::tertiary
+            }));
+        }
         if let Some((good, line)) = &self.last {
             footer = footer.push(text(line.as_str()).style(if *good {
                 theme::text::tertiary
@@ -524,6 +648,7 @@ fn list(connection: &Connection) -> Element<'_, Message> {
         if let Some(opened) = Opened::from_mail(
             &entry.from,
             &entry.id,
+            &entry.kind,
             entry.is_open_ask() || entry.is_unread_notice(),
             &entry.payload,
         ) {
@@ -535,6 +660,7 @@ fn list(connection: &Connection) -> Element<'_, Message> {
             if let Some(opened) = Opened::from_mail(
                 &item.mail.from,
                 &item.mail.id,
+                &item.mail.kind,
                 true,
                 &item.mail.payload,
             ) && !seen.iter().any(|(_, o)| o.key == opened.key)
@@ -587,6 +713,69 @@ fn list(connection: &Connection) -> Element<'_, Message> {
     )
     .height(Length::Fill)
     .into()
+}
+
+/// What sending comments does to the ask they answer, if anything.
+fn answers(kind: &str) -> Option<&'static str> {
+    match kind {
+        "request" => {
+            Some("Sending your comments answers this request and closes it.")
+        }
+        "decision" => Some(
+            "Sending your comments answers this decision without choosing an option, and closes it. To choose one, answer it in Triage.",
+        ),
+        _ => None,
+    }
+}
+
+/// A comment already sent, with its block's text when no block holds it.
+fn sent_view<'a>(
+    comment: SentComment,
+    with_quote: bool,
+) -> Element<'a, Message> {
+    let mut content = column![].spacing(4);
+    if with_quote && let Some(quote) = &comment.quote {
+        let mut quote: String = quote.chars().take(160).collect();
+        if comment
+            .quote
+            .as_ref()
+            .is_some_and(|q| q.chars().count() > 160)
+        {
+            quote.push('…');
+        }
+        content = content
+            .push(text(format!("On \"{quote}\"")).style(theme::text::tertiary));
+    }
+    content = content.push(text(comment.text)).push(
+        text(
+            match crate::screen::triage::ago(
+                crate::connection::now_ms() - comment.sent_ms,
+            ) {
+                ago if ago == "now" => "Sent just now".to_owned(),
+                ago => format!("Sent {ago} ago"),
+            },
+        )
+        .size(theme::TEXT_SIZE - 1.0)
+        .style(theme::text::tertiary),
+    );
+    container(content)
+        .padding(8)
+        .width(Length::Fill)
+        .style(|theme| theme::container::buffer(theme, false))
+        .into()
+}
+
+/// A block's text, as a comment quotes it.
+fn block_text(node: &markdown::Node) -> String {
+    Document {
+        nodes: vec![node.clone()],
+    }
+    .plain_text()
+}
+
+/// Whether a comment is longer than Privateer takes.
+fn too_long(comment: &str) -> bool {
+    comment.trim().chars().count() > report::MAX_COMMENT_CHARS
 }
 
 fn small_button<'a>(

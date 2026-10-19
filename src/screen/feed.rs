@@ -630,6 +630,7 @@ fn message_view<'a>(
     if let Some(opened) = reports::Opened::from_mail(
         &entry.from,
         &entry.id,
+        &entry.kind,
         takes_comments,
         &entry.payload,
     ) {
