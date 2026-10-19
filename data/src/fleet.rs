@@ -53,8 +53,77 @@ pub struct Machine {
     /// What Privateer could not check.
     #[serde(deserialize_with = "lenient")]
     pub unknown: Vec<String>,
+    /// The model routes on this machine, each with its state now. Empty
+    /// when the machine is not read.
+    #[serde(deserialize_with = "lenient")]
+    pub routes: Vec<MachineRoute>,
     #[serde(skip)]
     pub ships: Vec<Ship>,
+}
+
+/// A model route as one machine reads it: its state now and, when it is
+/// held off, when that ends. Every field is optional or defaulted.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct MachineRoute {
+    /// The captain's name for it. None for a ledger hold no listed route
+    /// names, which is then named by its identity.
+    #[serde(deserialize_with = "lenient")]
+    pub name: Option<String>,
+    /// Its identity: harness, provider and model.
+    #[serde(deserialize_with = "lenient")]
+    pub route: Option<String>,
+    /// `free`, `plan` or `credits`.
+    #[serde(deserialize_with = "lenient")]
+    pub cost: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub state: RouteState,
+    /// When a hold ends: a backoff, or a cap until its reset.
+    #[serde(deserialize_with = "lenient")]
+    pub until_ms: Option<i64>,
+    /// The hold's last error, as Privateer shortens it.
+    #[serde(deserialize_with = "lenient")]
+    pub error: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub allowance: Option<LiveAllowance>,
+}
+
+/// Whether a route can be tried now. Anything Privateer adds later reads as
+/// unknown.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteState {
+    Available,
+    /// Usable, and its declared allowance unused since it last renewed.
+    Idle,
+    BackingOff,
+    /// Held off with its allowance spent until it reopens.
+    Capped,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+impl RouteState {
+    /// Held off, so crew skip it for now.
+    pub fn is_throttled(self) -> bool {
+        matches!(self, RouteState::BackingOff | RouteState::Capped)
+    }
+}
+
+/// A route's allowance as the machine reads it. The shares are fractions
+/// from 0 to 1; a window or week that has no end time has none to show.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct LiveAllowance {
+    #[serde(deserialize_with = "lenient")]
+    pub window_ends_ms: Option<i64>,
+    #[serde(deserialize_with = "lenient")]
+    pub weekly_ends_ms: Option<i64>,
+    #[serde(deserialize_with = "lenient")]
+    pub window_used: Option<f64>,
+    #[serde(deserialize_with = "lenient")]
+    pub week_used: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -294,8 +363,8 @@ impl Snapshot {
     }
 
     /// Join a read onto the snapshot held before it. An unchanged machine
-    /// keeps its held ships, and a truncated machine read with no ships
-    /// keeps them too. None when an unchanged machine has nothing held:
+    /// keeps its held ships and routes, and a truncated machine read with no
+    /// ships keeps them too. None when an unchanged machine has nothing held:
     /// then read in full.
     pub fn merge(held: Option<&Snapshot>, mut next: Snapshot) -> Option<Self> {
         for machine in &mut next.machines {
@@ -304,6 +373,7 @@ impl Snapshot {
             });
             if machine.unchanged {
                 machine.ships = before?.ships.clone();
+                machine.routes = before?.routes.clone();
             } else if machine.truncated
                 && machine.ships.is_empty()
                 && let Some(before) = before
@@ -647,5 +717,32 @@ mod tests {
             names(&snapshot, &board.machines[0]),
             ["billing", "chandlery", "docs-site"]
         );
+    }
+
+    #[test]
+    fn machine_routes_read_tolerantly_and_an_unchanged_machine_keeps_them() {
+        let held = Snapshot::parse(json!({"machines": [{
+            "name": "atlas", "reachable": true, "changed_ms": 5,
+            "routes": [{"name": "plan-main", "state": "capped", "until_ms": 9,
+                "allowance": {"window_used": 0.4, "week_used": "lots"}}],
+        }]}))
+        .unwrap();
+        let route = &held.machines[0].routes[0];
+        assert_eq!(route.state, RouteState::Capped);
+        let allowance = route.allowance.as_ref().unwrap();
+        assert_eq!(allowance.window_used, Some(0.4));
+        assert_eq!(allowance.week_used, None);
+
+        let odd = Snapshot::parse(json!({"machines": [{"name": "bolt",
+            "routes": [{"name": "x", "state": "warming"}]}]}))
+        .unwrap();
+        assert_eq!(odd.machines[0].routes[0].state, RouteState::Unknown);
+
+        let next = Snapshot::parse(json!({"machines": [{
+            "name": "atlas", "changed_ms": 5, "unchanged": true,
+        }]}))
+        .unwrap();
+        let merged = Snapshot::merge(Some(&held), next).unwrap();
+        assert_eq!(merged.machines[0].routes, held.machines[0].routes);
     }
 }

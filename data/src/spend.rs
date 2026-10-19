@@ -14,6 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::fleet::{LiveAllowance, RouteState, Snapshot};
+
 const MINUTE: i64 = 60_000;
 const HOUR: i64 = 60 * MINUTE;
 const DAY: i64 = 24 * HOUR;
@@ -69,6 +71,15 @@ pub enum Cost {
     Unknown,
 }
 
+fn cost_of(cost: Option<&str>) -> Cost {
+    match cost {
+        Some("free") => Cost::Free,
+        Some("plan") => Cost::Plan,
+        Some("credits") => Cost::Credits,
+        _ => Cost::Unknown,
+    }
+}
+
 impl Cost {
     pub fn label(self) -> &'static str {
         match self {
@@ -76,6 +87,15 @@ impl Cost {
             Cost::Plan => "plan",
             Cost::Credits => "credits",
             Cost::Unknown => "cost not reported",
+        }
+    }
+
+    /// What is left of a plan or credits: Privateer does not report it.
+    pub fn budget(self) -> Option<&'static str> {
+        match self {
+            Cost::Plan => Some("plan allowance left: not reported"),
+            Cost::Credits => Some("credit balance: not reported"),
+            Cost::Free | Cost::Unknown => None,
         }
     }
 }
@@ -91,9 +111,142 @@ pub struct Listed<'a> {
     pub first_mate: Option<usize>,
 }
 
+/// A route as the Spend view lists it: its declared shape from `routes.show`,
+/// where crew, errands and first mates try it, and its state on each machine
+/// that reports it, from `fleet.snapshot`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Row<'a> {
+    pub name: &'a str,
+    /// From `routes.show`; None for a route only a machine reports.
+    pub declared: Option<&'a Route>,
+    /// Its place, from 1, in the crew, errand and first-mate lists.
+    pub crew: Option<usize>,
+    pub errand: Option<usize>,
+    pub first_mate: Option<usize>,
+    /// Its state on each machine that reports it, in the snapshot's order.
+    pub live: Vec<Live<'a>>,
+}
+
+/// A route's state on one machine, as `fleet.snapshot` reports it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Live<'a> {
+    pub machine: &'a str,
+    pub state: RouteState,
+    pub cost: Option<&'a str>,
+    /// Its identity: harness, provider and model.
+    pub identity: Option<&'a str>,
+    pub until_ms: Option<i64>,
+    pub error: Option<&'a str>,
+    pub allowance: Option<&'a LiveAllowance>,
+}
+
+impl Live<'_> {
+    /// "available", "idle (usable)", "backing off, back in 7m" or "capped,
+    /// resets in 2h 10m". The time is left off once it has passed.
+    pub fn label(&self, now_ms: i64) -> String {
+        let until = self.until_ms.filter(|at| *at > now_ms);
+        match (self.state, until) {
+            (RouteState::Available, _) => "available".into(),
+            (RouteState::Idle, _) => "idle (usable)".into(),
+            (RouteState::BackingOff, Some(at)) => {
+                format!("backing off, back in {}", span(at - now_ms))
+            }
+            (RouteState::BackingOff, None) => "backing off".into(),
+            (RouteState::Capped, Some(at)) => {
+                format!("capped, resets in {}", span(at - now_ms))
+            }
+            (RouteState::Capped, None) => "capped".into(),
+            (RouteState::Unknown, _) => "state not reported".into(),
+        }
+    }
+}
+
+impl Row<'_> {
+    pub fn cost(&self) -> Cost {
+        match self.declared {
+            Some(route) => route.cost(),
+            None => cost_of(self.live.iter().find_map(|l| l.cost)),
+        }
+    }
+
+    /// Held off on any machine.
+    pub fn throttled(&self) -> bool {
+        self.live.iter().any(|l| l.state.is_throttled())
+    }
+}
+
 impl Routes {
     pub fn parse(value: Value) -> Result<Self, String> {
         serde_json::from_value(value).map_err(|error| error.to_string())
+    }
+
+    /// Every route `routes.show` names and every route a machine reports:
+    /// the throttled first, then in the order crew try them, then the rest by
+    /// name. `routes` is None until it is read; `snapshot` likewise.
+    pub fn rows<'a>(
+        routes: Option<&'a Routes>,
+        snapshot: Option<&'a Snapshot>,
+    ) -> Vec<Row<'a>> {
+        let place = |list: &[String], name: &str| {
+            list.iter().position(|n| n == name).map(|at| at + 1)
+        };
+        let mut rows: BTreeMap<&'a str, Row<'a>> = BTreeMap::new();
+        if let Some(routes) = routes {
+            for (name, route) in &routes.routes {
+                let name = name.as_str();
+                rows.insert(
+                    name,
+                    Row {
+                        name,
+                        declared: Some(route),
+                        crew: place(&routes.crew, name),
+                        errand: place(&routes.errand, name),
+                        first_mate: place(&routes.first_mate, name),
+                        live: vec![],
+                    },
+                );
+            }
+        }
+        for machine in snapshot.into_iter().flat_map(|s| &s.machines) {
+            for route in &machine.routes {
+                // A ledger hold no listed route names has only its identity.
+                let Some(name) =
+                    route.name.as_deref().or(route.route.as_deref())
+                else {
+                    continue;
+                };
+                rows.entry(name)
+                    .or_insert_with(|| Row {
+                        name,
+                        declared: None,
+                        crew: None,
+                        errand: None,
+                        first_mate: None,
+                        live: vec![],
+                    })
+                    .live
+                    .push(Live {
+                        machine: &machine.name,
+                        state: route.state,
+                        cost: route.cost.as_deref(),
+                        identity: route.route.as_deref(),
+                        until_ms: route.until_ms,
+                        error: route.error.as_deref(),
+                        allowance: route.allowance.as_ref(),
+                    });
+            }
+        }
+        let mut rows: Vec<Row<'a>> = rows.into_values().collect();
+        rows.sort_by_key(|row| {
+            (
+                !row.throttled(),
+                row.crew.unwrap_or(usize::MAX),
+                row.errand.unwrap_or(usize::MAX),
+                row.first_mate.unwrap_or(usize::MAX),
+                row.name,
+            )
+        });
+        rows
     }
 
     /// Every route, in the order crew try them; then the ones only errands
@@ -129,23 +282,39 @@ impl Routes {
     }
 }
 
+/// A live allowance's shares as percents, and when each window resets:
+/// "allowance: window 40% used, resets in 2h · week 87% used". None when
+/// the machine reports no share.
+pub fn live_allowance(
+    allowance: &LiveAllowance,
+    now_ms: i64,
+) -> Option<String> {
+    let windows = [
+        ("window", allowance.window_used, allowance.window_ends_ms),
+        ("week", allowance.week_used, allowance.weekly_ends_ms),
+    ];
+    let parts: Vec<String> = windows
+        .into_iter()
+        .filter_map(|(window, used, ends)| {
+            let used = used.filter(|share| share.is_finite())?;
+            let reset = ends
+                .filter(|at| *at > now_ms)
+                .map(|at| format!(", resets in {}", span(at - now_ms)))
+                .unwrap_or_default();
+            Some(format!("{window} {:.0}% used{reset}", used * 100.0))
+        })
+        .collect();
+    (!parts.is_empty()).then(|| format!("allowance: {}", parts.join(" · ")))
+}
+
 impl Route {
     pub fn cost(&self) -> Cost {
-        match self.cost.as_deref() {
-            Some("free") => Cost::Free,
-            Some("plan") => Cost::Plan,
-            Some("credits") => Cost::Credits,
-            _ => Cost::Unknown,
-        }
+        cost_of(self.cost.as_deref())
     }
 
     /// What is left of a plan or credits: Privateer does not report it.
     pub fn budget(&self) -> Option<&'static str> {
-        match self.cost() {
-            Cost::Plan => Some("plan allowance left: not reported"),
-            Cost::Credits => Some("credit balance: not reported"),
-            Cost::Free | Cost::Unknown => None,
-        }
+        self.cost().budget()
     }
 
     /// The declared allowance, with when it next resets: "renews daily at
@@ -845,5 +1014,88 @@ mod tests {
         assert_eq!(day_label("2026-10-16"), "16 Oct");
         assert_eq!(day_label("laptop"), "laptop");
         assert_eq!(span(5 * HOUR + 46 * MINUTE), "5h 46m");
+    }
+
+    const SNAPSHOT: &str = include_str!("../../fixtures/fleet.snapshot.json");
+
+    #[test]
+    fn live_routes_keep_the_try_order_with_the_throttled_first() {
+        let routes =
+            Routes::parse(serde_json::from_str(ROUTES).unwrap()).unwrap();
+        let snapshot =
+            Snapshot::parse(serde_json::from_str(SNAPSHOT).unwrap()).unwrap();
+        let rows = Routes::rows(Some(&routes), Some(&snapshot));
+        let names: Vec<&str> = rows.iter().map(|row| row.name).collect();
+        assert_eq!(names, ["free-pool", "plan-main", "credits-reserve"]);
+
+        fn states<'a>(row: &Row<'a>) -> Vec<(&'a str, RouteState)> {
+            row.live.iter().map(|l| (l.machine, l.state)).collect()
+        }
+        assert_eq!(
+            states(&rows[0]),
+            [
+                ("atlas", RouteState::BackingOff),
+                ("boreas", RouteState::Idle)
+            ]
+        );
+        assert_eq!(
+            states(&rows[1]),
+            [
+                ("atlas", RouteState::Available),
+                ("boreas", RouteState::Capped)
+            ]
+        );
+        assert!(rows[0].throttled() && rows[1].throttled());
+        assert!(!rows[2].throttled());
+        assert_eq!(rows[1].crew, Some(2));
+    }
+
+    #[test]
+    fn a_route_only_a_machine_reports_is_listed_without_a_declaration() {
+        let snapshot =
+            Snapshot::parse(serde_json::from_str(SNAPSHOT).unwrap()).unwrap();
+        let rows = Routes::rows(None, Some(&snapshot));
+        let names: Vec<&str> = rows.iter().map(|row| row.name).collect();
+        assert_eq!(names, ["free-pool", "plan-main", "credits-reserve"]);
+        assert!(rows.iter().all(|row| row.declared.is_none()));
+        assert_eq!(rows[1].cost(), Cost::Plan);
+        assert_eq!(
+            rows[1].cost().budget(),
+            Some("plan allowance left: not reported")
+        );
+    }
+
+    #[test]
+    fn a_live_state_says_when_it_clears_and_when_it_has_passed() {
+        let snapshot =
+            Snapshot::parse(serde_json::from_str(SNAPSHOT).unwrap()).unwrap();
+        let rows = Routes::rows(None, Some(&snapshot));
+        let free = &rows[0].live[0];
+        assert_eq!(free.label(NOW), "backing off, back in 9m");
+        assert_eq!(free.label(1_792_300_540_000), "backing off");
+        let capped =
+            rows[1].live.iter().find(|l| l.machine == "boreas").unwrap();
+        assert_eq!(
+            capped.label(1_792_307_800_000 - (2 * HOUR + 10 * MINUTE)),
+            "capped, resets in 2h 10m"
+        );
+        assert_eq!(rows[1].live[0].label(NOW), "available");
+    }
+
+    #[test]
+    fn a_live_allowance_reads_its_shares_as_percents_with_resets() {
+        let snapshot =
+            Snapshot::parse(serde_json::from_str(SNAPSHOT).unwrap()).unwrap();
+        let rows = Routes::rows(None, Some(&snapshot));
+        let boreas =
+            rows[1].live.iter().find(|l| l.machine == "boreas").unwrap();
+        let allowance = boreas.allowance.unwrap();
+        assert_eq!(
+            live_allowance(allowance, NOW).as_deref(),
+            Some(
+                "allowance: window 40% used, resets in 1h · week 87% used, resets in 3d"
+            )
+        );
+        assert_eq!(rows[1].live[0].allowance, None);
     }
 }

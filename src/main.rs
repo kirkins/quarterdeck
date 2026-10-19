@@ -436,9 +436,10 @@ impl Quarterdeck {
         }
     }
 
-    /// The Fleet pane, or Live or Ships with their lists, is on screen.
+    /// The Fleet pane, Live or Ships with their lists, or Spend's live route
+    /// state, is on screen.
     fn fleet_shown(&self) -> bool {
-        [View::Fleet, View::Live, View::Ships]
+        [View::Fleet, View::Live, View::Ships, View::Spend]
             .into_iter()
             .any(|view| self.dashboard.shows(view))
     }
@@ -514,8 +515,9 @@ impl Quarterdeck {
             } else {
                 Subscription::none()
             },
-            // The fleet is read every 15 s while its pane, or Live's list of
-            // sessions, is on screen; the tick also keeps its times fresh.
+            // The fleet is read every 15 s while its pane, Live's list of
+            // sessions or Spend's routes are on screen; the tick also keeps
+            // its times fresh.
             if self.fleet_shown() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::FleetTick)
