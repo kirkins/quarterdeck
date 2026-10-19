@@ -35,6 +35,8 @@ const WAITING_FIXTURE: &str =
 const FEED_FIXTURE: &str = include_str!("../../fixtures/captain.feed.json");
 const FLEET_FIXTURE: &str = include_str!("../../fixtures/fleet.snapshot.json");
 const REPORTS_FIXTURE: &str = include_str!("../../fixtures/report.get.json");
+const ROUTES_FIXTURE: &str = include_str!("../../fixtures/routes.show.json");
+const USAGE_FIXTURE: &str = include_str!("../../fixtures/usage.records.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Error {
@@ -160,8 +162,19 @@ fn fixture(command: &str, args: &Value) -> Result<Value, Error> {
                 error: format!("no report {id} in the fleet"),
             });
     }
+    if command == "usage.summary" {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_millis() as i64);
+        return crate::spend::fixture_summary(USAGE_FIXTURE, args, now_ms)
+            .map_err(|error| Error::Command {
+                command: command.to_owned(),
+                error,
+            });
+    }
     let text = match command {
         "captain.waiting" => WAITING_FIXTURE,
+        "routes.show" => ROUTES_FIXTURE,
         "captain.feed" => FEED_FIXTURE,
         "fleet.snapshot" => FLEET_FIXTURE,
         "ship.list" => {

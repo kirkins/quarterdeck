@@ -3,14 +3,14 @@ use std::collections::HashSet;
 use data::config::{Position, Source};
 use data::dashboard::{Axis, Layout, View};
 use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{button, column, container, row, scrollable, space};
+use iced::widget::{button, column, container, row, scrollable};
 use iced::{Alignment, Length, Padding};
 
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Which};
 use crate::screen::triage::{self, Triage};
-use crate::screen::{feed, fleet, live, reports, ships};
+use crate::screen::{feed, fleet, live, reports, ships, spend};
 use crate::widget::{Column, Element, text};
 use crate::{font, icon};
 
@@ -31,6 +31,7 @@ pub enum Message {
     Live(live::Message),
     Fleet(fleet::Message),
     Ships(ships::Message),
+    Spend(spend::Message),
 }
 
 /// What the app must do after an update.
@@ -72,6 +73,7 @@ pub struct Dashboard {
     ships: ships::Ships,
     /// Writing to the ship open in Ships.
     ship_composer: feed::Composer,
+    spend: spend::Spend,
 }
 
 impl Dashboard {
@@ -90,6 +92,7 @@ impl Dashboard {
             fleet: fleet::Fleet::default(),
             ships: ships::Ships::default(),
             ship_composer: feed::Composer::default(),
+            spend: spend::Spend::default(),
         }
     }
 
@@ -98,6 +101,11 @@ impl Dashboard {
         data::Dashboard {
             layout: layout(&self.panes, self.panes.layout()),
         }
+    }
+
+    /// The usage the Spend view shows.
+    pub fn spend_query(&self) -> data::spend::Query {
+        self.spend.query()
     }
 
     /// The ship whose live session should be read now: one is picked and
@@ -320,6 +328,10 @@ impl Dashboard {
                     args,
                 }),
             },
+            Message::Spend(message) => {
+                self.spend.update(message);
+                None
+            }
             Message::Reports(message) => {
                 match self.reports.update(message, connection)? {
                     reports::Event::Read(id) => Some(Event::ReadReport(id)),
@@ -506,6 +518,7 @@ impl Dashboard {
                 View::Fleet => {
                     self.fleet.view(connection, theme).map(Message::Fleet)
                 }
+                View::Spend => self.spend.view(connection).map(Message::Spend),
                 View::Feed => feed::view(
                     connection,
                     &self.triage,
@@ -524,7 +537,6 @@ impl Dashboard {
                         theme,
                     )
                     .map(Message::Ships),
-                view => placeholder(view),
             };
 
             pane_grid::Content::new(body)
@@ -562,23 +574,6 @@ fn control<'a>(
             .style(theme::container::tooltip),
         iced::widget::tooltip::Position::Bottom,
     )
-    .into()
-}
-
-/// Until a view is built, its pane says what it will show.
-fn placeholder<'a>(view: View) -> Element<'a, Message> {
-    container(
-        column![
-            text(view.title()).size(18).font(font::MONO_BOLD.clone()),
-            text(view.summary()).style(theme::text::secondary),
-            space().height(4),
-            text("Not built yet.").style(theme::text::tertiary),
-        ]
-        .spacing(6)
-        .max_width(420),
-    )
-    .padding(16)
-    .center(Length::Fill)
     .into()
 }
 

@@ -1,0 +1,3721 @@
+{
+	"fixture_now_ms": 1792300000000,
+	"machines": [
+		{ "name": "atlas", "reached": true, "unknown": [] },
+		{ "name": "boreas", "reached": true, "unknown": [] },
+		{
+			"name": "calypso",
+			"reached": true,
+			"via": "collect",
+			"as_of_ms": 1792299700000,
+			"unknown": []
+		},
+		{
+			"name": "laptop",
+			"reached": false,
+			"via": "collect",
+			"as_of_ms": 1792289200000,
+			"error": "nothing carried from laptop lately"
+		},
+		{ "name": "bosun", "reached": false, "error": "connection refused" }
+	],
+	"records": [
+		{
+			"ts_ms": 1789733200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1789733200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1789762000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1789819600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1789848400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1789906000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1789934800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1789992400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1790021200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1790078800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1790107600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1790165200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1790194000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1790251600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1790280400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1790338000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1790366800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1790424400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1790453200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1790510800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1790539600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1790597200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1790626000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1790683600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1790712400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1790770000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1790798800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1790856400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1790885200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1790942800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1790971600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1791029200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1791058000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1791115600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1791144400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1791202000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1791230800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1791288400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1791317200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1791374800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1791403600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1791461200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1791490000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1791547600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1791576400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1791634000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1791662800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1791720400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1791749200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2860000, "output": 451000, "cacheRead": 8910000, "cacheWrite": 572000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1144000, "output": 221000, "cacheRead": 4030000, "cacheWrite": 260000 }
+		},
+		{
+			"ts_ms": 1791806800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1791835600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1400000, "output": 260000, "cacheRead": 5200000, "cacheWrite": 310000 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1791893200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 84000, "output": 16800, "cacheRead": 154000, "cacheWrite": 7000 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1791922000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 462000, "output": 99000, "cacheRead": 1078000, "cacheWrite": 66000 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 910000, "output": 182000, "cacheRead": 2990000, "cacheWrite": 195000 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1791979600000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 546000, "output": 117000, "cacheRead": 1274000, "cacheWrite": 78000 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 99000, "output": 24200, "cacheRead": 176000, "cacheWrite": 8800 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3640000, "output": 574000, "cacheRead": 11340000, "cacheWrite": 728000 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 700000, "output": 140000, "cacheRead": 2300000, "cacheWrite": 150000 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 299000, "output": 65000, "cacheRead": 780000, "cacheWrite": 52000 }
+		},
+		{
+			"ts_ms": 1792008400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 968000, "output": 187000, "cacheRead": 3410000, "cacheWrite": 220000 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 108000, "output": 26400, "cacheRead": 192000, "cacheWrite": 9600 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 322000, "output": 70000, "cacheRead": 840000, "cacheWrite": 56000 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1792066000000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1820000, "output": 338000, "cacheRead": 6760000, "cacheWrite": 403000 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 126000, "output": 30800, "cacheRead": 224000, "cacheWrite": 11200 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3120000, "output": 492000, "cacheRead": 9720000, "cacheWrite": 624000 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 253000, "output": 55000, "cacheRead": 660000, "cacheWrite": 44000 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1232000, "output": 238000, "cacheRead": 4340000, "cacheWrite": 280000 }
+		},
+		{
+			"ts_ms": 1792094800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 72000, "output": 14400, "cacheRead": 132000, "cacheWrite": 6000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 3380000, "output": 533000, "cacheRead": 10530000, "cacheWrite": 676000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 880000, "output": 170000, "cacheRead": 3100000, "cacheWrite": 200000 }
+		},
+		{
+			"ts_ms": 1792152400000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1540000, "output": 286000, "cacheRead": 5720000, "cacheWrite": 341000 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 588000, "output": 126000, "cacheRead": 1372000, "cacheWrite": 84000 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "boreas",
+			"ship": "search-index",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 2600000, "output": 410000, "cacheRead": 8100000, "cacheWrite": 520000 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 770000, "output": 154000, "cacheRead": 2530000, "cacheWrite": 165000 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "calypso",
+			"ship": "mobile-app",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1056000, "output": 204000, "cacheRead": 3720000, "cacheWrite": 240000 }
+		},
+		{
+			"ts_ms": 1792181200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 60000, "output": 12000, "cacheRead": 110000, "cacheWrite": 5000 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1680000, "output": 312000, "cacheRead": 6240000, "cacheWrite": 372000 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 420000, "output": 90000, "cacheRead": 980000, "cacheWrite": 60000 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 117000, "output": 28600, "cacheRead": 208000, "cacheWrite": 10400 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 840000, "output": 168000, "cacheRead": 2760000, "cacheWrite": 180000 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 230000, "output": 50000, "cacheRead": 600000, "cacheWrite": 40000 }
+		},
+		{
+			"ts_ms": 1792238800000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 66000, "output": 13200, "cacheRead": 121000, "cacheWrite": 5500 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "atlas",
+			"ship": "billing",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 1960000, "output": 364000, "cacheRead": 7280000, "cacheWrite": 434000 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "atlas",
+			"ship": "chandlery",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 504000, "output": 108000, "cacheRead": 1176000, "cacheWrite": 72000 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "atlas",
+			"ship": "docs-site",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 90000, "output": 22000, "cacheRead": 160000, "cacheWrite": 8000 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "boreas",
+			"ship": "analytics",
+			"route": "credits-reserve",
+			"harness": "ferry",
+			"jobs": 1,
+			"usage": null
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 980000, "output": 196000, "cacheRead": 3220000, "cacheWrite": 210000 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 276000, "output": 60000, "cacheRead": 720000, "cacheWrite": 48000 }
+		},
+		{
+			"ts_ms": 1792267600000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": { "input": 78000, "output": 15600, "cacheRead": 143000, "cacheWrite": 6500 }
+		},
+		{
+			"ts_ms": 1792296400000,
+			"machine": "boreas",
+			"ship": "ledger",
+			"route": "plan-main",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 980000,
+				"output": 196000,
+				"cacheRead": 3220000,
+				"cacheWrite": 210000
+			}
+		},
+		{
+			"ts_ms": 1792292800000,
+			"machine": "boreas",
+			"ship": "previews",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 276000,
+				"output": 60000,
+				"cacheRead": 720000,
+				"cacheWrite": 48000
+			}
+		},
+		{
+			"ts_ms": 1792289200000,
+			"machine": "calypso",
+			"ship": "status-page",
+			"route": "free-pool",
+			"harness": "tidewater",
+			"jobs": 1,
+			"usage": {
+				"input": 78000,
+				"output": 15600,
+				"cacheRead": 143000,
+				"cacheWrite": 6500
+			},
+			"partial": true
+		}
+	]
+}

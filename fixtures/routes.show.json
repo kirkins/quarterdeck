@@ -1,0 +1,32 @@
+{
+	"routes": {
+		"free-pool": {
+			"cost": "free",
+			"note": "Small free model pool. Good for scouting and summaries; first to back off.",
+			"options": { "model": "small" },
+			"manifest": "bundled:tidewater",
+			"tier": 4,
+			"allowance": { "daily_utc": "00:00" }
+		},
+		"plan-main": {
+			"cost": "plan",
+			"note": "Main subscription plan. Its weekly allowance is shared with the captain’s own use.",
+			"options": { "model": "large" },
+			"manifest": "bundled:tidewater",
+			"tier": 1,
+			"uses": ["implement", "review", "diagnose", "design"],
+			"allowance": { "window_hours": 5, "weekly_utc": "Mon 00:00" }
+		},
+		"credits-reserve": {
+			"cost": "credits",
+			"note": "Prepaid credits. Used only when the plans are capped.",
+			"options": { "model": "large" },
+			"manifest": "bundled:ferry"
+		}
+	},
+	"crew": ["free-pool", "plan-main", "credits-reserve"],
+	"errand": ["free-pool", "credits-reserve"],
+	"first_mate": ["plan-main", "free-pool"],
+	"ships": { "billing": { "crew": ["plan-main"] } },
+	"applied": { "billing": { "crew": "ship" } }
+}
