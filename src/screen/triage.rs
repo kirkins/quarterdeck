@@ -798,6 +798,7 @@ impl Triage {
         if let Some(opened) = reports::Opened::from_mail(
             &item.mail.from,
             &item.mail.id,
+            &item.mail.kind,
             true,
             &item.mail.payload,
         ) {
