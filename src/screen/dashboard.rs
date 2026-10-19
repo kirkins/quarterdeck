@@ -47,6 +47,8 @@ pub enum Event {
     FeedOnlyWaiting(bool),
     /// Read the Feed narrowed to this part of the history.
     FeedScope(data::feed::Scope),
+    /// Move the Feed to its newest message.
+    FeedToNewest,
     /// Fetch a stored report.
     ReadReport(String),
     /// Read a ship's live session now.
@@ -73,6 +75,8 @@ pub struct Dashboard {
     /// Asks whose answer controls are open under them in the Feed.
     answering: HashSet<String>,
     composer: feed::Composer,
+    /// Where the captain is in the Feed: its mark and its scroll.
+    reading: feed::Reading,
     reports: reports::Reports,
     live: live::Live,
     fleet: fleet::Fleet,
@@ -93,6 +97,10 @@ impl Dashboard {
             triage: Triage::with_filter(saved.triage.clone()),
             answering: HashSet::new(),
             composer: feed::Composer::default(),
+            reading: feed::Reading::of(&data::feed::Scope {
+                ship: None,
+                ship_mail: false,
+            }),
             reports: reports::Reports::default(),
             live: live::Live::default(),
             fleet: fleet::Fleet::default(),
@@ -169,14 +177,24 @@ impl Dashboard {
             feed::Message::ShipFilter(ship) if which == Which::All => {
                 let mut scope = self.feed_scope(connection);
                 scope.ship = ship;
+                self.reading = feed::Reading::of(&scope);
                 Some(Event::FeedScope(scope))
             }
             feed::Message::ShipMail(on) if which == Which::All => {
                 let mut scope = self.feed_scope(connection);
                 scope.ship_mail = on;
+                self.reading = feed::Reading::of(&scope);
                 Some(Event::FeedScope(scope))
             }
             feed::Message::ShipFilter(_) | feed::Message::ShipMail(_) => None,
+            feed::Message::Scrolled(view) if which == Which::All => {
+                self.reading.scrolled(&view, feed::newest(connection));
+                None
+            }
+            feed::Message::ToNewest if which == Which::All => {
+                Some(Event::FeedToNewest)
+            }
+            feed::Message::Scrolled(_) | feed::Message::ToNewest => None,
             feed::Message::OpenLink(url) => Some(Event::OpenLink(url)),
             feed::Message::Answer(key) => {
                 if !self.answering.remove(&key) {
@@ -205,6 +223,15 @@ impl Dashboard {
             feed::Message::Triage(message) => {
                 self.update(Message::Triage(message), connection)
             }
+        }
+    }
+
+    /// The Feed was seen: the captain has read to its newest message while
+    /// it is at the bottom. Called after every update, since new mail comes
+    /// without a message of the dashboard's own.
+    pub fn feed_seen(&mut self, connection: &Connection) {
+        if self.shows(View::Feed) {
+            self.reading.seen(feed::newest(connection));
         }
     }
 
@@ -587,6 +614,7 @@ impl Dashboard {
                     &self.triage,
                     &self.answering,
                     &self.composer,
+                    &self.reading,
                     theme,
                 )
                 .map(Message::Feed),

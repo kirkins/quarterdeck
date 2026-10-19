@@ -4,19 +4,21 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Local, TimeZone};
-use data::feed::Entry;
+use data::feed::{Entry, Scope};
+use data::feed_mark;
 use data::privateer::{Error, Sent};
 use data::ships::Ship;
 use iced::widget::{
     button, checkbox, column, container, pick_list, row, scrollable, space,
     text_editor,
 };
-use iced::{Alignment, Length, Padding};
+use iced::{Alignment, Length, Padding, Task};
 
 use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::{self, Connection, Which};
 use crate::font;
+use crate::icon;
 use crate::screen::reports;
 use crate::screen::triage::{self, Triage};
 use crate::widget::{Column, Element, loading, markdown, text};
@@ -25,6 +27,10 @@ use serde_json::{Value, json};
 #[derive(Debug, Clone)]
 pub enum Message {
     LoadOlder,
+    /// The Feed was scrolled: whether the captain is at its newest message.
+    Scrolled(scrollable::Viewport),
+    /// Scroll to the newest message, from the "N new messages" pill.
+    ToNewest,
     /// Show only the open items, asked of Privateer over the whole history.
     OnlyWaiting(bool),
     /// Narrow the Feed to one ship, or to every ship with `None`.
@@ -236,6 +242,97 @@ fn compose_button<'a>(
     press.into()
 }
 
+/// Where the captain is in the Feed: the mark it was last read to, and
+/// whether the captain has scrolled up from the newest message.
+pub struct Reading {
+    key: String,
+    /// The mark when the Feed was opened: the Unread divider sits above the
+    /// first newer message and stays for this visit.
+    pub mark: Option<i64>,
+    /// The mark as saved, so the file is written only when it moves.
+    saved: Option<i64>,
+    /// Scrolled up: the newest message's time when the captain left the
+    /// bottom. Messages newer than it are counted in the pill.
+    away: Option<i64>,
+}
+
+impl Reading {
+    /// The Feed of a scope, with the mark it was last read to.
+    pub fn of(scope: &Scope) -> Self {
+        let key = feed_mark::key(scope);
+        let mark = feed_mark::load(&feed_mark::path(), &key);
+        Self {
+            key,
+            mark,
+            saved: mark,
+            away: None,
+        }
+    }
+
+    /// The Feed was scrolled. At its bottom the captain has read to the
+    /// newest message; above it, what comes next is new.
+    pub fn scrolled(
+        &mut self,
+        view: &scrollable::Viewport,
+        newest: Option<i64>,
+    ) {
+        let bounds = view.bounds();
+        let content = view.content_bounds();
+        let to_bottom =
+            content.height - bounds.height - view.absolute_offset().y;
+        if to_bottom <= 1.0 {
+            self.away = None;
+            self.seen(newest);
+        } else if self.away.is_none() {
+            self.away = Some(newest.unwrap_or(i64::MIN));
+        }
+    }
+
+    /// Save the newest message as read, while the captain is at the bottom.
+    pub fn seen(&mut self, newest: Option<i64>) {
+        if self.away.is_some() {
+            return;
+        }
+        let Some(at) = newest else {
+            return;
+        };
+        if self.saved.is_some_and(|saved| at <= saved) {
+            return;
+        }
+        match feed_mark::save(&feed_mark::path(), &self.key, at) {
+            Ok(()) => self.saved = Some(at),
+            Err(error) => log::warn!("could not save the Feed mark: {error}"),
+        }
+    }
+
+    /// How many messages the pill counts, while the captain is scrolled up.
+    fn pill(&self, created: impl IntoIterator<Item = i64>) -> Option<usize> {
+        let away = self.away?;
+        let count = feed_mark::newer(created, away);
+        (count > 0).then_some(count)
+    }
+}
+
+/// The Feed's scroll, by its id, so it can be moved to the newest message.
+fn scroll_id() -> iced::widget::Id {
+    iced::widget::Id::new("feed")
+}
+
+/// Scroll the Feed to its newest message.
+pub fn to_newest<T: Send + 'static>() -> Task<T> {
+    iced::widget::operation::snap_to_end(scroll_id())
+}
+
+/// The newest message's time in the Feed, or None while nothing is read.
+pub fn newest(connection: &Connection) -> Option<i64> {
+    connection
+        .feed(Which::All)
+        .thread
+        .entries()
+        .map(|entry| entry.created_ms)
+        .max()
+}
+
 /// The ship picker's first choice: every ship.
 const ALL_SHIPS: &str = "All ships";
 
@@ -244,6 +341,7 @@ pub fn view<'a>(
     triage: &'a Triage,
     answering: &'a HashSet<String>,
     composer: &'a Composer,
+    reading: &'a Reading,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let feed = connection.feed(Which::All);
@@ -269,25 +367,65 @@ pub fn view<'a>(
         .label("Only waiting on me")
         .on_toggle(Message::OnlyWaiting)
         .style(theme::checkbox::primary);
-    column![
+    let thread = conversation(
+        connection,
+        Which::All,
+        triage,
+        answering,
+        reading.mark,
+        theme,
+    );
+    let newer = reading.pill(
+        connection
+            .feed(Which::All)
+            .thread
+            .entries()
+            .map(|entry| entry.created_ms),
+    );
+    let mut page = column![
         container(
             row![ship_pick, mail, only_waiting]
                 .spacing(12)
                 .align_y(Alignment::Center)
         )
         .padding([4, 12]),
-        conversation(connection, Which::All, triage, answering, theme),
-        composer.view(Some(&connection.ships)),
-    ]
-    .into()
+        thread,
+    ];
+    if let Some(count) = newer {
+        page = page.push(new_messages(count));
+    }
+    page.push(composer.view(Some(&connection.ships))).into()
 }
 
-/// A conversation, oldest at the top: the whole history, or one ship's.
+/// The "N new messages" pill, which scrolls the Feed to its newest message.
+fn new_messages<'a>(count: usize) -> Element<'a, Message> {
+    let words = if count == 1 {
+        "1 new message".to_owned()
+    } else {
+        format!("{count} new messages")
+    };
+    let pill = button(
+        row![icon::scroll_to_bottom(), text(words)]
+            .spacing(6)
+            .align_y(Alignment::Center),
+    )
+    .padding([4, 12])
+    .style(|theme, status| theme::button::primary(theme, status, false))
+    .on_press(Message::ToNewest);
+    container(pill)
+        .center_x(Length::Fill)
+        .padding([0, 12])
+        .into()
+}
+
+/// A conversation, oldest at the top: the whole history, or one ship's. With
+/// `unread`, the Unread divider sits above the first message newer than it.
 pub fn conversation<'a>(
     connection: &'a Connection,
     which: Which,
     triage: &'a Triage,
     answering: &'a HashSet<String>,
+    unread: Option<i64>,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
     let feed = connection.feed(which);
@@ -333,8 +471,14 @@ pub fn conversation<'a>(
 
     let replies = feed.thread.replies();
     let now = connection::now_ms();
+    let created: Vec<i64> = feed
+        .thread
+        .entries()
+        .map(|entry| entry.created_ms)
+        .collect();
+    let divider = feed_mark::divider(&created, unread);
     let mut day = None;
-    for entry in feed.thread.entries() {
+    for (index, entry) in feed.thread.entries().enumerate() {
         let when = local(entry.created_ms);
         let date = when.map(|w| w.date_naive());
         if date != day {
@@ -348,6 +492,14 @@ pub fn conversation<'a>(
                     .center_x(Length::Fill),
                 );
             }
+        }
+        if divider == Some(index) {
+            list = list.push(
+                container(
+                    text("Unread").style(theme::text::highlight_indicator),
+                )
+                .center_x(Length::Fill),
+            );
         }
         let key = entry.key();
         let sent = triage.sent(&key);
@@ -371,7 +523,13 @@ pub fn conversation<'a>(
         ));
     }
 
-    scrollable(list).anchor_bottom().height(Length::Fill).into()
+    let list = scrollable(list).anchor_bottom().height(Length::Fill);
+    // Only the Feed is followed: a ship's conversation has no pill or mark.
+    if which == Which::All {
+        list.id(scroll_id()).on_scroll(Message::Scrolled).into()
+    } else {
+        list.into()
+    }
 }
 
 /// What the feed says about a message beside its body.
