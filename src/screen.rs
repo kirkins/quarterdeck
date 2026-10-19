@@ -5,4 +5,5 @@ pub mod live;
 pub mod reports;
 pub mod settings;
 pub mod ships;
+pub mod spend;
 pub mod triage;

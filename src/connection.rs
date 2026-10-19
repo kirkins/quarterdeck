@@ -16,6 +16,7 @@ use data::privateer::{Client, Error, Sent};
 use data::report::Report;
 use data::session::Target;
 use data::ships::{self, Ship};
+use data::spend::{Query, Routes, Summary};
 use data::triage;
 use iced::Task;
 use serde_json::{Value, json};
@@ -42,6 +43,14 @@ pub enum Message {
         since: bool,
         result: Result<Snapshot, Error>,
     },
+    SpendRead(u64, SpendRead),
+}
+
+/// An answer for the Spend view.
+#[derive(Debug, Clone)]
+pub enum SpendRead {
+    Routes(Result<Routes, Error>),
+    Usage(Query, Result<Summary, Error>),
 }
 
 /// One ask, read for drawing: its card, and its Markdown.
@@ -97,6 +106,23 @@ pub struct Connection {
     reading_ships: bool,
     reading_report: bool,
     pub fleet: Fleet,
+    pub spend: Spend,
+}
+
+/// The Spend view as read so far. Routes are read once; usage when the
+/// period or grouping changes, and again on each refresh.
+#[derive(Default)]
+pub struct Spend {
+    pub routes: Option<Result<Routes, Error>>,
+    /// The last usage answer that worked, and what it was asked for.
+    pub usage: Option<(Query, Summary)>,
+    pub usage_error: Option<Error>,
+    /// What the view shows now, to read when an earlier read is done.
+    pub wanted: Query,
+    /// What usage was last asked for, whether or not it was answered.
+    asked: Option<Query>,
+    reading_routes: bool,
+    reading_usage: bool,
 }
 
 /// The fleet as last read, and whether the last read worked.
@@ -181,6 +207,7 @@ impl Connection {
             screen: None,
             reading_session: false,
             fleet: Fleet::default(),
+            spend: Spend::default(),
         }
     }
 
@@ -367,6 +394,59 @@ impl Connection {
             },
             move |result| Message::ReportRead(generation, id.clone(), result),
         )
+    }
+
+    /// What the Spend view shows: the routes, until read once, and the
+    /// usage for `query` when it is not read yet or `refresh` asks.
+    pub fn read_spend(&mut self, query: Query, refresh: bool) -> Task<Message> {
+        let spend = &mut self.spend;
+        spend.wanted = query;
+        let generation = self.generation;
+        let mut reads = Vec::new();
+
+        let routes_read = matches!(spend.routes, Some(Ok(_)));
+        if !spend.reading_routes
+            && (spend.routes.is_none() || refresh && !routes_read)
+        {
+            spend.reading_routes = true;
+            let client = self.client.clone();
+            reads.push(Task::perform(
+                async move {
+                    let value = client.run("routes.show", json!({})).await?;
+                    Routes::parse(value).map_err(|error| Error::Command {
+                        command: "routes.show".into(),
+                        error: format!("unexpected answer: {error}"),
+                    })
+                },
+                move |result| {
+                    Message::SpendRead(generation, SpendRead::Routes(result))
+                },
+            ));
+        }
+
+        if !spend.reading_usage && (refresh || spend.asked != Some(query)) {
+            spend.reading_usage = true;
+            spend.asked = Some(query);
+            let client = self.client.clone();
+            reads.push(Task::perform(
+                async move {
+                    let value = client
+                        .run("usage.summary", query.args(now_ms()))
+                        .await?;
+                    Summary::parse(value).map_err(|error| Error::Command {
+                        command: "usage.summary".into(),
+                        error: format!("unexpected answer: {error}"),
+                    })
+                },
+                move |result| {
+                    Message::SpendRead(
+                        generation,
+                        SpendRead::Usage(query, result),
+                    )
+                },
+            ));
+        }
+        Task::batch(reads)
     }
 
     /// The fleet's ships, until they have been read once.
@@ -606,6 +686,41 @@ impl Connection {
                     }
                 }
                 Task::none()
+            }
+            Message::SpendRead(generation, read) => {
+                if generation != self.generation {
+                    return Task::none();
+                }
+                let spend = &mut self.spend;
+                match read {
+                    SpendRead::Routes(result) => {
+                        spend.reading_routes = false;
+                        if let Err(error) = &result {
+                            log::warn!("{error}");
+                        }
+                        spend.routes = Some(result);
+                        Task::none()
+                    }
+                    SpendRead::Usage(query, result) => {
+                        spend.reading_usage = false;
+                        match result {
+                            Ok(summary) => {
+                                spend.usage = Some((query, summary));
+                                spend.usage_error = None;
+                            }
+                            Err(error) => {
+                                log::warn!("{error}");
+                                spend.usage_error = Some(error);
+                            }
+                        }
+                        // The view moved on while this was read.
+                        if spend.wanted != query {
+                            self.read_spend(self.spend.wanted, false)
+                        } else {
+                            Task::none()
+                        }
+                    }
+                }
             }
             Message::Waited(generation, result) => {
                 if generation != self.generation {

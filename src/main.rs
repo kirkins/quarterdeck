@@ -150,6 +150,8 @@ enum Message {
     FleetTick,
     /// Redraw, to turn the loading spinners.
     Animate,
+    /// Read the Spend pane's usage again.
+    SpendTick,
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
@@ -208,18 +210,21 @@ impl Quarterdeck {
         let mut connection = Connection::new(&config.privateer);
         let first_poll = connection.poll();
 
+        let mut quarterdeck = Quarterdeck {
+            config,
+            config_error,
+            mode,
+            theme,
+            main_window: window,
+            settings_window: None,
+            dashboard: dashboard::Dashboard::new(&dashboard_load),
+            connection,
+        };
+        let spend = quarterdeck.read_spend(false);
+
         (
-            Quarterdeck {
-                config,
-                config_error,
-                mode,
-                theme,
-                main_window: window,
-                settings_window: None,
-                dashboard: dashboard::Dashboard::new(&dashboard_load),
-                connection,
-            },
-            Task::batch([open, first_poll.map(Message::Connection)]),
+            quarterdeck,
+            Task::batch([open, first_poll.map(Message::Connection), spend]),
         )
     }
 
@@ -240,7 +245,34 @@ impl Quarterdeck {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        // A pane may have come on screen, the usage asked for changed, or
+        // the connection is new: the Spend pane reads what it lacks.
+        let spend_may_change = matches!(
+            message,
+            Message::Dashboard(_) | Message::ConfigReloaded(Ok(_))
+        );
+        let task = self.apply(message);
+        if spend_may_change {
+            Task::batch([task, self.read_spend(false)])
+        } else {
+            task
+        }
+    }
+
+    /// Read what the Spend pane shows, while it is on screen: the routes
+    /// once, the usage when its query changes or `refresh` asks.
+    fn read_spend(&mut self, refresh: bool) -> Task<Message> {
+        if !self.dashboard.shows(View::Spend) {
+            return Task::none();
+        }
+        self.connection
+            .read_spend(self.dashboard.spend_query(), refresh)
+            .map(Message::Connection)
+    }
+
+    fn apply(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::SpendTick => self.read_spend(true),
             Message::Dashboard(message) => match self
                 .dashboard
                 .update(message, &self.connection)
@@ -487,6 +519,13 @@ impl Quarterdeck {
             if self.fleet_shown() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::FleetTick)
+            } else {
+                Subscription::none()
+            },
+            // The Spend pane's usage is read again every minute it is shown.
+            if self.dashboard.shows(View::Spend) {
+                iced::time::every(std::time::Duration::from_secs(60))
+                    .map(|_| Message::SpendTick)
             } else {
                 Subscription::none()
             },
