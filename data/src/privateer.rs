@@ -389,7 +389,7 @@ fn group_alive(group: libc::pid_t) -> bool {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
+    use std::io::Write;
 
     use serde_json::json;
 
@@ -404,9 +404,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let bin = dir.join("privateer");
-        std::fs::write(&bin, format!("#!/bin/sh\n{body}\n")).unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))
+        // Write from a child: this process must not hold the file open for
+        // writing, or a concurrently forked child inherits it and exec fails
+        // with ETXTBSY.
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+            .arg(&bin)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
             .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(format!("#!/bin/sh\n{body}\n").as_bytes())
+            .unwrap();
+        assert!(child.wait().unwrap().success());
         (dir, bin)
     }
 
