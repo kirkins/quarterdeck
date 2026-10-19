@@ -16,7 +16,7 @@ use iced::{Length, Subscription, Task};
 
 use self::appearance::{Theme, theme};
 use self::connection::Connection;
-use self::screen::{dashboard, settings};
+use self::screen::{dashboard, feed, settings};
 use self::widget::{Element, text};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -257,7 +257,9 @@ impl Quarterdeck {
         // The Feed pane may have come on screen: its open items are read.
         let feed_may_appear = matches!(message, Message::Dashboard(_))
             && !self.dashboard.shows(View::Feed);
-        let mut tasks = vec![self.apply(message)];
+        let applied = self.apply(message);
+        self.dashboard.feed_seen(&self.connection);
+        let mut tasks = vec![applied];
         if spend_may_change {
             tasks.push(self.read_spend(false));
             tasks.push(self.read_tools(false));
@@ -338,6 +340,7 @@ impl Quarterdeck {
                     .connection
                     .set_scope(Some(scope))
                     .map(Message::Connection),
+                Some(dashboard::Event::FeedToNewest) => feed::to_newest(),
                 Some(dashboard::Event::Refresh) => Task::batch([
                     self.connection.poll().map(Message::Connection),
                     self.read_tools(true),

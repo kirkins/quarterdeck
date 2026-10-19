@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod decision;
 pub mod environment;
 pub mod feed;
+pub mod feed_mark;
 pub mod fleet;
 pub mod markdown;
 pub mod needs;
