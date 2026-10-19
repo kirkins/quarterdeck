@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use data::answered::Answered;
 use data::captain::Item;
 use data::choices;
 use data::decision::{self, Answer, Choice};
@@ -52,6 +53,10 @@ pub enum Message {
     SetKind(Option<String>),
     /// Copy an ask's hands-on step to the clipboard.
     CopyStep(String),
+    /// Show or fold the list of what was answered lately.
+    ToggleAnswered,
+    /// Open a ship's conversation, to follow up on an answer.
+    FollowUp(String),
 }
 
 pub enum Event {
@@ -67,6 +72,8 @@ pub enum Event {
     FilterChanged,
     /// Put this text on the clipboard.
     Copy(String),
+    /// Open this ship's conversation.
+    OpenShip(String),
 }
 
 /// The captain's answer so far to one ask.
@@ -106,6 +113,11 @@ pub struct Triage {
     /// The asks each card has had sent this session, by card key: a card's
     /// progress, since an answered ask leaves Privateer's list.
     answered: HashMap<String, HashSet<String>>,
+    /// What each answer sent from here said, by ask key, shown on the ask
+    /// until Privateer's list drops it.
+    sent_words: HashMap<String, String>,
+    /// The list of what was answered lately is open.
+    show_answered: bool,
 }
 
 impl Triage {
@@ -219,6 +231,11 @@ impl Triage {
                 let group = triage::group_key(item);
                 self.dismiss(key, group, &id)
             }
+            Message::ToggleAnswered => {
+                self.show_answered = !self.show_answered;
+                None
+            }
+            Message::FollowUp(ship) => Some(Event::OpenShip(ship)),
             Message::SendMark(key, id) => self.dismiss(key, None, &id),
             Message::OpenLink(url) => Some(Event::OpenLink(url)),
             Message::OpenReport(opened) => Some(Event::OpenReport(opened)),
@@ -255,6 +272,8 @@ impl Triage {
                 if let Some(group) = group {
                     self.card_of.insert(key.clone(), group);
                 }
+                self.sent_words
+                    .insert(key.clone(), sent_words(command, &args));
                 self.outcomes.insert(key.clone(), Outcome::Sending);
                 Some(Event::Write { key, command, args })
             }
@@ -368,6 +387,9 @@ impl Triage {
             for group in groups {
                 list = list.push(self.group_view(group, connection, theme));
             }
+        }
+        if let Some(answered) = self.answered_view(connection, waiting, now) {
+            list = list.push(answered);
         }
 
         scrollable(container(list).padding(12))
@@ -524,6 +546,140 @@ impl Triage {
         panel.into()
     }
 
+    /// An ask just answered from here, until Privateer's list drops it:
+    /// folded, faded, and saying what was sent.
+    fn sent_view<'a>(
+        &self,
+        key: &str,
+        item: &'a Item,
+        details: Option<&Details>,
+        outcome: &Outcome,
+    ) -> Element<'a, Message> {
+        let question = match details {
+            Some(d) if !d.card.options.is_empty() => &d.card.question,
+            _ => &item.mail.body,
+        };
+        let (mark, said) = match outcome {
+            Outcome::Held => (
+                text("not sent: sending is off").style(theme::text::tertiary),
+                None,
+            ),
+            _ => (
+                text("answered").style(theme::text::success),
+                self.sent_words.get(key).cloned(),
+            ),
+        };
+        let mut lines = column![
+            row![
+                icon::checkmark().style(theme::text::success),
+                text(item.asker().to_owned()).style(theme::text::tertiary),
+                mark,
+            ]
+            .spacing(8),
+            text(preview(question, 140)).style(theme::text::tertiary),
+        ]
+        .spacing(2);
+        if let Some(said) = said {
+            lines = lines.push(
+                text(format!("You sent: {said}")).style(theme::text::secondary),
+            );
+        }
+        container(lines).padding([4, 0]).into()
+    }
+
+    /// What was answered in the last day, folded to one line until opened.
+    /// Asks still on the waiting list are left out: they show there.
+    fn answered_view<'a>(
+        &self,
+        connection: &'a Connection,
+        waiting: &data::captain::Waiting,
+        now: i64,
+    ) -> Option<Element<'a, Message>> {
+        let answers = &connection.answers;
+        let Some(all) = &answers.list else {
+            return answers.error.as_ref().map(|error| {
+                text(format!("Could not read what was answered: {error}"))
+                    .style(theme::text::tertiary)
+                    .into()
+            });
+        };
+        let open: HashSet<String> =
+            waiting.waiting.iter().map(triage::key).collect();
+        let shown: Vec<&Answered> = all
+            .iter()
+            .filter(|a| !open.contains(&a.key))
+            .filter(|a| self.filter.ship.as_ref().is_none_or(|s| *s == a.ship))
+            .collect();
+        if shown.is_empty() {
+            return None;
+        }
+        let title = row![
+            text(if self.show_answered { "▾" } else { "▸" })
+                .style(theme::text::tertiary),
+            text(format!("Answered in the last day ({})", shown.len()))
+                .font(font::MONO_BOLD.clone())
+                .style(theme::text::secondary),
+        ]
+        .spacing(6);
+        let mut list = Column::new().spacing(10).push(
+            button(title)
+                .padding(0)
+                .style(theme::button::bare)
+                .on_press(Message::ToggleAnswered),
+        );
+        if !self.show_answered {
+            return Some(list.into());
+        }
+        for answered in shown {
+            let mut top = row![
+                icon::checkmark().style(theme::text::success),
+                text(answered.ship.clone()).style({
+                    let ship = answered.ship.clone();
+                    move |theme| theme::text::seeded(theme, &ship)
+                }),
+                text(self.outcome_words(answered))
+                    .style(theme::text::secondary),
+            ]
+            .spacing(8);
+            if answered.relayed {
+                top = top.push(
+                    text("relayed by the operator")
+                        .style(theme::text::tertiary),
+                );
+            }
+            top = top
+                .push(space().width(Length::Fill))
+                .push(
+                    text(ago(now - answered.closed_ms))
+                        .style(theme::text::tertiary),
+                )
+                .push(
+                    button(text("Follow up").style(theme::text::secondary))
+                        .padding(0)
+                        .style(theme::button::bare)
+                        .on_press(Message::FollowUp(answered.ship.clone())),
+                );
+            list = list.push(
+                column![
+                    top,
+                    text(preview(&answered.question, 160))
+                        .style(theme::text::tertiary),
+                ]
+                .spacing(2),
+            );
+        }
+        Some(list.into())
+    }
+
+    /// What an answered ask says became of it: when the feed has no reply
+    /// but the answer went from here, what was sent.
+    fn outcome_words(&self, answered: &Answered) -> String {
+        match self.sent_words.get(&answered.key) {
+            Some(words) if !answered.said => format!("You sent: {words}"),
+            _ => answered.outcome.clone(),
+        }
+    }
+
     fn item_view<'a>(
         &'a self,
         key: String,
@@ -552,6 +708,10 @@ impl Triage {
             let (label, style) = due(item);
             text(label).style(style)
         });
+
+        if let Some(outcome @ (Outcome::Sent | Outcome::Held)) = outcome {
+            return self.sent_view(&key, item, details, outcome);
+        }
 
         let header = button(header)
             .padding(0)
@@ -667,10 +827,6 @@ impl Triage {
                 .width(Length::Fill)
                 .style(|theme| theme::container::buffer(theme, false)),
             );
-        }
-
-        if let Some(Outcome::Sent | Outcome::Held) = outcome {
-            return container(body).padding([4, 0]).into();
         }
 
         body = body.push(self.answer_view(&key, item, details, &draft));
@@ -1189,6 +1345,17 @@ pub fn ago(ms: i64) -> String {
     }
 }
 
+/// What an answer sent from here said, in a few words.
+fn sent_words(command: &str, args: &Value) -> String {
+    if command == "captain.dismiss" {
+        return match args["note"].as_str().map(str::trim) {
+            Some(note) if !note.is_empty() => format!("Dismissed: {note}"),
+            _ => "Dismissed".into(),
+        };
+    }
+    preview(args["body"].as_str().unwrap_or_default(), 120)
+}
+
 /// The start of a message, on one line, cut at a word near `limit`
 /// characters.
 fn preview(body: &str, limit: usize) -> String {
@@ -1296,5 +1463,37 @@ mod tests {
             Err(data::privateer::Error::NotConfigured("refused".into())),
         );
         assert_eq!(triage.progress(&cards(&asks)[0]), Some((0, 2)));
+    }
+
+    #[test]
+    fn a_sent_answer_keeps_what_it_said_until_the_list_drops_it() {
+        let asks = [ask("a", None), ask("b", None)];
+        let mut triage = Triage::default();
+        let sent = || Ok(Sent::Sent(json!({})));
+        triage.write(
+            triage::key(&asks[0]),
+            None,
+            "captain.reply",
+            Ok(json!({"id": "a", "body": "Keep it for renewals",
+                      "payload": {"answer": {"option_id": "b"}}})),
+        );
+        triage.written(triage::key(&asks[0]), sent());
+        triage.write(
+            triage::key(&asks[1]),
+            None,
+            "captain.dismiss",
+            Ok(json!({"id": "b", "note": "already done"})),
+        );
+        triage.written(triage::key(&asks[1]), sent());
+
+        assert!(triage.sent(&triage::key(&asks[0])));
+        assert_eq!(
+            triage.sent_words[&triage::key(&asks[0])],
+            "Keep it for renewals"
+        );
+        assert_eq!(
+            triage.sent_words[&triage::key(&asks[1])],
+            "Dismissed: already done"
+        );
     }
 }

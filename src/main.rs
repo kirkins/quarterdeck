@@ -148,6 +148,8 @@ enum Message {
     SessionTick,
     /// Read the fleet again, if it is due.
     FleetTick,
+    /// Read what the captain answered lately, if it is due.
+    AnsweredTick,
     /// Redraw, to turn the loading spinners.
     Animate,
     /// Read the Spend pane's usage again.
@@ -369,8 +371,10 @@ impl Quarterdeck {
             Message::Written(key, result) => {
                 let sent = matches!(result, Ok(data::privateer::Sent::Sent(_)));
                 self.dashboard.written(key, result);
-                // A sent answer closes the ask: read the list again.
+                // A sent answer closes the ask: read the list again, and
+                // what was answered.
                 if sent {
+                    self.connection.answered_changed();
                     self.connection.poll().map(Message::Connection)
                 } else {
                     Task::none()
@@ -406,6 +410,13 @@ impl Quarterdeck {
                 None => Task::none(),
             },
             Message::Animate => Task::none(),
+            Message::AnsweredTick => {
+                if self.dashboard.shows(View::Triage) {
+                    self.connection.read_answered().map(Message::Connection)
+                } else {
+                    Task::none()
+                }
+            }
             Message::FleetTick => {
                 if self.fleet_shown() {
                     self.connection.read_fleet().map(Message::Connection)
@@ -577,6 +588,14 @@ impl Quarterdeck {
             if self.fleet_shown() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::FleetTick)
+            } else {
+                Subscription::none()
+            },
+            // What the captain answered lately is read while Triage is
+            // shown: the tick is cheap, a read happens only when due.
+            if self.dashboard.shows(View::Triage) {
+                iced::time::every(std::time::Duration::from_secs(1))
+                    .map(|_| Message::AnsweredTick)
             } else {
                 Subscription::none()
             },

@@ -440,6 +440,9 @@ impl Dashboard {
                     }
                     triage::Event::FilterChanged => Some(Event::LayoutChanged),
                     triage::Event::Copy(text) => Some(Event::Copy(text)),
+                    triage::Event::OpenShip(ship) => {
+                        self.open_ship(ship, connection)
+                    }
                 }
             }
         }
