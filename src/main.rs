@@ -4,6 +4,7 @@ mod appearance;
 mod connection;
 mod font;
 mod icon;
+mod notification;
 mod screen;
 mod widget;
 mod window;
@@ -212,6 +213,8 @@ impl Quarterdeck {
         };
 
         let mut connection = Connection::new(&config.privateer);
+        connection.notify =
+            config.notifications.enabled(config.privateer.source);
         connection.feed.open_only = dashboard_load.feed_only_waiting;
         let first_poll = connection.poll();
 
@@ -364,9 +367,12 @@ impl Quarterdeck {
                 self.config_error = None;
                 self.theme =
                     self.mode.theme(&self.config.appearance.selected).into();
-                self.connection
-                    .configure(&self.config.privateer)
-                    .map(Message::Connection)
+                let poll = self.connection.configure(&self.config.privateer);
+                self.connection.notify = self
+                    .config
+                    .notifications
+                    .enabled(self.config.privateer.source);
+                poll.map(Message::Connection)
             }
             Message::Written(key, result) => {
                 let sent = matches!(result, Ok(data::privateer::Sent::Sent(_)));
