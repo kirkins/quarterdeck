@@ -15,7 +15,7 @@ use crate::Theme;
 use crate::appearance::theme;
 use crate::connection::Connection;
 use crate::font;
-use crate::widget::{Column, Element, markdown as draw, text};
+use crate::widget::{Column, Element, loading_line, markdown as draw, text};
 
 /// The write key for a report's comments.
 pub const REPORT_KEY: &str = "report";
@@ -314,17 +314,14 @@ impl Reports {
                     }
                 }
                 None => {
-                    let status = match &current.attached {
-                        Attached::Stored { id, .. } => {
-                            match connection.reports.get(id) {
-                                Some(Err(error)) => error.to_string(),
-                                _ => "Reading the report...".to_owned(),
-                            }
-                        }
-                        Attached::Inline { .. } => String::new(),
-                    };
-                    body =
-                        body.push(text(status).style(theme::text::secondary));
+                    if let Attached::Stored { id, .. } = &current.attached {
+                        body = body.push(match connection.reports.get(id) {
+                            Some(Err(error)) => text(error.to_string())
+                                .style(theme::text::error)
+                                .into(),
+                            _ => loading_line("Reading the report"),
+                        });
+                    }
                 }
             }
         }

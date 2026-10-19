@@ -148,6 +148,8 @@ enum Message {
     SessionTick,
     /// Read the fleet again, if it is due.
     FleetTick,
+    /// Redraw, to turn the loading spinners.
+    Animate,
     AppearanceChanged(appearance::Mode),
     ConfigReloaded(Result<Config, config::Error>),
     Saved(Result<(), String>),
@@ -332,6 +334,7 @@ impl Quarterdeck {
                 }
                 None => Task::none(),
             },
+            Message::Animate => Task::none(),
             Message::FleetTick => {
                 if self.fleet_shown() {
                     self.connection.read_fleet().map(Message::Connection)
@@ -469,6 +472,13 @@ impl Quarterdeck {
             if self.dashboard.watching().is_some() {
                 iced::time::every(std::time::Duration::from_secs(1))
                     .map(|_| Message::SessionTick)
+            } else {
+                Subscription::none()
+            },
+            // Spinners turn only while something is loading.
+            if self.connection.busy() {
+                iced::time::every(std::time::Duration::from_millis(100))
+                    .map(|_| Message::Animate)
             } else {
                 Subscription::none()
             },

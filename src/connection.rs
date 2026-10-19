@@ -95,6 +95,7 @@ pub struct Connection {
     /// Stored reports read so far, by id, with their Markdown.
     pub reports: HashMap<String, Result<(Report, Document), Error>>,
     reading_ships: bool,
+    reading_report: bool,
     pub fleet: Fleet,
 }
 
@@ -141,11 +142,20 @@ pub enum Which {
 pub struct Feed {
     /// The ship it is narrowed to; none for the whole history.
     pub scope: Option<Scope>,
+    /// A read has worked at least once.
+    pub loaded: bool,
     pub thread: Thread,
     pub bodies: HashMap<String, Document>,
     pub error: Option<Error>,
     reading_newer: bool,
     pub reading_older: bool,
+}
+
+impl Feed {
+    /// Its first read is still to come.
+    pub fn loading(&self) -> bool {
+        !self.loaded && self.error.is_none()
+    }
 }
 
 /// Messages read per page.
@@ -166,6 +176,7 @@ impl Connection {
             ship_feed: Feed::default(),
             ships: Vec::new(),
             reading_ships: false,
+            reading_report: false,
             reports: HashMap::new(),
             screen: None,
             reading_session: false,
@@ -183,6 +194,28 @@ impl Connection {
 
     pub fn is_loading(&self) -> bool {
         self.in_flight && self.waiting.is_none() && self.error.is_none()
+    }
+
+    /// The ships list's first read is under way.
+    pub fn ships_loading(&self) -> bool {
+        self.ships.is_empty() && self.reading_ships
+    }
+
+    /// The fleet's first read is still to come.
+    pub fn fleet_loading(&self) -> bool {
+        self.fleet.snapshot.is_none() && self.fleet.error.is_none()
+    }
+
+    /// Anything shown is waiting on its first read, so a loading spinner
+    /// needs turning.
+    pub fn busy(&self) -> bool {
+        self.is_loading()
+            || self.feed.loading()
+            || (self.ship_feed.scope.is_some() && self.ship_feed.loading())
+            || self.ships_loading()
+            || (self.fleet.reading && self.fleet.snapshot.is_none())
+            || (self.reading_session && self.screen.is_none())
+            || self.reading_report
     }
 
     /// Point at a new config. Returns a poll when anything changed.
@@ -317,6 +350,7 @@ impl Connection {
         if matches!(self.reports.get(&id), Some(Ok(_))) {
             return Task::none();
         }
+        self.reading_report = true;
         let client = self.client.clone();
         let generation = self.generation;
         Task::perform(
@@ -477,6 +511,7 @@ impl Connection {
             }
             Message::ReportRead(generation, id, result) => {
                 if generation == self.generation {
+                    self.reading_report = false;
                     let read = result.map(|report| {
                         let document = markdown::parse(&report.content, None);
                         (report, document)
@@ -527,6 +562,7 @@ impl Connection {
                         } else {
                             feed.thread.add_newer(page);
                         }
+                        feed.loaded = true;
                         feed.error = None;
                     }
                     Err(error) => {

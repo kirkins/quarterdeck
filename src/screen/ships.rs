@@ -18,7 +18,7 @@ use crate::connection::{Connection, Which};
 use crate::font;
 use crate::screen::feed;
 use crate::screen::triage::Triage;
-use crate::widget::{Column, Element, text};
+use crate::widget::{Column, Element, loading_line, text};
 
 /// The write key for a message to the open ship.
 pub const COMPOSE_KEY: &str = "compose-ship";
@@ -124,6 +124,11 @@ impl Ships {
         let mut names = names;
         names.sort_unstable();
         names.dedup();
+        if names.is_empty()
+            && (connection.ships_loading() || connection.fleet_loading())
+        {
+            return Column::new().push(loading_line("Reading ships"));
+        }
 
         Column::with_children(names.into_iter().map(|name| {
             let picked = self.selected.as_deref() == Some(name);
