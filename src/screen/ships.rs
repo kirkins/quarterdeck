@@ -131,7 +131,9 @@ impl Ships {
                     theme
                 )
                 .map(Message::Feed),
-                composer.view(None).map(Message::Feed),
+                composer
+                    .view(None, connection.fleet.snapshot.as_ref())
+                    .map(Message::Feed),
             ]
             .into(),
         };

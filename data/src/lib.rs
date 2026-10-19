@@ -7,6 +7,7 @@ pub mod alert;
 pub mod ansi;
 pub mod answered;
 pub mod appearance;
+pub mod attachment;
 pub mod captain;
 pub mod choices;
 pub mod config;

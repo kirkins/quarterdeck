@@ -149,6 +149,8 @@ enum Message {
     SessionTick,
     /// Read the fleet again, if it is due.
     FleetTick,
+    /// A file dropped onto a window.
+    FileDropped(iced::window::Id, std::path::PathBuf),
     /// Read what the captain answered lately, if it is due.
     AnsweredTick,
     /// Redraw, to turn the loading spinners.
@@ -315,6 +317,16 @@ impl Quarterdeck {
                 Some(dashboard::Event::Copy(text)) => {
                     iced::clipboard::write(text)
                 }
+                Some(dashboard::Event::PickFiles(which)) => {
+                    Task::perform(pick_files(), move |paths| {
+                        Message::Dashboard(dashboard::Dashboard::attach(
+                            which, paths,
+                        ))
+                    })
+                }
+                Some(dashboard::Event::ReadFleet) => {
+                    self.connection.read_fleet().map(Message::Connection)
+                }
                 Some(dashboard::Event::OpenSettings) => self.open_settings(),
                 Some(dashboard::Event::OpenLink(url)) => {
                     open_link(&url);
@@ -421,6 +433,18 @@ impl Quarterdeck {
                     self.connection.read_answered().map(Message::Connection)
                 } else {
                     Task::none()
+                }
+            }
+            // A file dropped onto the window goes to the composer in view.
+            // Wayland windows get no drops from winit yet; Attach works there.
+            Message::FileDropped(id, path) => {
+                match self.dashboard.drop_target() {
+                    Some(which) if id == self.main_window.id => {
+                        self.apply(Message::Dashboard(
+                            dashboard::Dashboard::attach(which, vec![path]),
+                        ))
+                    }
+                    _ => Task::none(),
                 }
             }
             Message::FleetTick => {
@@ -571,6 +595,12 @@ impl Quarterdeck {
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             window::events().map(|(id, event)| Message::Window(id, event)),
+            iced::event::listen_with(|event, _, id| match event {
+                iced::Event::Window(iced::window::Event::FileDropped(path)) => {
+                    Some(Message::FileDropped(id, path))
+                }
+                _ => None,
+            }),
             appearance::subscription().map(Message::AppearanceChanged),
             iced::time::every(self.connection.poll_every())
                 .map(|_| Message::Connection(connection::Message::Poll)),
@@ -622,4 +652,15 @@ impl Quarterdeck {
             },
         ])
     }
+}
+
+/// The files the captain picks, through the desktop's file chooser; none
+/// when the chooser is closed.
+async fn pick_files() -> Vec<std::path::PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .set_title("Attach files")
+        .pick_files()
+        .await
+        .map(|files| files.iter().map(|f| f.path().to_owned()).collect())
+        .unwrap_or_default()
 }

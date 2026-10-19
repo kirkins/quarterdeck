@@ -2,15 +2,18 @@
 //! their state; an open one is answered in Triage, the one answer path.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use chrono::{DateTime, Local, TimeZone};
+use data::attachment::{self, Attachment};
 use data::feed::{Entry, Scope};
 use data::feed_mark;
+use data::fleet::Snapshot;
 use data::privateer::{Error, Sent};
 use data::ships::Ship;
 use iced::widget::{
-    button, checkbox, column, container, pick_list, row, scrollable, space,
-    text_editor,
+    Row, button, checkbox, column, container, image, pick_list, row,
+    scrollable, space, text_editor,
 };
 use iced::{Alignment, Length, Padding, Task};
 
@@ -56,9 +59,21 @@ pub enum Compose {
     /// Whether the message asks for an answer (a request) or tells (a
     /// notice).
     Ask(bool),
+    /// Pick files to send with the message.
+    Attach,
+    /// Files picked or dropped onto the window.
+    Attached(Vec<PathBuf>),
+    Detach(usize),
     Confirm,
     Cancel,
     Send,
+}
+
+/// What the composer asks of the app.
+pub enum Out {
+    Write(&'static str, Value),
+    /// Open the file picker.
+    Pick,
 }
 
 /// The write key for the composer's message, beside the asks' keys.
@@ -70,6 +85,8 @@ pub struct Composer {
     to: Option<String>,
     content: text_editor::Content,
     ask: bool,
+    /// Files to send with the message, copied when it is sent.
+    attachments: Vec<Attachment>,
     confirming: bool,
     sending: bool,
     /// What became of the last message, and whether that was good.
@@ -77,48 +94,115 @@ pub struct Composer {
 }
 
 impl Composer {
-    /// A write to run, when the captain sends.
+    /// A write to run, when the captain sends, or the picker to open.
+    /// `fleet` says where the ship runs, which files need.
     pub fn update(
         &mut self,
         message: Compose,
-    ) -> Option<(&'static str, Value)> {
+        fleet: Option<&Snapshot>,
+    ) -> Option<Out> {
         match message {
-            Compose::To(ship) => self.to = Some(ship),
+            Compose::To(ship) => {
+                self.to = Some(ship);
+                self.confirming = false;
+            }
             Compose::Edit(action) => {
                 self.content.perform(action);
                 self.confirming = false;
             }
             Compose::Ask(ask) => self.ask = ask,
-            Compose::Confirm => self.confirming = self.ready(),
+            Compose::Attach => return Some(Out::Pick),
+            Compose::Attached(paths) => self.attach(paths),
+            Compose::Detach(index) => {
+                if index < self.attachments.len() {
+                    self.attachments.remove(index);
+                }
+                self.confirming = false;
+            }
+            Compose::Confirm => self.confirming = self.ready(fleet),
             Compose::Cancel => self.confirming = false,
             Compose::Send => {
-                if !self.ready() || self.sending {
+                if !self.ready(fleet) || self.sending {
                     return None;
                 }
+                let to = self.to.clone()?;
+                let kept = match attachment::keep(
+                    &self.attachments,
+                    &attachment::dir(),
+                    &Local::now().format("%Y%m%d-%H%M%S").to_string(),
+                ) {
+                    Ok(kept) => kept,
+                    Err(error) => {
+                        self.confirming = false;
+                        self.last = Some((false, error));
+                        return None;
+                    }
+                };
                 self.sending = true;
                 self.last = None;
                 let args = json!({
-                    "to": self.to.clone()?,
+                    "to": to,
                     "kind": if self.ask { "request" } else { "notice" },
-                    "body": self.content.text().trim(),
+                    "body": attachment::body_with(&self.content.text(), &kept),
                 });
-                return Some(("captain.send", args));
+                return Some(Out::Write("captain.send", args));
             }
         }
         None
     }
 
-    /// Write to this ship.
+    /// Add files, each once, up to the most one message takes. Those that
+    /// cannot be sent are said why.
+    fn attach(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let mut problems = Vec::new();
+        for path in paths {
+            if self.attachments.iter().any(|a| a.path == path) {
+                continue;
+            }
+            if self.attachments.len() >= attachment::MAX_FILES {
+                problems.push(format!(
+                    "a message takes at most {} files",
+                    attachment::MAX_FILES
+                ));
+                break;
+            }
+            match Attachment::at(&path) {
+                Ok(file) => self.attachments.push(file),
+                Err(problem) => problems.push(problem),
+            }
+        }
+        self.confirming = false;
+        self.last =
+            (!problems.is_empty()).then(|| (false, problems.join("; ")));
+    }
+
+    /// Whether files wait to be sent.
+    pub fn has_attachments(&self) -> bool {
+        !self.attachments.is_empty()
+    }
+
+    /// Write to this ship. Files picked for another ship are put down.
     pub fn address(&mut self, ship: &str) {
         if self.to.as_deref() != Some(ship) {
             self.to = Some(ship.to_owned());
+            self.attachments.clear();
             self.confirming = false;
             self.last = None;
         }
     }
 
-    fn ready(&self) -> bool {
-        self.to.is_some() && !self.content.text().trim().is_empty()
+    fn ready(&self, fleet: Option<&Snapshot>) -> bool {
+        let Some(to) = &self.to else {
+            return false;
+        };
+        if self.attachments.is_empty() {
+            !self.content.text().trim().is_empty()
+        } else {
+            attachment::reach(to, fleet) == attachment::Reach::Here
+        }
     }
 
     /// What became of the message. A sent or logged one clears the box; a
@@ -130,10 +214,12 @@ impl Composer {
         self.last = Some(match result {
             Ok(Sent::Sent(_)) => {
                 self.content = text_editor::Content::new();
+                self.attachments.clear();
                 (true, format!("Sent to {to}."))
             }
             Ok(Sent::Held(_)) => {
                 self.content = text_editor::Content::new();
+                self.attachments.clear();
                 (true, format!("Not sent to {to}: sending is off (logged)."))
             }
             Err(error) => (false, error.to_string()),
@@ -145,6 +231,7 @@ impl Composer {
     pub fn view<'a>(
         &'a self,
         ships: Option<&'a [Ship]>,
+        fleet: Option<&'a Snapshot>,
     ) -> Element<'a, Message> {
         let to: Element<'a, Message> = match ships {
             Some(ships) => {
@@ -195,7 +282,7 @@ impl Composer {
                 "Send",
                 Compose::Confirm,
                 true,
-                self.ready() && !self.sending,
+                self.ready(fleet) && !self.sending,
             ));
         }
         if let Some((good, line)) = &self.last {
@@ -206,18 +293,70 @@ impl Composer {
             }));
         }
 
-        container(
-            column![
-                row![to, ask].spacing(12).align_y(Alignment::Center),
-                editor,
-                actions
-            ]
-            .spacing(6),
-        )
-        .padding(10)
-        .style(theme::container::buffer_title_bar)
-        .into()
+        let attach = compose_button("Attach", Compose::Attach, false, true);
+        let mut body = column![
+            row![to, ask, space::horizontal(), attach]
+                .spacing(12)
+                .align_y(Alignment::Center),
+            editor,
+        ]
+        .spacing(6);
+        if !self.attachments.is_empty() {
+            body = body.push(
+                Row::with_children(
+                    self.attachments
+                        .iter()
+                        .enumerate()
+                        .map(|(i, file)| attachment_chip(i, file)),
+                )
+                .spacing(6)
+                .wrap(),
+            );
+            if let Some(problem) = self
+                .to
+                .as_deref()
+                .and_then(|to| attachment::reach(to, fleet).problem(to))
+            {
+                body = body.push(text(problem).style(theme::text::tertiary));
+            }
+        }
+
+        container(body.push(actions))
+            .padding(10)
+            .style(theme::container::buffer_title_bar)
+            .into()
     }
+}
+
+/// A file waiting to be sent: a thumbnail for an image, its name and size,
+/// and a way to take it off.
+fn attachment_chip<'a>(
+    index: usize,
+    file: &'a Attachment,
+) -> Element<'a, Message> {
+    let mut chip = row![].spacing(6).align_y(Alignment::Center);
+    if file.is_image() && file.thumbnail() {
+        chip = chip.push(
+            image(image::Handle::from_path(&file.path))
+                .height(40)
+                .content_fit(iced::ContentFit::Contain),
+        );
+    }
+    chip = chip
+        .push(text(file.name.as_str()))
+        .push(text(attachment::size(file.bytes)).style(theme::text::tertiary))
+        .push(
+            button(text("✕"))
+                .padding([0, 6])
+                .style(|theme, status| {
+                    theme::button::secondary(theme, status, false)
+                })
+                .on_press(Message::Compose(Compose::Detach(index))),
+        );
+    container(chip)
+        .padding([4, 8])
+        .style(|theme| theme::container::buffer(theme, false))
+        .into()
 }
 
 fn compose_button<'a>(
@@ -394,7 +533,11 @@ pub fn view<'a>(
     if let Some(count) = newer {
         page = page.push(new_messages(count));
     }
-    page.push(composer.view(Some(&connection.ships))).into()
+    page.push(
+        composer
+            .view(Some(&connection.ships), connection.fleet.snapshot.as_ref()),
+    )
+    .into()
 }
 
 /// The "N new messages" pill, which scrolls the Feed to its newest message.
