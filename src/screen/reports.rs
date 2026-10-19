@@ -82,7 +82,8 @@ pub struct Reports {
     current: Option<Opened>,
     /// An inline report's Markdown, parsed when opened.
     inline: Option<Document>,
-    /// Comments per report, by the ask's key, kept until sent.
+    /// Comments per report, by the ask's key, kept until sent. Each change is
+    /// also saved to the drafts file.
     comments: HashMap<String, Vec<Comment>>,
     /// The block being commented on, and the text so far.
     editing: Option<(usize, String)>,
@@ -101,6 +102,9 @@ impl Reports {
     ) -> Option<Event> {
         match message {
             Message::Open(opened) => {
+                let drafts =
+                    report::load_drafts(&report::drafts_path(), &opened.key);
+                self.comments.insert(opened.key.clone(), drafts);
                 let read = match &opened.attached {
                     Attached::Inline { content, .. } => {
                         self.inline = Some(markdown::parse(content, None));
@@ -140,12 +144,13 @@ impl Reports {
                     .map(|node| Document { nodes: vec![node] }.plain_text())
                     .unwrap_or_default();
                 let key = self.current.as_ref()?.key.clone();
-                let comments = self.comments.entry(key).or_default();
+                let comments = self.comments.entry(key.clone()).or_default();
                 comments.retain(|c| c.selector != block(index));
                 if !comment.trim().is_empty() {
                     comments.push(Comment::on_block(index, &quote, &comment));
                     comments.sort_by_key(|c| index_of(&c.selector));
                 }
+                self.persist(&key);
                 self.confirming = false;
             }
             Message::CancelEdit => self.editing = None,
@@ -154,6 +159,7 @@ impl Reports {
                 if let Some(comments) = self.comments.get_mut(&key) {
                     comments.retain(|c| c.selector != block(index));
                 }
+                self.persist(&key);
                 self.confirming = false;
             }
             Message::Note(value) => self.note = value,
@@ -190,27 +196,40 @@ impl Reports {
         None
     }
 
-    /// What became of the comments. Sent or logged, they are cleared;
-    /// refused, they are kept.
+    /// What became of the comments. Sent, they are cleared; held or refused,
+    /// they are kept as drafts.
     pub fn written(&mut self, result: Result<Sent, Error>) {
         self.sending = false;
         self.confirming = false;
         let key = self.current.as_ref().map(|c| c.key.clone());
         self.last = Some(match result {
-            Ok(sent) => {
+            Ok(Sent::Sent(_)) => {
                 if let Some(key) = key {
                     self.comments.remove(&key);
+                    self.persist(&key);
                 }
                 self.note.clear();
-                match sent {
-                    Sent::Sent(_) => (true, "Sent.".to_owned()),
-                    Sent::Held(_) => {
-                        (true, "Not sent: sending is off (logged).".to_owned())
-                    }
-                }
+                (true, "Sent.".to_owned())
             }
+            Ok(Sent::Held(_)) => (
+                true,
+                "Not sent: sending is off (logged). The comments are kept."
+                    .to_owned(),
+            ),
             Err(error) => (false, error.to_string()),
         });
+    }
+
+    /// Save one report's drafts to the drafts file. A failure is logged; the
+    /// comments stay on screen either way.
+    fn persist(&self, key: &str) {
+        let comments: &[Comment] =
+            self.comments.get(key).map_or(&[], Vec::as_slice);
+        if let Err(error) =
+            report::save_drafts(&report::drafts_path(), key, comments)
+        {
+            log::warn!("could not save the comment drafts: {error}");
+        }
     }
 
     fn current_comments(&self) -> &[Comment] {
@@ -316,6 +335,19 @@ impl Reports {
                 None => {
                     if let Attached::Stored { id, .. } = &current.attached {
                         body = body.push(match connection.reports.get(id) {
+                            Some(Err(error))
+                                if report::held_elsewhere(
+                                    &error.to_string(),
+                                    &current.from,
+                                    connection.fleet.snapshot.as_ref(),
+                                ) =>
+                            {
+                                text(
+                                    "This report is stored on another machine and can't be opened here yet.",
+                                )
+                                .style(theme::text::secondary)
+                                .into()
+                            }
                             Some(Err(error)) => text(error.to_string())
                                 .style(theme::text::error)
                                 .into(),
