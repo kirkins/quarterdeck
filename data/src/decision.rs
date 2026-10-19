@@ -187,6 +187,21 @@ fn sentences(text: &str) -> Vec<&str> {
     out
 }
 
+const MAX_GROUP: usize = 64;
+
+/// The decision group an ask names: `payload.decision.group`, letters, digits,
+/// `-` and `_`, at most 64 characters, as Privateer checks it. Asks from one
+/// sender that name the same group are answered as one card.
+pub fn group_of(mail: &Mail) -> Option<&str> {
+    let group = mail.payload.get("decision")?.get("group")?.as_str()?;
+    let well_formed = !group.is_empty()
+        && group.len() <= MAX_GROUP
+        && group
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    well_formed.then_some(group)
+}
+
 /// What the captain answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Answer {
@@ -339,6 +354,28 @@ mod tests {
         assert_eq!(broken.question, "Pick one?");
         assert!(broken.problems[0].contains("1 options"));
         assert!(broken.free_text_ok);
+    }
+
+    #[test]
+    fn a_group_is_read_only_when_well_formed() {
+        let grouped = |group: Value| {
+            mail("Which?", json!({"decision": {"group": group}}))
+        };
+        assert_eq!(
+            group_of(&grouped(json!("analytics-setup"))),
+            Some("analytics-setup")
+        );
+        assert_eq!(group_of(&grouped(json!("a_1"))), Some("a_1"));
+        assert_eq!(group_of(&grouped(json!("two words"))), None);
+        assert_eq!(group_of(&grouped(json!("dots.here"))), None);
+        assert_eq!(group_of(&grouped(json!(""))), None);
+        assert_eq!(group_of(&grouped(json!(7))), None);
+        assert_eq!(group_of(&grouped(json!("x".repeat(65)))), None);
+        assert_eq!(
+            group_of(&grouped(json!("x".repeat(64)))).map(str::len),
+            Some(64)
+        );
+        assert_eq!(group_of(&mail("Which?", json!({"choices": ["a"]}))), None);
     }
 
     #[test]

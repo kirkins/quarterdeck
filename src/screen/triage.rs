@@ -11,7 +11,7 @@ use data::captain::Item;
 use data::choices;
 use data::decision::{self, Answer, Choice};
 use data::privateer::{Error, Sent};
-use data::triage::{self, Filter, Section};
+use data::triage::{self, Filter, Group, Section};
 use iced::widget::{
     button, checkbox, column, container, row, scrollable, space, text_input,
 };
@@ -101,6 +101,11 @@ pub struct Triage {
     filter: Filter,
     /// Hands-on steps copied, until the ask is folded again.
     copied: HashSet<String>,
+    /// The card each answered ask belongs to, by ask key.
+    card_of: HashMap<String, String>,
+    /// The asks each card has had sent this session, by card key: a card's
+    /// progress, since an answered ask leaves Privateer's list.
+    answered: HashMap<String, HashSet<String>>,
 }
 
 impl Triage {
@@ -191,12 +196,12 @@ impl Triage {
                 let (item, details) = find(connection, &key)?;
                 let draft = self.drafts.get(&key)?;
                 let args = reply(item, details, draft);
-                self.write(key, "captain.reply", args)
+                self.write(key, triage::group_key(item), "captain.reply", args)
             }
             Message::Done(key) => {
                 let (item, _) = find(connection, &key)?;
                 let args = decision::plain_reply_args(&item.mail.id, "Done.");
-                self.write(key, "captain.reply", args)
+                self.write(key, triage::group_key(item), "captain.reply", args)
             }
             Message::StartDismiss(key) => {
                 let draft = self.drafts.entry(key).or_default();
@@ -211,27 +216,34 @@ impl Triage {
             Message::SendDismiss(key) => {
                 let (item, _) = find(connection, &key)?;
                 let id = item.mail.id.clone();
-                self.dismiss(key, &id)
+                let group = triage::group_key(item);
+                self.dismiss(key, group, &id)
             }
-            Message::SendMark(key, id) => self.dismiss(key, &id),
+            Message::SendMark(key, id) => self.dismiss(key, None, &id),
             Message::OpenLink(url) => Some(Event::OpenLink(url)),
             Message::OpenReport(opened) => Some(Event::OpenReport(opened)),
         }
     }
 
     /// Close the ask `id` with the note in its draft, as Dismiss does.
-    fn dismiss(&mut self, key: String, id: &str) -> Option<Event> {
+    fn dismiss(
+        &mut self,
+        key: String,
+        group: Option<String>,
+        id: &str,
+    ) -> Option<Event> {
         let note = self.drafts.get(&key).map(|d| d.note.clone());
         let args = Ok(decision::dismiss_args(
             id,
             note.as_deref().unwrap_or_default(),
         ));
-        self.write(key, "captain.dismiss", args)
+        self.write(key, group, "captain.dismiss", args)
     }
 
     fn write(
         &mut self,
         key: String,
+        group: Option<String>,
         command: &'static str,
         args: Result<Value, String>,
     ) -> Option<Event> {
@@ -240,6 +252,9 @@ impl Triage {
         }
         match args {
             Ok(args) => {
+                if let Some(group) = group {
+                    self.card_of.insert(key.clone(), group);
+                }
                 self.outcomes.insert(key.clone(), Outcome::Sending);
                 Some(Event::Write { key, command, args })
             }
@@ -256,6 +271,12 @@ impl Triage {
         let outcome = match result {
             Ok(Sent::Sent(_)) => {
                 self.drafts.remove(&key);
+                if let Some(group) = self.card_of.get(&key) {
+                    self.answered
+                        .entry(group.clone())
+                        .or_default()
+                        .insert(key.clone());
+                }
                 Outcome::Sent
             }
             Ok(Sent::Held(_)) => {
@@ -341,22 +362,70 @@ impl Triage {
                     .style(theme::text::secondary),
             );
         }
-        for (section, items) in sections {
-            list = list.push(section_title(section, items.len()));
-            for item in items {
-                let key = triage::key(item);
-                let details = connection.details.get(&key);
-                let decision =
-                    details.is_some_and(|d| !d.card.options.is_empty());
-                let open = decision != self.toggled.contains(&key);
-                list =
-                    list.push(self.item_view(key, item, details, open, theme));
+        for (section, groups) in sections {
+            let count: usize = groups.iter().map(|g| g.items.len()).sum();
+            list = list.push(section_title(section, count));
+            for group in groups {
+                list = list.push(self.group_view(group, connection, theme));
             }
         }
 
         scrollable(container(list).padding(12))
             .height(Length::Fill)
             .into()
+    }
+
+    /// A card: its asks, each answered on its own, under one header when it
+    /// is more than one ask or has answers this session.
+    fn group_view<'a>(
+        &'a self,
+        group: Group<'a>,
+        connection: &'a Connection,
+        theme: &'a Theme,
+    ) -> Element<'a, Message> {
+        let progress = self.progress(&group);
+        let mut asks = Column::new().spacing(10);
+        if let Some((done, total)) = progress {
+            asks = asks.push(card_header(&group, done, total, connection));
+        }
+        for &item in &group.items {
+            let key = triage::key(item);
+            let details = connection.details.get(&key);
+            let decision = details.is_some_and(|d| !d.card.options.is_empty());
+            let open = decision != self.toggled.contains(&key);
+            asks = asks.push(self.item_view(
+                key,
+                item,
+                details,
+                open,
+                progress.is_some(),
+                theme,
+            ));
+        }
+        match progress {
+            Some(_) => container(asks)
+                .padding(10)
+                .style(|theme| theme::container::buffer(theme, false))
+                .into(),
+            None => asks.into(),
+        }
+    }
+
+    /// A card's progress as (answered, in all), or None when it is a card of
+    /// one with no answers. Answered asks count whether or not Privateer's
+    /// list still shows them, once each.
+    fn progress(&self, group: &Group<'_>) -> Option<(usize, usize)> {
+        let answered = self.answered.get(group.key.as_ref()?);
+        let done = answered.map_or(0, HashSet::len);
+        if group.items.len() < 2 && done == 0 {
+            return None;
+        }
+        let open: HashSet<String> =
+            group.items.iter().map(|item| triage::key(item)).collect();
+        let gone = answered.map_or(0, |sent| {
+            sent.iter().filter(|key| !open.contains(*key)).count()
+        });
+        Some((done, group.items.len() + gone))
     }
 
     /// The answer controls for one open ask, without the ask itself: for a
@@ -461,6 +530,7 @@ impl Triage {
         item: &'a Item,
         details: Option<&'a Details>,
         open: bool,
+        grouped: bool,
         theme: &'a Theme,
     ) -> Element<'a, Message> {
         let outcome = self.outcomes.get(&key);
@@ -546,7 +616,8 @@ impl Triage {
                 body = body.push(markdown(why, theme, Message::OpenLink));
             }
         }
-        if !details.card.blocked.is_empty() {
+        // A card shows what its asks wait on once, as chips.
+        if !details.card.blocked.is_empty() && !grouped {
             body = body.push(
                 text(format!(
                     "Waiting on this: {}",
@@ -746,6 +817,62 @@ impl Triage {
 
         content.push(actions).into()
     }
+}
+
+/// A card's header: who asked, how many questions, how many are answered,
+/// the blockers its questions share, and the earliest open deadline.
+fn card_header<'a>(
+    group: &Group<'a>,
+    done: usize,
+    total: usize,
+    connection: &'a Connection,
+) -> Element<'a, Message> {
+    let first: &'a Item = group.items[0];
+    let asker = first.asker();
+    let mut blocked: Vec<&'a str> = Vec::new();
+    for item in &group.items {
+        let shared = connection
+            .details
+            .get(&triage::key(item))
+            .into_iter()
+            .flat_map(|d| d.card.blocked.iter().map(String::as_str));
+        for name in shared {
+            if !blocked.contains(&name) {
+                blocked.push(name);
+            }
+        }
+    }
+    let (due, style) = due_label(group.deadline_ms());
+
+    let header = row![
+        text(asker).style(move |theme| theme::text::seeded(theme, asker)),
+        text(format!("{total} related questions"))
+            .style(theme::text::secondary),
+        text(format!("{done} of {total} answered"))
+            .style(theme::text::tertiary),
+        space().width(Length::Fill),
+        text(due).style(style),
+    ]
+    .spacing(8);
+    let mut header = Column::new().spacing(6).push(header);
+    if !blocked.is_empty() {
+        let mut chips = Row::new().spacing(6);
+        for name in blocked {
+            chips = chips.push(
+                container(text(name).size(theme::TEXT_SIZE - 1.0))
+                    .padding([2, 8])
+                    .style(|theme| theme::container::buffer(theme, false)),
+            );
+        }
+        header = header.push(
+            row![
+                text("Waiting on this:").style(theme::text::secondary),
+                chips.wrap(),
+            ]
+            .spacing(8),
+        );
+    }
+    header.into()
 }
 
 fn find_item<'a>(connection: &'a Connection, key: &str) -> Option<&'a Item> {
@@ -967,7 +1094,11 @@ fn section_title<'a>(section: Section, count: usize) -> Element<'a, Message> {
 /// When an ask is due, in words and colour: overdue in red, due within a
 /// day in amber, and "No deadline" when it has none.
 fn due(item: &Item) -> (String, Style) {
-    let Some(deadline) = item.mail.deadline_ms else {
+    due_label(item.mail.deadline_ms)
+}
+
+fn due_label(deadline: Option<i64>) -> (String, Style) {
+    let Some(deadline) = deadline else {
         return ("No deadline".into(), theme::text::tertiary);
     };
     let left = deadline - connection::now_ms();
@@ -1068,4 +1199,102 @@ fn preview(body: &str, limit: usize) -> String {
     let cut: String = flat.chars().take(limit).collect();
     let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
     format!("{cut}…")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use data::captain::Mail;
+    use serde_json::json;
+
+    fn ask(id: &str, group: Option<&str>) -> Item {
+        let payload = match group {
+            Some(group) => json!({"decision": {"group": group}}),
+            None => json!({}),
+        };
+        Item {
+            ship: "analytics".into(),
+            asked_ms: 1,
+            mail: Mail {
+                id: id.into(),
+                from: "analytics".into(),
+                kind: "decision".into(),
+                payload,
+                ..Mail::default()
+            },
+            ..Item::default()
+        }
+    }
+
+    fn cards(items: &[Item]) -> Vec<Group<'_>> {
+        triage::sections(items, 0)
+            .into_iter()
+            .flat_map(|(_, groups)| groups)
+            .collect()
+    }
+
+    fn write(triage: &mut Triage, item: &Item) -> Option<Event> {
+        triage.write(
+            triage::key(item),
+            triage::group_key(item),
+            "captain.reply",
+            Ok(json!({})),
+        )
+    }
+
+    #[test]
+    fn a_card_counts_its_answers_as_they_go() {
+        let asks = [
+            ask("a", Some("setup")),
+            ask("b", Some("setup")),
+            ask("c", Some("setup")),
+        ];
+        let mut triage = Triage::default();
+        let shown = cards(&asks);
+        assert_eq!(shown.len(), 1);
+        assert_eq!(triage.progress(&shown[0]), Some((0, 3)));
+
+        // Each question sends on its own; the others stay open meanwhile.
+        assert!(write(&mut triage, &asks[0]).is_some());
+        assert!(write(&mut triage, &asks[1]).is_some());
+        triage.written(triage::key(&asks[0]), Ok(Sent::Sent(json!({}))));
+
+        // Privateer's list drops the answered ask on the next poll.
+        let open = [asks[1].clone(), asks[2].clone()];
+        assert_eq!(triage.progress(&cards(&open)[0]), Some((1, 3)));
+
+        // A held answer was not sent, so it is not counted.
+        triage.written(triage::key(&asks[1]), Ok(Sent::Held(vec![])));
+        assert_eq!(triage.progress(&cards(&open)[0]), Some((1, 3)));
+
+        // Answered and still listed counts once, not twice.
+        assert!(write(&mut triage, &asks[1]).is_some());
+        triage.written(triage::key(&asks[1]), Ok(Sent::Sent(json!({}))));
+        assert_eq!(triage.progress(&cards(&asks)[0]), Some((2, 3)));
+
+        // One question left: still a card, so its progress shows.
+        let last = [asks[2].clone()];
+        assert_eq!(triage.progress(&cards(&last)[0]), Some((2, 3)));
+    }
+
+    #[test]
+    fn a_card_of_one_with_no_answers_has_no_progress() {
+        let asks = [ask("solo", Some("setup")), ask("plain", None)];
+        let triage = Triage::default();
+        for card in cards(&asks) {
+            assert_eq!(triage.progress(&card), None);
+        }
+    }
+
+    #[test]
+    fn a_failed_answer_leaves_the_card_as_it_was() {
+        let asks = [ask("a", Some("setup")), ask("b", Some("setup"))];
+        let mut triage = Triage::default();
+        assert!(write(&mut triage, &asks[0]).is_some());
+        triage.written(
+            triage::key(&asks[0]),
+            Err(data::privateer::Error::NotConfigured("refused".into())),
+        );
+        assert_eq!(triage.progress(&cards(&asks)[0]), Some((0, 2)));
+    }
 }
