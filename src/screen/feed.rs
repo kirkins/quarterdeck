@@ -25,6 +25,8 @@ use serde_json::{Value, json};
 #[derive(Debug, Clone)]
 pub enum Message {
     LoadOlder,
+    /// Show only the open items, asked of Privateer over the whole history.
+    OnlyWaiting(bool),
     /// Show or hide the answer controls under an open ask, by its key.
     Answer(String),
     OpenLink(String),
@@ -237,7 +239,12 @@ pub fn view<'a>(
     composer: &'a Composer,
     theme: &'a Theme,
 ) -> Element<'a, Message> {
+    let only_waiting = checkbox(connection.feed(Which::All).open_only)
+        .label("Only waiting on me")
+        .on_toggle(Message::OnlyWaiting)
+        .style(theme::checkbox::primary);
     column![
+        container(only_waiting).padding([4, 12]),
         conversation(connection, Which::All, triage, answering, theme),
         composer.view(Some(&connection.ships)),
     ]
@@ -265,6 +272,7 @@ pub fn conversation<'a>(
                 "This Privateer has no captain.feed yet.".to_owned()
             }
             Some(error) => error.to_string(),
+            None if feed.open_only => "Nothing is waiting on you.".to_owned(),
             None if which == Which::All => "No messages yet.".to_owned(),
             None => "No messages with this ship yet.".to_owned(),
         };
