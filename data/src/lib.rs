@@ -3,6 +3,7 @@ pub use self::config::Config;
 pub use self::dashboard::Dashboard;
 pub use self::window::Window;
 
+pub mod alert;
 pub mod ansi;
 pub mod answered;
 pub mod appearance;

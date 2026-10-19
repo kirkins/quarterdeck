@@ -17,6 +17,21 @@ pub struct Config {
     pub scale_factor: ScaleFactor,
     pub sidebar: Sidebar,
     pub privateer: Privateer,
+    pub notifications: Notifications,
+}
+
+/// Desktop notifications for asks that newly need the captain now.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Notifications {
+    /// Unset, they are on when reading a real fleet and off for fixtures.
+    pub enabled: Option<bool>,
+}
+
+impl Notifications {
+    pub fn enabled(self, source: Source) -> bool {
+        self.enabled.unwrap_or(source == Source::Cli)
+    }
 }
 
 /// How Quarterdeck reaches Privateer.
@@ -151,6 +166,7 @@ struct File {
     scale_factor: ScaleFactor,
     sidebar: Sidebar,
     privateer: Privateer,
+    notifications: Notifications,
 }
 
 impl Config {
@@ -191,6 +207,7 @@ impl Config {
                 home: file.privateer.home.map(expand_home),
                 ..file.privateer
             },
+            notifications: file.notifications,
         })
     }
 }
@@ -438,6 +455,22 @@ mod tests {
         assert!(!config.appearance.selected.is_dynamic());
         assert_eq!(config.sidebar.position, Position::Right);
         assert_eq!(config.font.size, Some(14));
+    }
+
+    #[tokio::test]
+    async fn notifications_follow_the_source_unless_set() {
+        let unset = Notifications::default();
+        assert!(unset.enabled(Source::Cli));
+        assert!(!unset.enabled(Source::Fixtures));
+
+        let dir = scratch("notifications");
+        std::fs::write(
+            dir.join("config.toml"),
+            "[notifications]\nenabled = false\n",
+        )
+        .unwrap();
+        let config = Config::load_from(&dir).await.unwrap();
+        assert!(!config.notifications.enabled(Source::Cli));
     }
 
     #[tokio::test]

@@ -41,7 +41,12 @@ bin = "privateer"                             # a path, or a name on PATH
 source = "cli"                                # or "fixtures" for invented data
 poll_seconds = 15                             # at least 5
 allow_send = false                            # true to really send answers
+
+[notifications]
+enabled = true                                # default: on for "cli", off for "fixtures"
 ```
+
+When an ask newly needs you now (high urgency, or a deadline within a day), Quarterdeck shows a desktop notification: the ship and what it asks, or a count and the first few when several arrive together. Each ask is announced once, whether it arrived urgent or became urgent as its deadline drew near. What already waits when Quarterdeck starts is not announced.
 
 Quarterdeck runs `privateer --home HOME COMMAND --json ARGS` as the captain: it clears `PRIVATEER_ACTOR`, `PRIVATEER_ROLE` and `PRIVATEER_HOME`, so starting it from a ship's shell does not make it act as that ship. Each command runs in its own process group, with a time limit and an output limit, and is stopped with everything it started when it runs over. When `privateer machine captain` keeps the captain's desk on another machine, Privateer answers the captain's commands from there (Privateer PR #251).
 
@@ -63,6 +68,7 @@ Layout:
 - `src/connection.rs`: polling Privateer, and what it last answered.
 - `src/screen/feed.rs` and `data/src/feed.rs`: the Feed, and the conversation read by cursor.
 - `src/screen/triage.rs`: the Triage view, decision cards, answering and dismissing.
+- `data/src/alert.rs` and `src/notification.rs`: which asks newly need you now, and the desktop notification.
 - `data/src/triage.rs`: sections and order. `data/src/decision.rs`: an ask as a card, and the reply and dismiss arguments.
 - `data/src/privateer.rs`: running the privateer binary, and the one guarded write path. `data/src/captain.rs`: what `captain.waiting` returns.
 - `data/src/markdown.rs` and `src/widget/markdown.rs`: Markdown into a document model, and drawing it. Ported from halloy-extend's Doc Lib parser and extension rich-text blocks; inline `$...$` math is not read, so prices stay text.

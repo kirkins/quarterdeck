@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use data::alert::Alerts;
 use data::answered::{self, Answered};
 use data::captain::Waiting;
 use data::choices;
@@ -138,6 +139,9 @@ pub struct Connection {
     pub spend: Spend,
     pub tools: Tools,
     pub answers: Answers,
+    /// Show a desktop notification when an ask newly needs the captain now.
+    pub notify: bool,
+    alerts: Alerts,
 }
 
 /// What the captain answered lately, read while Triage is shown: every
@@ -286,6 +290,8 @@ impl Connection {
             spend: Spend::default(),
             tools: Tools::default(),
             answers: Answers::default(),
+            notify: false,
+            alerts: Alerts::default(),
         }
     }
 
@@ -332,6 +338,7 @@ impl Connection {
         }
         *self = Self {
             generation: self.generation + 1,
+            notify: self.notify,
             feed: Feed {
                 scope: self.feed.scope.clone(),
                 open_only: self.feed.open_only,
@@ -826,6 +833,14 @@ impl Connection {
             .iter()
             .map(|item| (triage::key(item), Details::read(item)))
             .collect();
+        // Every source has answered once: needs read, or known unreadable.
+        let complete = self.needs.is_some() || self.needs_reason.is_some();
+        if let Some(alert) =
+            self.alerts.observe(&waiting.waiting, now_ms(), complete)
+            && self.notify
+        {
+            crate::notification::show(alert);
+        }
         self.waiting = Some(waiting);
     }
 
