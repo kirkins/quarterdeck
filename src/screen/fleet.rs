@@ -5,6 +5,7 @@
 use std::collections::HashSet;
 
 use data::fleet::{Board, Job, Machine, MachineRow, Ship, ShipRow, Wait};
+use data::session::Target;
 use iced::widget::{button, column, container, row, scrollable, space};
 use iced::{Alignment, Length, Padding};
 
@@ -20,6 +21,12 @@ type Style = fn(&Theme) -> iced::widget::text::Style;
 pub enum Message {
     /// Fold or unfold a machine's ships, by its name.
     Toggle(String),
+    /// Watch a first mate's or crew's live session, under this name.
+    Watch(Target, String),
+}
+
+pub enum Event {
+    Watch(Target, String),
 }
 
 #[derive(Default)]
@@ -28,12 +35,14 @@ pub struct Fleet {
 }
 
 impl Fleet {
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message) -> Option<Event> {
         match message {
+            Message::Watch(target, label) => Some(Event::Watch(target, label)),
             Message::Toggle(machine) => {
                 if !self.folded.remove(&machine) {
                     self.folded.insert(machine);
                 }
+                None
             }
         }
     }
@@ -288,18 +297,22 @@ fn ship_view<'a>(
         ));
     }
 
-    let mut block = column![
-        row![name, dotted(facts)]
-            .spacing(12)
-            .align_y(Alignment::Center)
-    ]
-    .spacing(4);
+    let mut head = row![name, dotted(facts)]
+        .spacing(12)
+        .align_y(Alignment::Center);
+    if ship.hosted && !dim {
+        head = head.push(space().width(Length::Fill)).push(watch(
+            Target::first_mate(ship.name.as_str()),
+            ship.name.clone(),
+        ));
+    }
+    let mut block = column![head].spacing(4);
 
     let mut crew = Column::new()
         .spacing(6)
         .padding(Padding::default().left(16));
     for job in &ship.jobs {
-        crew = crew.push(job_view(job, dim, now));
+        crew = crew.push(job_view(&ship.name, job, dim, now));
     }
     let hidden = (ship.jobs_total as usize).saturating_sub(ship.jobs.len());
     if hidden > 0 {
@@ -312,7 +325,12 @@ fn ship_view<'a>(
     container(block).padding([0, 8]).into()
 }
 
-fn job_view<'a>(job: &'a Job, dim: bool, now: i64) -> Element<'a, Message> {
+fn job_view<'a>(
+    ship: &str,
+    job: &'a Job,
+    dim: bool,
+    now: i64,
+) -> Element<'a, Message> {
     let state = job.state.as_deref().unwrap_or("unknown");
     let state_style: Style = if job.is_orphaned() {
         theme::text::error
@@ -351,7 +369,14 @@ fn job_view<'a>(job: &'a Job, dim: bool, now: i64) -> Element<'a, Message> {
         head.push(("heavy".into(), theme::text::tertiary));
     }
 
-    let mut lines = column![dotted(head)].spacing(2);
+    let mut first = row![dotted(head)].spacing(12).align_y(Alignment::Center);
+    if job.session.is_some() && !dim {
+        first = first.push(space().width(Length::Fill)).push(watch(
+            Target::crew(ship, job.id.as_str()),
+            format!("{ship} › {title}"),
+        ));
+    }
+    let mut lines = column![first].spacing(2);
     if let Some(doing) = job.doing.as_ref().filter(|d| !d.text.is_empty()) {
         lines = lines.push(text(doing.text.as_str()).style(if dim {
             theme::text::tertiary
@@ -370,6 +395,15 @@ fn job_view<'a>(job: &'a Job, dim: bool, now: i64) -> Element<'a, Message> {
             .push(text(wait_label(wait, now)).style(theme::text::tertiary));
     }
     lines.into()
+}
+
+/// A button that opens a session in Live.
+fn watch<'a>(target: Target, label: String) -> Element<'a, Message> {
+    button(text("Watch").size(theme::TEXT_SIZE - 1.0))
+        .padding([1, 8])
+        .style(|theme, status| theme::button::secondary(theme, status, false))
+        .on_press(Message::Watch(target, label))
+        .into()
 }
 
 /// Why a job is not moving, in words: what it waits for, since when, and

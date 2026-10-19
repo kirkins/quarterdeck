@@ -42,7 +42,7 @@ pub enum Event {
     /// Fetch a stored report.
     ReadReport(String),
     /// Read a ship's live session now.
-    WatchSession(String),
+    WatchSession(data::session::Target),
     /// Run a write for the ask `key`.
     Write {
         key: String,
@@ -94,9 +94,8 @@ impl Dashboard {
 
     /// The ship whose live session should be read now: one is picked and
     /// the Live pane is on screen.
-    pub fn watching(&self) -> Option<&str> {
-        let shown = self.panes.iter().any(|(_, pane)| pane.view == View::Live);
-        shown.then(|| self.live.ship()).flatten()
+    pub fn watching(&self) -> Option<&data::session::Target> {
+        self.shows(View::Live).then(|| self.live.target()).flatten()
     }
 
     /// Whether a view's pane is on screen: open, and not behind a
@@ -121,6 +120,23 @@ impl Dashboard {
         match read {
             Some(reports::Event::Read(id)) => Some(Event::ReadReport(id)),
             _ => shown,
+        }
+    }
+
+    /// Show a session in Live and read it now.
+    fn watch(
+        &mut self,
+        target: data::session::Target,
+        label: String,
+        connection: &Connection,
+    ) -> Option<Event> {
+        let read = self.live.update(live::Message::Pick(target, label));
+        self.update(Message::Open(View::Live), connection);
+        match read {
+            Some(live::Event::Watch(target)) => {
+                Some(Event::WatchSession(target))
+            }
+            _ => None,
         }
     }
 
@@ -216,10 +232,11 @@ impl Dashboard {
                 }
                 None
             }
-            Message::Fleet(message) => {
-                self.fleet.update(message);
-                None
-            }
+            Message::Fleet(message) => match self.fleet.update(message)? {
+                fleet::Event::Watch(target, label) => {
+                    self.watch(target, label, connection)
+                }
+            },
             Message::Live(message) => match self.live.update(message)? {
                 live::Event::Watch(ship) => Some(Event::WatchSession(ship)),
                 live::Event::Write { command, args } => Some(Event::Write {
