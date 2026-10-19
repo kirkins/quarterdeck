@@ -1,0 +1,452 @@
+{
+	"ships": {
+		"billing": {
+			"ship": "billing",
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 30
+			},
+			"first_mate": {
+				"harness": "pi",
+				"options": {
+					"model": "large",
+					"effort": "high",
+					"max_turns": 40,
+					"api_key": "<set>",
+					"proxy": "https://deck:PLANTED-PASSWORD@proxy.example.test:8443/v1?api_token=PLANTED-QUERY&region=eu",
+					"upstream": {
+						"region": "eu",
+						"headers": {
+							"X-Session": "PLANTED-NESTED",
+							"Accept": "application/json"
+						},
+						"mirrors": [
+							{
+								"url": "https://mirror:PLANTED-MIRROR@mirror.example.test/?secret=PLANTED-MIRROR-QUERY"
+							}
+						]
+					}
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": [
+						"plan-main",
+						"free-pool"
+					]
+				},
+				"crew": {
+					"list": "ship",
+					"names": [
+						"plan-main"
+					]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": [
+						"free-pool",
+						"credits-reserve"
+					]
+				},
+				"routes": {
+					"plan-main": {
+						"cost": "plan",
+						"tier": 1,
+						"uses": [
+							"implement",
+							"review",
+							"diagnose",
+							"design"
+						]
+					},
+					"free-pool": {
+						"cost": "free",
+						"tier": 4,
+						"uses": []
+					},
+					"credits-reserve": {
+						"cost": "credits",
+						"tier": null,
+						"uses": []
+					}
+				}
+			},
+			"charter": {
+				"actions": [
+					"read the ledger",
+					"draft the retry policy",
+					"reply to the captain",
+					"run the billing tests",
+					"open pull requests",
+					"send dunning mail after approval"
+				],
+				"active": true
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": [
+					"Never charge a card",
+					"Ask before a live policy changes"
+				],
+				"ship_rules": []
+			},
+			"tool_bundles": {
+				"bounded": true,
+				"selected": {
+					"skills": [
+						"retry-policy",
+						"dunning-letters",
+						"invoice-pdf",
+						"refund-check",
+						"tax-lines",
+						"currency-round",
+						"chargeback-notes",
+						"ledger-recon",
+						"webhook-replay",
+						"statement-csv",
+						"fraud-flags"
+					],
+					"mcp_servers": [
+						"stripe-sandbox",
+						"postgres-ledger",
+						"mail-drafts",
+						"calendar"
+					]
+				},
+				"error": null
+			},
+			"skills": [
+				{
+					"name": "retry-policy",
+					"description": "Draft and replay retry policies against past declines"
+				},
+				{
+					"name": "dunning-letters",
+					"description": "Write the reminder emails for overdue invoices"
+				},
+				{
+					"name": "invoice-pdf",
+					"description": "Render invoices to PDF with the house template"
+				},
+				{
+					"name": "refund-check",
+					"description": "Check a refund against the original charge"
+				},
+				{
+					"name": "tax-lines",
+					"description": "Split tax across invoice lines by jurisdiction"
+				},
+				{
+					"name": "currency-round",
+					"description": "Round amounts consistently across currencies"
+				},
+				{
+					"name": "chargeback-notes",
+					"description": "Summarise a chargeback for the captain"
+				},
+				{
+					"name": "ledger-recon",
+					"description": "Reconcile the day's ledger against the bank export"
+				},
+				{
+					"name": "webhook-replay",
+					"description": "Replay a failed payment webhook safely"
+				},
+				{
+					"name": "statement-csv",
+					"description": "Export account statements as CSV"
+				},
+				{
+					"name": "fraud-flags",
+					"description": "Explain why a payment was flagged"
+				}
+			],
+			"mcp_servers": [
+				{
+					"name": "stripe-sandbox",
+					"url": "https://user:PLANTED-MCP@mcp.example.test/s/PLANTED-PATH/mcp?key=PLANTED-MCP-QUERY",
+					"description": "Test-mode card and charge tools",
+					"credentials": [
+						"STRIPE_API_KEY"
+					]
+				},
+				{
+					"name": "postgres-ledger",
+					"url": "https://db.example.test:5432",
+					"description": "Read-only ledger queries",
+					"credentials": [
+						"DB_PASSWORD"
+					]
+				},
+				{
+					"name": "mail-drafts",
+					"url": "https://mail.example.test",
+					"description": "Draft dunning mail for the captain's review",
+					"credentials": [
+						"MAIL_TOKEN"
+					]
+				},
+				{
+					"name": "calendar",
+					"url": "https://cal.example.test",
+					"description": null,
+					"credentials": []
+				}
+			],
+			"plugins": [
+				{
+					"name": "attended/mail.ts",
+					"description": "Privateer's attended mail adapter: the ship's mail in the live session."
+				},
+				{
+					"name": "attended/captain.ts",
+					"description": "The captain's fleet commands, such as /stow, in the live session."
+				},
+				{
+					"name": "attended/calm.ts",
+					"description": "The /calm conversation view for Pi sessions."
+				}
+			]
+		},
+		"chandlery": {
+			"ship": "chandlery",
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 7.5
+			},
+			"first_mate": {
+				"harness": "claude",
+				"options": {
+					"model": "large",
+					"effort": "medium"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": [
+						"plan-main"
+					]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": [
+						"plan-main",
+						"free-pool"
+					]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": [
+						"free-pool"
+					]
+				},
+				"routes": {
+					"plan-main": {
+						"cost": "plan",
+						"tier": 1,
+						"uses": [
+							"implement",
+							"review",
+							"diagnose",
+							"design"
+						]
+					},
+					"free-pool": {
+						"cost": "free",
+						"tier": 4,
+						"uses": []
+					}
+				}
+			},
+			"charter": {
+				"actions": [
+					"build the catalogue",
+					"reply to the captain",
+					"run the visual tests"
+				],
+				"active": false
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": [
+					"Release only with the captain's approval"
+				],
+				"ship_rules": []
+			},
+			"tool_bundles": {
+				"bounded": true,
+				"selected": {
+					"skills": [
+						"catalogue-pages",
+						"visual-check"
+					]
+				},
+				"error": "bundle catalogue-pages: SKILL.md is missing its description"
+			},
+			"skills": [],
+			"mcp_servers": [
+				{
+					"name": "shop-preview",
+					"url": "https://preview.example.test",
+					"description": "Preview deploys for the catalogue",
+					"credentials": []
+				}
+			],
+			"plugins": [
+				{
+					"name": "privateer-mail",
+					"description": "Bounded attended mailbox delivery for a Privateer ship."
+				}
+			]
+		},
+		"docs-site": {
+			"ship": "docs-site",
+			"machine": "atlas",
+			"hosted": true,
+			"sleep": {
+				"policy": "after_idle",
+				"idle_minutes": 15
+			},
+			"first_mate": {
+				"harness": null,
+				"options": {
+					"model": "small-free"
+				}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": [
+						"free-pool"
+					]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": [
+						"free-pool"
+					]
+				},
+				"errand": {
+					"list": "none",
+					"names": []
+				},
+				"routes": {
+					"free-pool": {
+						"cost": "free",
+						"tier": 4,
+						"uses": []
+					}
+				}
+			},
+			"charter": {
+				"actions": [
+					"write the changelog",
+					"reply to the captain"
+				],
+				"active": true
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": [],
+				"ship_rules": []
+			},
+			"tool_bundles": {
+				"bounded": false,
+				"selected": null,
+				"error": null
+			},
+			"skills": [],
+			"mcp_servers": [],
+			"plugins": []
+		},
+		"status-page": {
+			"ship": "status-page",
+			"machine": "atlas",
+			"hosted": false,
+			"sleep": {
+				"policy": "not_hosted",
+				"idle_minutes": null
+			},
+			"first_mate": {
+				"harness": "codex",
+				"options": {}
+			},
+			"routes": {
+				"first_mate": {
+					"list": "fleet",
+					"names": [
+						"plan-main"
+					]
+				},
+				"crew": {
+					"list": "fleet",
+					"names": [
+						"free-pool",
+						"plan-main"
+					]
+				},
+				"errand": {
+					"list": "fleet",
+					"names": [
+						"free-pool"
+					]
+				},
+				"routes": {
+					"plan-main": {
+						"cost": "plan",
+						"tier": 1,
+						"uses": [
+							"implement",
+							"review",
+							"diagnose",
+							"design"
+						]
+					},
+					"free-pool": {
+						"cost": "free",
+						"tier": 4,
+						"uses": []
+					}
+				}
+			},
+			"charter": {
+				"actions": [
+					"watch the uptime checks",
+					"reply to the captain"
+				],
+				"active": true
+			},
+			"permissions": {
+				"fleet_mode": "ask",
+				"fleet_rules": [
+					"Ask before a live policy changes"
+				],
+				"ship_rules": []
+			},
+			"tool_bundles": {
+				"bounded": true,
+				"selected": [
+					"status@1"
+				],
+				"error": null
+			},
+			"skills": [
+				{
+					"name": "incident-notes",
+					"description": "Write up an incident for the status page"
+				}
+			],
+			"mcp_servers": [],
+			"plugins": []
+		},
+		"search-index": {
+			"refused": "ship search-index is on machine boreas; ask there"
+		}
+	}
+}

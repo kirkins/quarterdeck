@@ -112,6 +112,14 @@ impl Dashboard {
         self.spend.query()
     }
 
+    /// The ship whose tools should be read: they are the tab shown in Ships,
+    /// and Ships is on screen.
+    pub fn tools_ship(&self) -> Option<&str> {
+        self.shows(View::Ships)
+            .then(|| self.ships.tools_ship())
+            .flatten()
+    }
+
     /// The ship whose live session should be read now: one is picked and
     /// the Live pane is on screen.
     pub fn watching(&self) -> Option<&data::session::Target> {
