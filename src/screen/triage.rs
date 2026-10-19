@@ -42,6 +42,8 @@ pub enum Message {
     StartDismiss(String),
     Note(String, String),
     SendDismiss(String),
+    /// Mark an unread notice read: its key, then its mail id.
+    SendMark(String, String),
     OpenLink(String),
     OpenReport(reports::Opened),
     /// Narrow the list to one ship, or to all (None).
@@ -208,16 +210,23 @@ impl Triage {
             }
             Message::SendDismiss(key) => {
                 let (item, _) = find(connection, &key)?;
-                let note = self.drafts.get(&key).map(|d| d.note.clone());
-                let args = Ok(decision::dismiss_args(
-                    &item.mail.id,
-                    note.as_deref().unwrap_or_default(),
-                ));
-                self.write(key, "captain.dismiss", args)
+                let id = item.mail.id.clone();
+                self.dismiss(key, &id)
             }
+            Message::SendMark(key, id) => self.dismiss(key, &id),
             Message::OpenLink(url) => Some(Event::OpenLink(url)),
             Message::OpenReport(opened) => Some(Event::OpenReport(opened)),
         }
+    }
+
+    /// Close the ask `id` with the note in its draft, as Dismiss does.
+    fn dismiss(&mut self, key: String, id: &str) -> Option<Event> {
+        let note = self.drafts.get(&key).map(|d| d.note.clone());
+        let args = Ok(decision::dismiss_args(
+            id,
+            note.as_deref().unwrap_or_default(),
+        ));
+        self.write(key, "captain.dismiss", args)
     }
 
     fn write(
@@ -377,6 +386,73 @@ impl Triage {
                 panel.push(text(problem.as_str()).style(theme::text::error));
         }
         Some(panel.into())
+    }
+
+    /// Whether an answer to this ask was sent from here. The Feed closes the
+    /// ask in place then, before Privateer's next read shows it closed.
+    pub fn sent(&self, key: &str) -> bool {
+        matches!(self.outcomes.get(key), Some(Outcome::Sent))
+    }
+
+    /// The Mark read control under an unread notice, for a view that shows
+    /// it, such as the Feed: a note and a confirm step, as Dismiss has.
+    pub fn mark_panel<'a>(
+        &'a self,
+        key: &str,
+        id: &str,
+    ) -> Element<'a, Message> {
+        let draft = self.drafts.get(key).cloned().unwrap_or_default();
+        let key = key.to_owned();
+        let mut panel = Column::new().spacing(6);
+        match self.outcomes.get(&key) {
+            Some(Outcome::Sent) => {
+                return text("Marked read").style(theme::text::tertiary).into();
+            }
+            Some(Outcome::Held) => {
+                return text("not sent: sending is off")
+                    .style(theme::text::tertiary)
+                    .into();
+            }
+            Some(Outcome::Sending) => {
+                return text("sending").style(theme::text::tertiary).into();
+            }
+            Some(Outcome::Failed(problem)) => {
+                panel = panel
+                    .push(text(problem.as_str()).style(theme::text::error));
+            }
+            None => {}
+        }
+        if draft.dismissing {
+            let id = id.to_owned();
+            panel = panel
+                .push(
+                    text_input("A note for the ship (optional)", &draft.note)
+                        .on_input({
+                            let key = key.clone();
+                            move |value| Message::Note(key.clone(), value)
+                        })
+                        .on_submit(Message::SendMark(key.clone(), id.clone()))
+                        .padding(6),
+                )
+                .push(
+                    row![
+                        action(
+                            "Mark read",
+                            Message::SendMark(key.clone(), id),
+                            true
+                        ),
+                        action("Cancel", Message::Back(key), false),
+                    ]
+                    .spacing(6),
+                );
+        } else {
+            panel = panel.push(action(
+                "Mark read",
+                Message::StartDismiss(key),
+                false,
+            ));
+        }
+        panel.into()
     }
 
     fn item_view<'a>(

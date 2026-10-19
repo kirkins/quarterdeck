@@ -13,6 +13,10 @@ use std::collections::{HashMap, HashSet};
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::captain::Mail;
+use crate::decision::Card;
+use crate::report::Attached;
+
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Page {
@@ -71,6 +75,138 @@ impl Entry {
         matches!(self.kind.as_str(), "request" | "decision")
             && self.state.as_deref() == Some("open")
     }
+
+    /// The message as a card reads it, for its options.
+    pub fn as_mail(&self) -> Mail {
+        Mail {
+            id: self.id.clone(),
+            from: self.from.clone(),
+            kind: self.kind.clone(),
+            request_kind: None,
+            task_id: None,
+            urgency: self.urgency.clone(),
+            deadline_ms: self.deadline_ms,
+            created_ms: self.created_ms,
+            body: self.body.clone(),
+            payload: self.payload.clone(),
+        }
+    }
+
+    /// The option a captain's reply chose, from its `payload.answer`.
+    fn chosen_option(&self) -> Option<&str> {
+        self.payload
+            .get("answer")?
+            .get("option_id")?
+            .as_str()
+            .filter(|id| !id.is_empty())
+    }
+
+    /// The number of comments the captain put on a report, if any.
+    pub fn comment_count(&self) -> usize {
+        self.payload
+            .get("annotations")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len)
+    }
+
+    /// "N comments on <title>", with the title from the report this message
+    /// carries or the one it answers (`asked`). None without comments.
+    pub fn comments_line(&self, asked: Option<&Entry>) -> Option<String> {
+        let count = self.comment_count();
+        if count == 0 {
+            return None;
+        }
+        let noun = comment_noun(count);
+        let title = Attached::of(&self.payload)
+            .or_else(|| asked.and_then(|ask| Attached::of(&ask.payload)));
+        Some(match title {
+            Some(title) => format!("{noun} on {}", title.title()),
+            None => noun,
+        })
+    }
+
+    /// The captain's own note on a message: its body past the "N comments
+    /// on" line the send puts first. A body without that line is all note.
+    pub fn captain_note(&self) -> Option<String> {
+        let body = self.body.trim();
+        let summary = format!("{} on ", comment_noun(self.comment_count()));
+        let note = match body.strip_prefix(&summary) {
+            Some(_) => body.split_once("\n\n").map_or("", |(_, note)| note),
+            None => body,
+        };
+        let note = note.trim();
+        (!note.is_empty()).then(|| note.to_owned())
+    }
+
+    /// The closing time of an ask: when it was answered or ended.
+    pub fn closed_ms(&self) -> Option<i64> {
+        self.answered_ms.or(self.ended_ms)
+    }
+
+    /// What became of this message, in words, or None while nothing did.
+    /// `reply` is the captain's answer to it, when the feed has it: its
+    /// chosen option is named from the ask's own options.
+    pub fn outcome(&self, reply: Option<&Entry>, now: i64) -> Option<String> {
+        let ended = self.end_reason.as_deref().or(self.state.as_deref())?;
+        if self.kind == "notice" {
+            return matches!(ended, "acknowledged" | "dismissed")
+                .then(|| "Marked read".to_owned());
+        }
+        match ended {
+            "dismissed" => Some("Dismissed".to_owned()),
+            "answered" => Some(match (reply, self.closed_ms()) {
+                (Some(reply), _) => self.answer_words(reply),
+                (None, Some(at)) => format!("Answered {}", ago(now - at)),
+                (None, None) => "Answered".to_owned(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// What the captain's reply to this ask says it chose, or wrote.
+    fn answer_words(&self, reply: &Entry) -> String {
+        let body = reply.body.trim();
+        match reply.chosen_option() {
+            Some(option) => {
+                let label = Card::from_mail(&self.as_mail())
+                    .options
+                    .into_iter()
+                    .find(|choice| choice.id == option)
+                    .map_or_else(|| body.to_owned(), |choice| choice.label);
+                if label.is_empty() {
+                    "Answered".to_owned()
+                } else {
+                    format!("You chose {label}")
+                }
+            }
+            None if body.is_empty() => "Answered".to_owned(),
+            None => format!("You answered: {}", first_words(body, 8)),
+        }
+    }
+}
+
+fn comment_noun(count: usize) -> String {
+    format!("{count} comment{}", if count == 1 { "" } else { "s" })
+}
+
+/// The first few words of a text, with an ellipsis when some were left out.
+fn first_words(text: &str, count: usize) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() > count {
+        format!("{}…", words[..count].join(" "))
+    } else {
+        words.join(" ")
+    }
+}
+
+/// How long ago, for "Answered 2m ago".
+fn ago(ms: i64) -> String {
+    match ms.max(0) / 60_000 {
+        0 => "just now".to_owned(),
+        minutes @ 1..60 => format!("{minutes}m ago"),
+        60..1440 => format!("{}h ago", ms / 3_600_000),
+        _ => format!("{}d ago", ms / 86_400_000),
+    }
 }
 
 impl Page {
@@ -79,18 +215,21 @@ impl Page {
     }
 }
 
-/// One ship's part of the history: its mail with the captain, and with
-/// `ship_mail` its other mail too (ship to ship, crew and runtime notices).
+/// The part of the history a view reads: one ship's, or every ship's when
+/// `ship` is none. With `ship_mail` it also has the other mail too (ship to
+/// ship, crew and runtime notices).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scope {
-    pub ship: String,
+    pub ship: Option<String>,
     pub ship_mail: bool,
 }
 
 impl Scope {
-    /// Narrow a `captain.feed` read to this ship.
+    /// Narrow a `captain.feed` read to this part of the history.
     pub fn narrow(&self, mut args: Value) -> Value {
-        args["ship"] = Value::from(self.ship.as_str());
+        if let Some(ship) = &self.ship {
+            args["ship"] = Value::from(ship.as_str());
+        }
         if self.ship_mail {
             args["include_ship_mail"] = Value::Bool(true);
         }
@@ -122,6 +261,17 @@ impl Thread {
 
     pub fn get(&self, key: &str) -> Option<&Entry> {
         self.entries.get(key)
+    }
+
+    /// The captain's replies, by the key of the ask each one answers.
+    pub fn replies(&self) -> HashMap<String, &Entry> {
+        self.entries()
+            .filter(|entry| entry.from == "captain")
+            .filter_map(|entry| {
+                let ask = entry.correlation.as_ref()?;
+                Some((format!("{}/{ask}", entry.to), entry))
+            })
+            .collect()
     }
 
     /// The arguments for the next read of new mail, or of the newest page
@@ -430,7 +580,7 @@ mod tests {
     fn a_ships_conversation_reads_only_that_ship_and_names_it() {
         let thread = Thread::default();
         let scope = Scope {
-            ship: "billing".into(),
+            ship: Some("billing".into()),
             ship_mail: true,
         };
         let args = scope.narrow(thread.newer_args(30, 1000));
@@ -446,5 +596,133 @@ mod tests {
         let mut between = entry("ops", "m2", 2, "c2");
         between.ship = Some("billing".into());
         assert_eq!(between.ship(), "billing");
+    }
+
+    #[test]
+    fn the_feed_narrows_to_a_ship_or_to_ship_mail_or_neither() {
+        let read = json!({"before": 1001, "limit": 30});
+        let all_ships = Scope {
+            ship: None,
+            ship_mail: true,
+        };
+        assert_eq!(
+            all_ships.narrow(read.clone()),
+            json!({"before": 1001, "limit": 30, "include_ship_mail": true})
+        );
+        let neither = Scope {
+            ship: None,
+            ship_mail: false,
+        };
+        assert_eq!(neither.narrow(read.clone()), read);
+    }
+
+    #[test]
+    fn a_reply_is_found_by_the_ask_it_answers() {
+        let mut thread = Thread::default();
+        let mut reply = entry("captain", "r1", 20, "c2");
+        reply.to = "chandlery".into();
+        reply.correlation = Some("s-301".into());
+        thread.add_newer(Page {
+            entries: vec![entry("chandlery", "s-301", 10, "c1"), reply],
+            more: false,
+        });
+        let replies = thread.replies();
+        assert_eq!(replies["chandlery/s-301"].id, "r1");
+        assert_eq!(replies.len(), 1);
+    }
+
+    #[test]
+    fn an_answered_ask_says_what_the_captain_chose_or_wrote() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../fixtures/captain.feed.json"
+        ))
+        .unwrap();
+        let page = Page::parse(fixture).unwrap();
+        let by_id = |id: &str| {
+            page.entries.iter().find(|e| e.id == id).unwrap().clone()
+        };
+        let ask = by_id("s-301");
+        let reply = by_id("r-301");
+        // The fixture's reply has no option, so its words stand: the first
+        // eight, then an ellipsis.
+        assert_eq!(
+            ask.outcome(Some(&reply), 0).as_deref(),
+            Some("You answered: Homepage only, for a week. Then we look…")
+        );
+
+        let mut chose = reply.clone();
+        chose.body = "Everywhere — the whole site".into();
+        chose.payload = json!({"answer": {"option_id": "all"}});
+        assert_eq!(
+            ask.outcome(Some(&chose), 0).as_deref(),
+            Some("You chose Everywhere")
+        );
+
+        // Without the reply, the time it closed stands in.
+        let closed = ask.closed_ms().unwrap();
+        assert_eq!(
+            ask.outcome(None, closed + 2 * 60_000).as_deref(),
+            Some("Answered 2m ago")
+        );
+        assert_eq!(
+            ask.outcome(None, closed + 30_000).as_deref(),
+            Some("Answered just now")
+        );
+    }
+
+    #[test]
+    fn a_dismissed_ask_and_a_read_notice_say_so() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../fixtures/captain.feed.json"
+        ))
+        .unwrap();
+        let page = Page::parse(fixture).unwrap();
+        let by_id = |id: &str| {
+            page.entries.iter().find(|e| e.id == id).unwrap().clone()
+        };
+        assert_eq!(
+            by_id("m-601").outcome(None, 0).as_deref(),
+            Some("Dismissed")
+        );
+        assert_eq!(by_id("o-201").outcome(None, 0), None);
+
+        let mut read = by_id("o-201");
+        read.state = Some("acknowledged".into());
+        assert_eq!(read.outcome(None, 0).as_deref(), Some("Marked read"));
+        assert!(!read.is_unread_notice());
+    }
+
+    #[test]
+    fn comments_read_as_a_count_on_the_report_and_the_captains_note() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../fixtures/captain.feed.json"
+        ))
+        .unwrap();
+        let page = Page::parse(fixture).unwrap();
+        let by_id = |id: &str| {
+            page.entries.iter().find(|e| e.id == id).unwrap().clone()
+        };
+        let report = by_id("d-701");
+        let reply = by_id("c-701");
+        assert_eq!(reply.comment_count(), 2);
+        assert_eq!(
+            reply.comments_line(Some(&report)).as_deref(),
+            Some("2 comments on Onboarding guide, draft 2")
+        );
+        // The fixture's body has no count line, so all of it is the note.
+        assert_eq!(
+            reply.captain_note().as_deref(),
+            Some("Two changes before the tag, both in the comments.")
+        );
+
+        let mut sent = reply.clone();
+        sent.body =
+            "1 comment on Onboarding\n\nOne more, after the tag.".into();
+        sent.payload = json!({"annotations": [{"comment": "x"}]});
+        assert_eq!(
+            sent.captain_note().as_deref(),
+            Some("One more, after the tag.")
+        );
+        assert_eq!(by_id("o-201").comments_line(None), None);
     }
 }

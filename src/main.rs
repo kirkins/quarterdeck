@@ -334,6 +334,10 @@ impl Quarterdeck {
                         .map(Message::Connection);
                     Task::batch([read, self.save_layout()])
                 }
+                Some(dashboard::Event::FeedScope(scope)) => self
+                    .connection
+                    .set_scope(Some(scope))
+                    .map(Message::Connection),
                 Some(dashboard::Event::Refresh) => Task::batch([
                     self.connection.poll().map(Message::Connection),
                     self.read_tools(true),

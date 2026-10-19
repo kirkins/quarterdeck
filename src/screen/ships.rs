@@ -62,7 +62,7 @@ impl Ships {
     /// The conversation to read for the ship on screen.
     pub fn scope(&self) -> Option<Scope> {
         Some(Scope {
-            ship: self.selected.clone()?,
+            ship: Some(self.selected.clone()?),
             ship_mail: self.ship_mail,
         })
     }

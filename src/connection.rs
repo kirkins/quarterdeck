@@ -44,6 +44,9 @@ pub enum Message {
     /// The open items over the whole history, read on a refresh.
     FeedOpenRead {
         generation: u64,
+        /// The part of the history it was read for; a read for another is
+        /// dropped.
+        scope: Option<Scope>,
         /// The time bound asked for: messages written after it were not
         /// judged by the refresh.
         before: i64,
@@ -200,7 +203,8 @@ pub enum Which {
 /// and whether the last read worked.
 #[derive(Default)]
 pub struct Feed {
-    /// The ship it is narrowed to; none for the whole history.
+    /// The part of the history it reads; none for all of it, captain mail
+    /// only.
     pub scope: Option<Scope>,
     /// Only the open items, asked of Privateer, so the whole history is
     /// covered and not only the pages read.
@@ -308,6 +312,7 @@ impl Connection {
         *self = Self {
             generation: self.generation + 1,
             feed: Feed {
+                scope: self.feed.scope.clone(),
                 open_only: self.feed.open_only,
                 ..Feed::default()
             },
@@ -348,7 +353,24 @@ impl Connection {
             return Task::none();
         }
         self.feed = Feed {
+            scope: self.feed.scope.clone(),
             open_only,
+            ..Feed::default()
+        };
+        self.read_feed(Which::All, false)
+    }
+
+    /// Narrow the Feed to a ship, or to its ship-to-ship mail, or to
+    /// neither. It is read anew from its newest page when the choice
+    /// changes.
+    pub fn set_scope(&mut self, scope: Option<Scope>) -> Task<Message> {
+        let scope = scope.filter(|s| s.ship.is_some() || s.ship_mail);
+        if self.feed.scope == scope {
+            return Task::none();
+        }
+        self.feed = Feed {
+            scope,
+            open_only: self.feed.open_only,
             ..Feed::default()
         };
         self.read_feed(Which::All, false)
@@ -363,10 +385,15 @@ impl Connection {
         }
         feed.reading_open = true;
         let before = now_ms() + 1;
+        let scope = feed.scope.clone();
         let client = self.client.clone();
         let generation = self.generation;
         let args =
             json!({"open_only": true, "before": before, "limit": OPEN_PAGE});
+        let args = match &scope {
+            Some(scope) => scope.narrow(args),
+            None => args,
+        };
         Task::perform(
             async move {
                 let value = client.run("captain.feed", args).await?;
@@ -377,6 +404,7 @@ impl Connection {
             },
             move |result| Message::FeedOpenRead {
                 generation,
+                scope: scope.clone(),
                 before,
                 result,
             },
@@ -855,6 +883,7 @@ impl Connection {
             }
             Message::FeedOpenRead {
                 generation,
+                scope,
                 before,
                 result,
             } => {
@@ -863,6 +892,9 @@ impl Connection {
                 }
                 let feed = &mut self.feed;
                 feed.reading_open = false;
+                if feed.scope != scope {
+                    return Task::none();
+                }
                 match result {
                     Ok(page) => {
                         for entry in &page.entries {
