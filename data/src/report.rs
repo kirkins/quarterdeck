@@ -7,8 +7,14 @@
 //! comment anchored to a block of the report by `{selector, quote}`.
 //! The limits are Privateer's, so nothing sent is refused for its size.
 
-use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+use crate::environment;
+use crate::fleet::Snapshot;
 
 pub const MAX_ANNOTATIONS: usize = 100;
 pub const MAX_COMMENT_CHARS: usize = 4096;
@@ -80,7 +86,7 @@ impl Report {
 }
 
 /// One comment on a block of the report.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Comment {
     /// Which block, as `block:<index>`.
     pub selector: String,
@@ -150,6 +156,68 @@ pub fn reply_args(
     Ok(json!({"id": id, "body": body, "payload": {"annotations": annotations}}))
 }
 
+/// The file that holds every report's comment drafts, in the data directory.
+const DRAFTS_FILE: &str = "report-drafts.json";
+
+pub fn drafts_path() -> PathBuf {
+    environment::data_dir().join(DRAFTS_FILE)
+}
+
+/// The drafts kept for a report, by its key. A missing or unreadable file
+/// holds none.
+pub fn load_drafts(path: &Path, key: &str) -> Vec<Comment> {
+    read_drafts(path).remove(key).unwrap_or_default()
+}
+
+/// Keep `comments` as the drafts of a report, or none once it is empty.
+pub fn save_drafts(
+    path: &Path,
+    key: &str,
+    comments: &[Comment],
+) -> Result<(), String> {
+    let mut all = read_drafts(path);
+    if comments.is_empty() {
+        all.remove(key);
+    } else {
+        all.insert(key.to_owned(), comments.to_vec());
+    }
+    let bytes = serde_json::to_vec_pretty(&all).map_err(|e| e.to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let partial = path.with_extension("json.partial");
+    std::fs::write(&partial, bytes).map_err(|e| e.to_string())?;
+    std::fs::rename(&partial, path).map_err(|e| e.to_string())
+}
+
+fn read_drafts(path: &Path) -> BTreeMap<String, Vec<Comment>> {
+    let Ok(bytes) = std::fs::read(path) else {
+        return BTreeMap::new();
+    };
+    serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+        log::warn!("ignoring report drafts {}: {error}", path.display());
+        BTreeMap::new()
+    })
+}
+
+/// Whether a refused `report.get` is for a report held on another machine:
+/// Privateer says it is not in the fleet, and the ship that sent it is placed
+/// on another machine by the fleet as last read.
+pub fn held_elsewhere(
+    error: &str,
+    ship: &str,
+    fleet: Option<&Snapshot>,
+) -> bool {
+    if !(error.contains("no report") && error.contains("in the fleet")) {
+        return false;
+    }
+    fleet
+        .and_then(|fleet| fleet.ship(ship))
+        .is_some_and(|(machine, _)| {
+            matches!(machine.link.as_deref(), Some("reaches" | "reached_by"))
+        })
+}
+
 /// At most `limit` characters, cut by character, never inside one.
 fn cut(text: &str, limit: usize) -> String {
     text.chars().take(limit).collect()
@@ -178,6 +246,53 @@ mod tests {
             matches!(stored, Attached::Stored { ref id, .. } if id == "report-1")
         );
         assert_eq!(Attached::of(&json!({"decision": {}})), None);
+    }
+
+    #[test]
+    fn drafts_are_kept_per_report_until_cleared() {
+        let dir = std::env::temp_dir()
+            .join(format!("quarterdeck-drafts-{}", std::process::id()));
+        let path = dir.join(DRAFTS_FILE);
+        let _ = std::fs::remove_dir_all(&dir);
+        let one = [Comment::on_block(0, "Exports omit photos.", "Fix this")];
+
+        assert!(load_drafts(&path, "ship/a1").is_empty());
+        save_drafts(&path, "ship/a1", &one).unwrap();
+        save_drafts(&path, "ship/b2", &one[..0]).unwrap();
+        assert_eq!(load_drafts(&path, "ship/a1"), one.to_vec());
+
+        save_drafts(&path, "ship/a1", &[]).unwrap();
+        assert!(load_drafts(&path, "ship/a1").is_empty());
+        std::fs::write(&path, b"not json").unwrap();
+        assert!(load_drafts(&path, "ship/a1").is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_report_on_another_machine_is_told_apart() {
+        let fleet = Snapshot::parse(serde_json::json!({
+            "machines": [
+                {"name": "here", "link": "here"},
+                {"name": "laptop", "link": "reaches"},
+            ],
+            "ships": [
+                {"name": "billing", "machine": "here"},
+                {"name": "status-page", "machine": "laptop"},
+            ]
+        }))
+        .unwrap();
+        let refused =
+            r#"{"ok":false,"error":"no report report-1 in the fleet"}"#;
+
+        assert!(held_elsewhere(refused, "status-page", Some(&fleet)));
+        assert!(!held_elsewhere(refused, "billing", Some(&fleet)));
+        assert!(!held_elsewhere(refused, "unknown", Some(&fleet)));
+        assert!(!held_elsewhere(refused, "status-page", None));
+        assert!(!held_elsewhere(
+            "permission denied",
+            "status-page",
+            Some(&fleet)
+        ));
     }
 
     #[test]
