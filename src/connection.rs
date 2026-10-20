@@ -126,8 +126,12 @@ pub struct Connection {
     pub feed: Feed,
     /// The open ship's conversation, in the Ships view.
     pub ship_feed: Feed,
-    /// Every ship the fleet knows, A to Z, read once per connection.
+    /// Every ship the fleet knows, A to Z, kept on a failed refresh.
     pub ships: Vec<Ship>,
+    pub ships_error: Option<Error>,
+    /// A successful read, including an empty fleet.
+    pub ships_read_ms: Option<i64>,
+    ships_asked_ms: Option<i64>,
     /// The live session being watched: its last screen.
     pub screen: Option<Screen>,
     reading_session: bool,
@@ -201,6 +205,8 @@ pub struct Fleet {
 
 /// The fleet is read at most this often while it is on screen.
 const FLEET_EVERY_MS: i64 = 15_000;
+
+const SHIPS_EVERY_MS: i64 = 60_000;
 
 /// A live session's last screen.
 pub struct Screen {
@@ -281,6 +287,9 @@ impl Connection {
             feed: Feed::default(),
             ship_feed: Feed::default(),
             ships: Vec::new(),
+            ships_error: None,
+            ships_read_ms: None,
+            ships_asked_ms: None,
             reading_ships: false,
             reading_report: false,
             reports: HashMap::new(),
@@ -309,7 +318,13 @@ impl Connection {
 
     /// The ships list's first read is under way.
     pub fn ships_loading(&self) -> bool {
-        self.ships.is_empty() && self.reading_ships
+        self.ships_read_ms.is_none()
+            && self.ships_error.is_none()
+            && self.reading_ships
+    }
+
+    pub fn ships_refreshing(&self) -> bool {
+        self.reading_ships
     }
 
     /// The fleet's first read is still to come.
@@ -334,6 +349,7 @@ impl Connection {
     pub fn configure(&mut self, config: &config::Privateer) -> Task<Message> {
         let client = Client::new(config);
         if client == self.client {
+            self.poll = poll_interval(config);
             return Task::none();
         }
         *self = Self {
@@ -342,6 +358,10 @@ impl Connection {
             feed: Feed {
                 scope: self.feed.scope.clone(),
                 open_only: self.feed.open_only,
+                ..Feed::default()
+            },
+            ship_feed: Feed {
+                scope: self.ship_feed.scope.clone(),
                 ..Feed::default()
             },
             ..Self::new(config)
@@ -370,7 +390,7 @@ impl Connection {
             self.poll_needs(),
             self.read_feed(Which::All, false),
             self.read_feed(Which::Ship, false),
-            self.read_ships(),
+            self.read_ships(false),
         ])
     }
 
@@ -684,12 +704,20 @@ impl Connection {
         )
     }
 
-    /// The fleet's ships, until they have been read once.
-    fn read_ships(&mut self) -> Task<Message> {
-        if !self.ships.is_empty() || self.reading_ships {
+    /// Refresh on a bounded interval, or now when explicitly requested.
+    /// An empty fleet and a failed read both wait until the next interval.
+    pub fn read_ships(&mut self, refresh: bool) -> Task<Message> {
+        let now = now_ms();
+        if self.reading_ships
+            || (!refresh
+                && self
+                    .ships_asked_ms
+                    .is_some_and(|at| now.saturating_sub(at) < SHIPS_EVERY_MS))
+        {
             return Task::none();
         }
         self.reading_ships = true;
+        self.ships_asked_ms = Some(now);
         let client = self.client.clone();
         let generation = self.generation;
         Task::perform(
@@ -912,8 +940,15 @@ impl Connection {
                 if generation == self.generation {
                     self.reading_ships = false;
                     match result {
-                        Ok(ships) => self.ships = ships,
-                        Err(error) => log::warn!("{error}"),
+                        Ok(ships) => {
+                            self.ships = ships;
+                            self.ships_read_ms = Some(now_ms());
+                            self.ships_error = None;
+                        }
+                        Err(error) => {
+                            log::warn!("{error}");
+                            self.ships_error = Some(error);
+                        }
                     }
                 }
                 Task::none()
@@ -1166,4 +1201,94 @@ pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_millis() as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ship(name: &str) -> Ship {
+        Ship {
+            name: name.into(),
+            ..Ship::default()
+        }
+    }
+
+    #[test]
+    fn roster_refresh_is_bounded_and_manual_refresh_bypasses_the_interval() {
+        let mut connection = Connection::new(&config::Privateer::default());
+        drop(connection.read_ships(false));
+        assert!(connection.ships_loading());
+        let asked = connection.ships_asked_ms;
+        // A manual refresh cannot overlap a read in flight.
+        drop(connection.read_ships(true));
+        assert_eq!(connection.ships_asked_ms, asked);
+        drop(connection.update(Message::Ships(0, Ok(vec![ship("old")]))));
+        drop(connection.read_ships(false));
+        assert!(!connection.ships_refreshing());
+        drop(connection.read_ships(true));
+        assert!(connection.ships_refreshing());
+        drop(connection.update(Message::Ships(0, Ok(vec![ship("new")]))));
+        assert_eq!(connection.ships, vec![ship("new")]);
+        connection.ships_asked_ms = Some(now_ms() - SHIPS_EVERY_MS);
+        drop(connection.read_ships(false));
+        assert!(connection.ships_refreshing());
+    }
+
+    #[test]
+    fn failed_refresh_keeps_the_list_and_a_successful_empty_read_clears_it() {
+        let mut connection = Connection::new(&config::Privateer::default());
+        drop(connection.update(Message::Ships(0, Ok(vec![ship("kept")]))));
+        let read_ms = connection.ships_read_ms;
+        drop(connection.read_ships(true));
+        drop(connection.update(Message::Ships(
+            0,
+            Err(Error::NotConfigured("offline".into())),
+        )));
+        assert_eq!(connection.ships, vec![ship("kept")]);
+        assert_eq!(connection.ships_read_ms, read_ms);
+        assert!(connection.ships_error.is_some());
+        drop(connection.read_ships(false));
+        assert!(!connection.ships_refreshing());
+        drop(connection.read_ships(true));
+        drop(connection.update(Message::Ships(0, Ok(vec![]))));
+        assert!(connection.ships.is_empty());
+        assert!(connection.ships_read_ms.is_some());
+        assert!(connection.ships_error.is_none());
+        drop(connection.read_ships(false));
+        assert!(!connection.ships_loading());
+        assert!(!connection.ships_refreshing());
+    }
+
+    #[test]
+    fn old_roster_responses_cannot_change_a_new_connection() {
+        let mut connection = Connection::new(&config::Privateer::default());
+        drop(connection.read_ships(false));
+        let changed = config::Privateer {
+            home: Some("/other".into()),
+            ..config::Privateer::default()
+        };
+        drop(connection.configure(&changed));
+        drop(connection.update(Message::Ships(0, Ok(vec![ship("wrong")]))));
+        assert!(connection.ships.is_empty());
+        assert!(connection.ships_refreshing());
+        assert!(connection.ships_read_ms.is_none());
+        drop(connection.update(Message::Ships(1, Ok(vec![ship("right")]))));
+        assert_eq!(connection.ships, vec![ship("right")]);
+        assert!(!connection.ships_refreshing());
+    }
+
+    #[test]
+    fn changing_only_poll_seconds_updates_the_timer_without_dropping_data() {
+        let config = config::Privateer::default();
+        let mut connection = Connection::new(&config);
+        drop(connection.update(Message::Ships(0, Ok(vec![ship("kept")]))));
+        drop(connection.configure(&config::Privateer {
+            poll_seconds: 30,
+            ..config
+        }));
+        assert_eq!(connection.poll_every(), Duration::from_secs(30));
+        assert_eq!(connection.ships, vec![ship("kept")]);
+        assert_eq!(connection.generation, 0);
+    }
 }

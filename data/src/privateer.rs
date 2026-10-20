@@ -136,7 +136,7 @@ impl Client {
             Source::Cli => {
                 let home = self.home.as_deref().ok_or_else(|| {
                     Error::NotConfigured(
-                        "Set [privateer] home in config.toml to a Privateer \
+                        "Set the Privateer home in Settings to a Privateer \
                          home, such as a ship's .privateer folder."
                             .into(),
                     )

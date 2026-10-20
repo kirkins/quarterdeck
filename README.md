@@ -22,6 +22,10 @@ The first build compiles iced and wgpu and takes a while.
 
 Everything is optional. Quarterdeck reads `config.toml` from its config directory (`~/.config/quarterdeck` on Linux, `~/Library/Application Support/quarterdeck` on macOS, or `~/.config/quarterdeck` there too if that has a config file). A `config.toml` beside the executable makes it portable.
 
+Settings lets you choose the source, binary, Privateer home, check interval (at least 5 seconds), and whether sending is allowed. Edits take effect with **Save connection**, which keeps the other TOML settings and comments. **Test connection** checks the draft with `captain.waiting` and `ship.list` without saving it or sending anything; it also works with fixtures. Invalid fields, connection failures, and save errors appear in Settings. The sidebar always says whether sending is on or off. You can still edit the file by hand and use **Reload config.toml** to discard connection edits and read it again.
+
+The ship list refreshes on the first poll at least a minute after the previous attempt. **Refresh ships** in Feed and Ships, or the sidebar's connection check, refreshes it immediately. A failed read keeps the last good list and shows its age and error. A successful read updates the pickers, including when the fleet becomes empty; messages to a destination removed from the list keep their text but cannot be sent until a known ship is selected.
+
 ```toml
 theme = "ferra"                               # or { light = "paper", dark = "ferra" } to follow the system
 scale_factor = 1.0

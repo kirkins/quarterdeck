@@ -8,7 +8,6 @@ use chrono::{DateTime, Local, TimeZone};
 use data::attachment::{self, Attachment};
 use data::feed::{Entry, Scope};
 use data::feed_mark;
-use data::fleet::Snapshot;
 use data::privateer::{Error, Sent};
 use data::ships::Ship;
 use iced::widget::{
@@ -29,6 +28,7 @@ use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    RefreshShips,
     LoadOlder,
     /// The Feed was scrolled: whether the captain is at its newest message.
     Scrolled(scrollable::Viewport),
@@ -99,7 +99,7 @@ impl Composer {
     pub fn update(
         &mut self,
         message: Compose,
-        fleet: Option<&Snapshot>,
+        connection: &Connection,
     ) -> Option<Out> {
         match message {
             Compose::To(ship) => {
@@ -119,10 +119,10 @@ impl Composer {
                 }
                 self.confirming = false;
             }
-            Compose::Confirm => self.confirming = self.ready(fleet),
+            Compose::Confirm => self.confirming = self.ready(connection),
             Compose::Cancel => self.confirming = false,
             Compose::Send => {
-                if !self.ready(fleet) || self.sending {
+                if !self.ready(connection) || self.sending {
                     return None;
                 }
                 let to = self.to.clone()?;
@@ -194,14 +194,20 @@ impl Composer {
         }
     }
 
-    fn ready(&self, fleet: Option<&Snapshot>) -> bool {
+    fn ready(&self, connection: &Connection) -> bool {
         let Some(to) = &self.to else {
             return false;
         };
+        if connection.ships_read_ms.is_none()
+            || !connection.ships.iter().any(|ship| ship.name == *to)
+        {
+            return false;
+        }
         if self.attachments.is_empty() {
             !self.content.text().trim().is_empty()
         } else {
-            attachment::reach(to, fleet) == attachment::Reach::Here
+            attachment::reach(to, connection.fleet.snapshot.as_ref())
+                == attachment::Reach::Here
         }
     }
 
@@ -231,7 +237,7 @@ impl Composer {
     pub fn view<'a>(
         &'a self,
         ships: Option<&'a [Ship]>,
-        fleet: Option<&'a Snapshot>,
+        connection: &'a Connection,
     ) -> Element<'a, Message> {
         let to: Element<'a, Message> = match ships {
             Some(ships) => {
@@ -274,7 +280,7 @@ impl Composer {
                     "Send",
                     Compose::Send,
                     true,
-                    !self.sending,
+                    self.ready(connection) && !self.sending,
                 ))
                 .push(compose_button("Cancel", Compose::Cancel, false, true));
         } else {
@@ -282,7 +288,7 @@ impl Composer {
                 "Send",
                 Compose::Confirm,
                 true,
-                self.ready(fleet) && !self.sending,
+                self.ready(connection) && !self.sending,
             ));
         }
         if let Some((good, line)) = &self.last {
@@ -301,6 +307,13 @@ impl Composer {
             editor,
         ]
         .spacing(6);
+        if connection.ships_read_ms.is_some()
+            && self.to.as_ref().is_some_and(|to| {
+                !connection.ships.iter().any(|s| s.name == *to)
+            })
+        {
+            body = body.push(text("This destination is no longer in the ship list. Choose a ship before sending.").style(theme::text::error));
+        }
         if !self.attachments.is_empty() {
             body = body.push(
                 Row::with_children(
@@ -312,11 +325,10 @@ impl Composer {
                 .spacing(6)
                 .wrap(),
             );
-            if let Some(problem) = self
-                .to
-                .as_deref()
-                .and_then(|to| attachment::reach(to, fleet).problem(to))
-            {
+            if let Some(problem) = self.to.as_deref().and_then(|to| {
+                attachment::reach(to, connection.fleet.snapshot.as_ref())
+                    .problem(to)
+            }) {
                 body = body.push(text(problem).style(theme::text::tertiary));
             }
         }
@@ -523,9 +535,13 @@ pub fn view<'a>(
     );
     let mut page = column![
         container(
-            row![ship_pick, mail, only_waiting]
-                .spacing(12)
-                .align_y(Alignment::Center)
+            column![
+                row![ship_pick, mail, only_waiting]
+                    .spacing(12)
+                    .align_y(Alignment::Center),
+                ships_status(connection),
+            ]
+            .spacing(6)
         )
         .padding([4, 12]),
         thread,
@@ -533,11 +549,85 @@ pub fn view<'a>(
     if let Some(count) = newer {
         page = page.push(new_messages(count));
     }
-    page.push(
-        composer
-            .view(Some(&connection.ships), connection.fleet.snapshot.as_ref()),
-    )
+    page.push(composer.view(Some(&connection.ships), connection))
+        .into()
+}
+
+/// Roster freshness and failures stay beside the ship controls. The last
+/// good list remains usable while a refresh is in flight or has failed.
+pub fn ships_status(connection: &Connection) -> Element<'_, Message> {
+    let line = match (&connection.ships_error, connection.ships_read_ms) {
+        (Some(error), Some(at)) => format!(
+            "Ship refresh failed: {error}. Showing list from {}.",
+            triage::ago(connection::now_ms() - at)
+        ),
+        (Some(error), None) => format!("Could not read ships: {error}"),
+        (None, Some(at)) => format!(
+            "{} ships · checked {}",
+            connection.ships.len(),
+            triage::ago(connection::now_ms() - at)
+        ),
+        (None, None) => "Reading ships…".into(),
+    };
+    let refresh = button(text(if connection.ships_refreshing() {
+        "Refreshing…"
+    } else {
+        "Refresh ships"
+    }))
+    .padding([3, 8])
+    .style(|theme, status| theme::button::secondary(theme, status, false))
+    .on_press_maybe(
+        (!connection.ships_refreshing()).then_some(Message::RefreshShips),
+    );
+    column![
+        text(line).style(if connection.ships_error.is_some() {
+            theme::text::error
+        } else {
+            theme::text::tertiary
+        }),
+        refresh,
+    ]
+    .spacing(4)
     .into()
+}
+
+#[cfg(test)]
+mod composer_tests {
+    use super::*;
+
+    #[test]
+    fn removing_a_destination_blocks_send_and_preserves_the_message() {
+        let mut connection =
+            Connection::new(&data::config::Privateer::default());
+        let mut composer = Composer {
+            to: Some("test".into()),
+            content: text_editor::Content::with_text("Keep my message"),
+            ..Composer::default()
+        };
+        assert!(!composer.ready(&connection));
+        drop(connection.update(connection::Message::Ships(
+            0,
+            Ok(vec![Ship {
+                name: "test".into(),
+                ..Ship::default()
+            }]),
+        )));
+        assert!(composer.ready(&connection));
+        composer.update(Compose::Confirm, &connection);
+        assert!(composer.confirming);
+        // A failed refresh keeps a known destination usable.
+        drop(connection.update(connection::Message::Ships(
+            0,
+            Err(Error::NotConfigured("offline".into())),
+        )));
+        assert!(composer.ready(&connection));
+        drop(connection.update(connection::Message::Ships(0, Ok(vec![]))));
+        assert!(!composer.ready(&connection));
+        assert!(composer.update(Compose::Send, &connection).is_none());
+        assert_eq!(composer.content.text(), "Keep my message");
+        assert_eq!(composer.to.as_deref(), Some("test"));
+        assert!(!composer.sending);
+    }
 }
 
 /// The "N new messages" pill, which scrolls the Feed to its newest message.

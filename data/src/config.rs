@@ -63,6 +63,18 @@ impl Default for Privateer {
     }
 }
 
+impl Privateer {
+    /// Resolve the same home-relative paths for both saved settings and a
+    /// connection test of settings that have not been saved yet.
+    pub fn expanded(self) -> Self {
+        Self {
+            bin: expand_home(self.bin),
+            home: self.home.map(expand_home),
+            ..self
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Source {
@@ -202,11 +214,7 @@ impl Config {
             font: file.font,
             scale_factor: file.scale_factor,
             sidebar: file.sidebar,
-            privateer: Privateer {
-                bin: expand_home(file.privateer.bin),
-                home: file.privateer.home.map(expand_home),
-                ..file.privateer
-            },
+            privateer: file.privateer.expanded(),
             notifications: file.notifications,
         })
     }
@@ -225,6 +233,7 @@ fn expand_home(path: PathBuf) -> PathBuf {
 pub enum Edit {
     Theme(String),
     SidebarPosition(Position),
+    Privateer(Privateer),
 }
 
 impl Config {
@@ -261,6 +270,46 @@ pub async fn apply_to(path: &Path, edit: Edit) -> Result<(), Error> {
                 doc["sidebar"] = toml_edit::table();
             }
             doc["sidebar"]["position"] = toml_edit::value(position);
+        }
+        Edit::Privateer(config) => {
+            let poll_seconds =
+                i64::try_from(config.poll_seconds).map_err(|_| {
+                    Error::Parse("Polling interval is too large".into())
+                })?;
+            if !doc.contains_key("privateer") {
+                doc["privateer"] = toml_edit::table();
+            }
+            let table =
+                doc["privateer"].as_table_like_mut().ok_or_else(|| {
+                    Error::Parse("[privateer] must be a table".into())
+                })?;
+            // Preserve comments on the settings themselves, as well as
+            // unknown Privateer settings and the rest of the document.
+            let mut set = |key: &str, mut value: toml_edit::Value| {
+                if let Some(old) =
+                    table.get(key).and_then(|item| item.as_value())
+                {
+                    *value.decor_mut() = old.decor().clone();
+                }
+                table.insert(key, toml_edit::Item::Value(value));
+            };
+            set(
+                "source",
+                match config.source {
+                    Source::Cli => "cli",
+                    Source::Fixtures => "fixtures",
+                }
+                .into(),
+            );
+            set("bin", config.bin.to_string_lossy().into_owned().into());
+            if let Some(home) = &config.home {
+                set("home", home.to_string_lossy().into_owned().into());
+            }
+            set("poll_seconds", poll_seconds.into());
+            set("allow_send", config.allow_send.into());
+            if config.home.is_none() {
+                table.remove("home");
+            }
         }
     }
 
@@ -471,6 +520,80 @@ mod tests {
         .unwrap();
         let config = Config::load_from(&dir).await.unwrap();
         assert!(!config.notifications.enabled(Source::Cli));
+    }
+
+    #[tokio::test]
+    async fn connection_edits_keep_other_settings_and_comments() {
+        let dir = scratch("connection-edit");
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "# my settings\n[font]\nsize = 14 # bigger\n\n[privateer] # fleet\nbin = 'old' # wrapper\nhome = '/old' # desk\nallow_send = false # opt in\ncustom = 'keep me'\n\n[notifications]\nenabled = false\n").unwrap();
+        let privateer = Privateer {
+            bin: "/a path/privateer".into(),
+            home: Some("/another path/.privateer".into()),
+            poll_seconds: 30,
+            allow_send: true,
+            ..Privateer::default()
+        };
+        apply_to(&path, Edit::Privateer(privateer.clone()))
+            .await
+            .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        for kept in [
+            "# my settings",
+            "size = 14 # bigger",
+            "# fleet",
+            "# wrapper",
+            "# desk",
+            "# opt in",
+            "custom = 'keep me'",
+        ] {
+            assert!(content.contains(kept), "lost {kept}: {content}");
+        }
+        let loaded = Config::load_from(&dir).await.unwrap();
+        assert_eq!(loaded.privateer, privateer);
+        assert_eq!(loaded.font.size, Some(14));
+        assert_eq!(loaded.notifications.enabled, Some(false));
+    }
+
+    #[tokio::test]
+    async fn connection_edits_create_config_and_support_inline_tables() {
+        let dir = scratch("connection-inline");
+        let path = dir.join("config.toml");
+        let privateer = Privateer {
+            source: Source::Fixtures,
+            ..Privateer::default()
+        };
+        apply_to(&path, Edit::Privateer(privateer.clone()))
+            .await
+            .unwrap();
+        assert_eq!(Config::load_from(&dir).await.unwrap().privateer, privateer);
+        std::fs::write(
+            &path,
+            "privateer = { home = '/old', custom = 42 } # portable\n",
+        )
+        .unwrap();
+        apply_to(&path, Edit::Privateer(privateer.clone()))
+            .await
+            .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("custom = 42"));
+        assert!(content.contains("# portable"));
+        assert!(!content.contains("home ="));
+        assert_eq!(Config::load_from(&dir).await.unwrap().privateer, privateer);
+    }
+
+    #[tokio::test]
+    async fn invalid_connection_table_is_not_overwritten() {
+        let dir = scratch("connection-invalid");
+        let path = dir.join("config.toml");
+        let content = "privateer = 'invalid'\n";
+        std::fs::write(&path, content).unwrap();
+        assert!(
+            apply_to(&path, Edit::Privateer(Privateer::default()))
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
     }
 
     #[tokio::test]
