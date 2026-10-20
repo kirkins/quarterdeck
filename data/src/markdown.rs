@@ -1,5 +1,5 @@
 //! Markdown into a small document model: headings, paragraphs, lists,
-//! quotes, code blocks, rules and images, with bold, italic, code,
+//! quotes, code blocks, rules, tables and images, with bold, italic, code,
 //! strikethrough and links inline. Ported from halloy-extend's Doc Lib
 //! (`render_markdown_blocks` in its pdf-runtime helper).
 //!
@@ -32,11 +32,26 @@ pub enum Node {
         lines: Vec<String>,
     },
     Rule,
+    /// A GitHub-style table; every row has one cell per column.
+    Table {
+        alignments: Vec<Align>,
+        header: Vec<Vec<Span>>,
+        rows: Vec<Vec<Vec<Span>>>,
+    },
     /// A local image that exists, with its alt text as caption.
     Image {
         path: PathBuf,
         caption: Option<String>,
     },
+}
+
+/// How a table column lines up its cells.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Align {
+    #[default]
+    Left,
+    Center,
+    Right,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -69,6 +84,18 @@ impl Document {
                         .join("\n"),
                 ),
                 Node::CodeBlock { lines, .. } => Some(lines.join("\n")),
+                Node::Table { header, rows, .. } => Some(
+                    std::iter::once(header)
+                        .chain(rows)
+                        .map(|row| {
+                            row.iter()
+                                .map(|cell| spans(cell))
+                                .collect::<Vec<_>>()
+                                .join(" | ")
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
                 Node::Rule => None,
                 Node::Image { caption, .. } => caption.clone(),
             })
@@ -126,6 +153,12 @@ pub fn parse(markdown: &str, base: Option<&Path>) -> Document {
                 language: fence.language,
                 lines: code,
             });
+            continue;
+        }
+
+        if let Some((table, consumed)) = parse_table(&lines[index..], base) {
+            nodes.push(table);
+            index += consumed;
             continue;
         }
 
@@ -224,6 +257,7 @@ pub fn parse(markdown: &str, base: Option<&Path>) -> Document {
                 && (parse_standalone_image_line(next_trimmed).is_some()
                     || parse_display_math_block(&lines[index..]).is_some()
                     || parse_fence_start(next_trimmed).is_some()
+                    || parse_table(&lines[index..], base).is_some()
                     || parse_heading_line(next_trimmed).is_some()
                     || next_trimmed.starts_with('>')
                     || parse_list_marker(next).is_some()
@@ -350,6 +384,94 @@ fn parse_display_math_block(lines: &[&str]) -> Option<(Vec<String>, usize)> {
     }
 
     None
+}
+
+/// A table: a header row, a delimiter row with as many cells (`---`,
+/// `:--`, `:-:`, `--:`), then rows up to a blank line or a line without a
+/// pipe. Short rows are padded and long ones cut to the header's width.
+fn parse_table(lines: &[&str], base: Option<&Path>) -> Option<(Node, usize)> {
+    let first = lines.first()?.trim();
+    if !first.contains('|') {
+        return None;
+    }
+    let header = split_row(first);
+    let alignments = split_row(lines.get(1)?.trim())
+        .iter()
+        .map(|cell| parse_delimiter_cell(cell))
+        .collect::<Option<Vec<_>>>()?;
+    if alignments.len() != header.len() {
+        return None;
+    }
+
+    let cells = |row: Vec<&str>| {
+        let mut row = row
+            .into_iter()
+            .map(|cell| parse_inline(cell, base))
+            .collect::<Vec<_>>();
+        row.resize(header.len(), Vec::new());
+        row
+    };
+    let mut consumed = 2;
+    let mut rows = Vec::new();
+    while let Some(line) = lines.get(consumed).map(|line| line.trim()) {
+        if line.is_empty() || !line.contains('|') {
+            break;
+        }
+        rows.push(cells(split_row(line)));
+        consumed += 1;
+    }
+
+    Some((
+        Node::Table {
+            alignments,
+            header: cells(header.clone()),
+            rows,
+        },
+        consumed,
+    ))
+}
+
+/// A row's cells, split on pipes that are not escaped, without the outer
+/// pipes.
+fn split_row(line: &str) -> Vec<&str> {
+    let line = line.strip_prefix('|').unwrap_or(line);
+    let line = match line.strip_suffix('|') {
+        Some(rest) if !rest.ends_with('\\') => rest,
+        _ => line,
+    };
+    let mut cells = Vec::new();
+    let mut start = 0;
+    let mut escaped = false;
+    for (index, c) in line.char_indices() {
+        match c {
+            '\\' if !escaped => {
+                escaped = true;
+                continue;
+            }
+            '|' if !escaped => {
+                cells.push(line[start..index].trim());
+                start = index + 1;
+            }
+            _ => {}
+        }
+        escaped = false;
+    }
+    cells.push(line[start..].trim());
+    cells
+}
+
+fn parse_delimiter_cell(cell: &str) -> Option<Align> {
+    let left = cell.starts_with(':');
+    let right = cell.ends_with(':');
+    let dashes = cell.trim_start_matches(':').trim_end_matches(':');
+    if dashes.is_empty() || !dashes.bytes().all(|byte| byte == b'-') {
+        return None;
+    }
+    Some(match (left, right) {
+        (true, true) => Align::Center,
+        (false, true) => Align::Right,
+        _ => Align::Left,
+    })
 }
 
 fn parse_fence_start(line: &str) -> Option<Fence> {
@@ -715,6 +837,62 @@ mod tests {
             spans[0].url.as_deref(),
             Some("https://www.ema.gov.sg/System_Planning.aspx")
         );
+    }
+
+    #[test]
+    fn reads_tables() {
+        let doc = parse(
+            "Costs:\n| Plan | Price | Notes |\n|:-----|------:|:-----:|\n\
+             | **Pro** | $40 | a \\| b |\n| Free |\n\nAfter.\n\n\
+             a | b\n--|--\n1 | 2 | 3\n",
+            None,
+        );
+
+        let Node::Paragraph(spans) = &doc.nodes[0] else {
+            panic!("{:?}", doc.nodes[0]);
+        };
+        assert_eq!(text(spans), "Costs:");
+        let Node::Table {
+            alignments,
+            header,
+            rows,
+        } = &doc.nodes[1]
+        else {
+            panic!("{:?}", doc.nodes[1]);
+        };
+        assert_eq!(alignments, &[Align::Left, Align::Right, Align::Center]);
+        assert_eq!(
+            header.iter().map(|c| text(c)).collect::<Vec<_>>(),
+            ["Plan", "Price", "Notes"]
+        );
+        assert!(rows[0][0].iter().any(|s| s.strong && s.text == "Pro"));
+        assert_eq!(text(&rows[0][2]), "a | b");
+        assert_eq!(rows[1].len(), 3);
+        assert!(rows[1][1].is_empty());
+        assert!(matches!(&doc.nodes[2], Node::Paragraph(_)));
+
+        // Without outer pipes too; a long row is cut to the header.
+        let Node::Table { rows, .. } = &doc.nodes[3] else {
+            panic!("{:?}", doc.nodes[3]);
+        };
+        assert_eq!(
+            rows[0].iter().map(|c| text(c)).collect::<Vec<_>>(),
+            ["1", "2"]
+        );
+        assert_eq!(doc.nodes.len(), 4);
+        assert_eq!(
+            Document {
+                nodes: vec![doc.nodes[1].clone()]
+            }
+            .plain_text(),
+            "Plan | Price | Notes\nPro | $40 | a | b\nFree |  | "
+        );
+    }
+
+    #[test]
+    fn pipes_without_a_delimiter_row_stay_text() {
+        let doc = parse("a | b\nc | d\n", None);
+        assert!(matches!(&doc.nodes[..], [Node::Paragraph(_)]));
     }
 
     #[test]
