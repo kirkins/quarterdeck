@@ -17,6 +17,7 @@ pub mod progress_bar;
 pub mod rule;
 pub mod scrollable;
 pub mod svg;
+pub mod table;
 pub mod text;
 pub mod text_editor;
 pub mod text_input;

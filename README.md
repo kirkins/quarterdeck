@@ -72,7 +72,7 @@ Layout:
 - `data/src/alert.rs` and `src/notification.rs`: which asks newly need you now, and the desktop notification.
 - `data/src/triage.rs`: sections and order. `data/src/decision.rs`: an ask as a card, and the reply and dismiss arguments.
 - `data/src/privateer.rs`: running the privateer binary, and the one guarded write path. `data/src/captain.rs`: what `captain.waiting` returns.
-- `data/src/markdown.rs` and `src/widget/markdown.rs`: Markdown into a document model, and drawing it. Ported from halloy-extend's Doc Lib parser and extension rich-text blocks; inline `$...$` math is not read, so prices stay text.
+- `data/src/markdown.rs` and `src/widget/markdown.rs`: Markdown into a document model, and drawing it. Ported from halloy-extend's Doc Lib parser and extension rich-text blocks; GitHub-style tables are drawn as a grid fitted to the pane, wrapping cells, and scroll sideways only in a pane too narrow for their columns; inline `$...$` math is not read, so prices stay text.
 - `src/screen/reports.rs` and `data/src/report.rs`: the report reader, and comments within Privateer's limits.
 - `src/screen/live.rs` and `data/src/ansi.rs`: the Live view, and a terminal screen's colours.
 - `src/screen/ships.rs`: the Ships view, one ship's conversation and work, built on the Feed's conversation.
