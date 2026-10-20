@@ -131,9 +131,7 @@ impl Ships {
                     theme
                 )
                 .map(Message::Feed),
-                composer
-                    .view(None, connection.fleet.snapshot.as_ref())
-                    .map(Message::Feed),
+                composer.view(None, connection).map(Message::Feed),
             ]
             .into(),
         };
@@ -149,15 +147,19 @@ impl Ships {
         .into()
     }
 
-    /// Every ship, from the fleet when it is read, else the ships list.
+    /// Membership comes from the refreshed roster; a fleet snapshot is a
+    /// fallback until the roster's first successful read.
     fn list<'a>(&self, connection: &'a Connection) -> Column<'a, Message> {
-        let names: Vec<&'a str> = match &connection.fleet.snapshot {
-            Some(snapshot) => snapshot
+        let names: Vec<&'a str> = if connection.ships_read_ms.is_some() {
+            connection.ships.iter().map(|s| s.name.as_str()).collect()
+        } else if let Some(snapshot) = &connection.fleet.snapshot {
+            snapshot
                 .machines
                 .iter()
                 .flat_map(|m| m.ships.iter().map(|s| s.name.as_str()))
-                .collect(),
-            None => connection.ships.iter().map(|s| s.name.as_str()).collect(),
+                .collect()
+        } else {
+            Vec::new()
         };
         let mut names = names;
         names.sort_unstable();
@@ -165,7 +167,9 @@ impl Ships {
         if names.is_empty()
             && (connection.ships_loading() || connection.fleet_loading())
         {
-            return Column::new().push(loading_line("Reading ships"));
+            return Column::new()
+                .push(loading_line("Reading ships"))
+                .push(feed::ships_status(connection).map(Message::Feed));
         }
 
         Column::with_children(names.into_iter().map(|name| {
@@ -200,6 +204,7 @@ impl Ships {
                 .into()
         }))
         .spacing(2)
+        .push(feed::ships_status(connection).map(Message::Feed))
     }
 
     /// Who the ship is and what it is doing: presence, its open tasks, and

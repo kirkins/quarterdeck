@@ -39,6 +39,7 @@ pub enum Event {
     LayoutChanged,
     OpenSettings,
     Refresh,
+    RefreshShips,
     OpenLink(String),
     LoadOlder(Which),
     /// Read this ship's own conversation.
@@ -201,6 +202,7 @@ impl Dashboard {
         connection: &Connection,
     ) -> Option<Event> {
         match message {
+            feed::Message::RefreshShips => Some(Event::RefreshShips),
             feed::Message::LoadOlder => Some(Event::LoadOlder(which)),
             feed::Message::OnlyWaiting(on) => Some(Event::FeedOnlyWaiting(on)),
             feed::Message::ShipFilter(ship) if which == Which::All => {
@@ -243,7 +245,7 @@ impl Dashboard {
                     }
                 };
                 let fleet = connection.fleet.snapshot.as_ref();
-                match composer.update(message, fleet) {
+                match composer.update(message, connection) {
                     Some(feed::Out::Write(command, args)) => {
                         Some(Event::Write {
                             key: key.to_owned(),
@@ -576,6 +578,19 @@ impl Dashboard {
                     .style(theme::scrollable::hidden)
                     .height(Length::Fill),
                 status(connection),
+                container(
+                    text(if connection.sends() {
+                        "Sending on"
+                    } else {
+                        "Sending off"
+                    })
+                    .style(if connection.sends() {
+                        theme::text::success
+                    } else {
+                        theme::text::tertiary
+                    })
+                )
+                .padding([0, 8]),
                 settings,
             ]
             .spacing(8),

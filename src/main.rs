@@ -135,6 +135,7 @@ struct Quarterdeck {
     theme: Theme,
     main_window: window::Window,
     settings_window: Option<window::Id>,
+    settings: settings::Settings,
     dashboard: dashboard::Dashboard,
     connection: Connection,
 }
@@ -219,6 +220,7 @@ impl Quarterdeck {
             config.notifications.enabled(config.privateer.source);
         connection.feed.open_only = dashboard_load.feed_only_waiting;
         let first_poll = connection.poll();
+        let settings = settings::Settings::new(&config.privateer);
 
         let mut quarterdeck = Quarterdeck {
             config,
@@ -227,6 +229,7 @@ impl Quarterdeck {
             theme,
             main_window: window,
             settings_window: None,
+            settings,
             dashboard: dashboard::Dashboard::new(&dashboard_load),
             connection,
         };
@@ -360,23 +363,41 @@ impl Quarterdeck {
                 Some(dashboard::Event::FeedToNewest) => feed::to_newest(),
                 Some(dashboard::Event::Refresh) => Task::batch([
                     self.connection.poll().map(Message::Connection),
+                    self.connection.read_ships(true).map(Message::Connection),
                     self.read_tools(true),
                 ]),
+                Some(dashboard::Event::RefreshShips) => {
+                    self.connection.read_ships(true).map(Message::Connection)
+                }
                 None => Task::none(),
             },
-            Message::Settings(settings::Message::Reload) => {
-                Task::perform(Config::load(), Message::ConfigReloaded)
-            }
-            Message::Settings(settings::Message::Edit(edit)) => Task::perform(
-                async move {
-                    Config::apply(edit).await?;
-                    Config::load().await
-                },
-                Message::ConfigReloaded,
-            ),
+            Message::Settings(message) => match self.settings.update(message) {
+                Some(settings::Action::Reload) => {
+                    Task::perform(Config::load(), Message::ConfigReloaded)
+                }
+                Some(settings::Action::Edit(edit)) => Task::perform(
+                    async move {
+                        Config::apply(edit).await?;
+                        Config::load().await
+                    },
+                    Message::ConfigReloaded,
+                ),
+                Some(settings::Action::Test(revision, config)) => {
+                    Task::perform(
+                        settings::test_connection(config),
+                        move |result| {
+                            Message::Settings(settings::Message::Tested(
+                                revision, result,
+                            ))
+                        },
+                    )
+                }
+                None => Task::none(),
+            },
             Message::ConfigReloaded(Ok(config)) => {
                 self.config = config;
                 self.config_error = None;
+                self.settings.loaded(&self.config.privateer);
                 self.theme =
                     self.mode.theme(&self.config.appearance.selected).into();
                 let poll = self.connection.configure(&self.config.privateer);
@@ -404,6 +425,7 @@ impl Quarterdeck {
             Message::ConfigReloaded(Err(error)) => {
                 log::error!("config: {error}");
                 self.config_error = Some(error.to_string());
+                self.settings.failed(error.to_string());
                 Task::none()
             }
             Message::AppearanceChanged(mode) => {
@@ -561,7 +583,8 @@ impl Quarterdeck {
 
     fn view(&self, id: window::Id) -> Element<'_, Message> {
         if Some(id) == self.settings_window {
-            return settings::view(&self.config).map(Message::Settings);
+            return settings::view(&self.config, &self.settings)
+                .map(Message::Settings);
         }
 
         let dashboard = self
@@ -573,8 +596,8 @@ impl Quarterdeck {
             Some(error) => column![
                 container(
                     text(format!(
-                        "Your config could not be read, so the defaults are in \
-                         use: {error}"
+                        "Could not load or save config: {error}. \
+                         The last loaded settings remain in use."
                     ))
                     .style(theme::text::error),
                 )

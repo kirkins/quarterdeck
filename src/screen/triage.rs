@@ -348,8 +348,8 @@ impl Triage {
         if !connection.sends() {
             list = list.push(
                 text(
-                    "Sending is off: answers are logged, not sent. Set \
-                     allow_send = true under [privateer] in config.toml.",
+                    "Sending is off: answers are logged, not sent. Enable \
+                     Allow sending under Privateer in Settings, then save the connection.",
                 )
                 .style(theme::text::tertiary),
             );
